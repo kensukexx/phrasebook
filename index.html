@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ことばの旅券 — 言語別あいさつ帳</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #ECE3CE; --ink: #1D2B3A; --ink-soft: #46566A; --red: #A83A2E; --blue: #2F4C7A; --gold: #A9822F; --green: #4C7A52; --line: rgba(29,43,58,0.18);
+    --fs-scale: 1;
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background: var(--paper);
+    background-image: repeating-linear-gradient(0deg, rgba(29,43,58,0.02) 0px, rgba(29,43,58,0.02) 1px, transparent 1px, transparent 3px);
+    color:var(--ink); font-family:"Noto Sans JP","Noto Sans KR","Noto Sans SC", sans-serif; min-height:100vh; padding-bottom:70px; }
+  header{ position:relative; background:var(--ink); color:var(--paper); padding:22px 20px 26px; overflow:hidden; }
+  header::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:8px;
+    background: repeating-linear-gradient(-45deg, var(--red) 0 14px, var(--paper) 14px 20px, var(--blue) 20px 34px, var(--paper) 34px 40px); }
+  .headtop{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  .eyebrow{ font-family:"IBM Plex Mono", monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); margin:0 0 6px; }
+  h1{ font-family:"Fraunces", serif; font-weight:600; font-size:clamp(26px,7vw,34px); margin:0 0 4px; letter-spacing:.01em; }
+  header p.sub{ margin:0; font-size:13.5px; color:rgba(236,227,206,0.75); }
+  .icon-btn{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:1.5px solid rgba(236,227,206,0.4);
+    background:rgba(236,227,206,0.08); color:var(--paper); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .icon-btn:active{ transform:scale(0.94); }
+
+  .langbar{ display:flex; align-items:center; gap:10px; padding:16px 16px 4px; }
+  .langbar label{ font-family:"IBM Plex Mono", monospace; font-size:11px; color:var(--ink-soft); flex:0 0 auto; }
+  .langselect{ flex:1; padding:11px 14px; border:2px solid var(--ink); border-radius:999px; background:var(--red); color:var(--paper);
+    font-family:"IBM Plex Mono", monospace; font-size:14px; font-weight:600; text-align:center; cursor:pointer; }
+
+  .lang-row{ display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid var(--line); touch-action:pan-y; user-select:none; -webkit-user-select:none; background:transparent; border-radius:8px; }
+  .lang-row:last-child{ border-bottom:none; }
+  .lang-row.dragging{ background:#F7F1DE; box-shadow:0 4px 14px rgba(29,43,58,0.2); opacity:0.9; z-index:5; }
+  .lang-row .handle{ font-size:18px; color:var(--ink-soft); flex:0 0 auto; cursor:grab; padding:4px 6px; }
+  .lang-row .lp-label{ flex:1; font-size:15px; color:var(--ink); }
+  .lang-row .lp-check{ color:var(--red); font-weight:700; width:20px; text-align:center; flex:0 0 auto; }
+
+  .cats{ display:flex; gap:8px; padding:12px 16px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .cat{ flex:0 0 auto; padding:6px 12px; border:1.5px solid var(--blue); border-radius:999px; background:transparent;
+    font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--blue); cursor:pointer; white-space:nowrap; }
+  .cat.active{ background:var(--blue); color:var(--paper); }
+
+  .listenbar{ padding:12px 16px 0; }
+  .listenbtn{ width:100%; padding:12px; border:2px solid var(--ink); border-radius:12px; background:var(--ink); color:var(--paper);
+    font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:14px; cursor:pointer; }
+  .listenbtn.active{ background:var(--red); border-color:var(--red); }
+
+  .toolrow{ padding:10px 16px 0; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .toggles{ display:flex; gap:14px; }
+  .toggle-wrap{ display:flex; align-items:center; gap:7px; font-family:"IBM Plex Mono", monospace; font-size:11.5px; color:var(--ink-soft); }
+  .switch{ position:relative; width:36px; height:21px; background:rgba(29,43,58,0.2); border-radius:999px; cursor:pointer; flex:0 0 auto; }
+  .switch::after{ content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%; background:var(--paper); transition:transform .15s ease; }
+  .switch.on{ background:var(--green); }
+  .switch.on::after{ transform:translateX(15px); }
+  .progress-label{ font-family:"IBM Plex Mono", monospace; font-size:11.5px; color:var(--ink-soft); }
+
+  .searchwrap{ padding:10px 16px 4px; display:flex; gap:8px; }
+  .searchwrap input{ flex:1; padding:11px 14px; border:1.5px solid var(--line); border-radius:10px; background:rgba(255,255,255,0.4);
+    font-family:"Noto Sans JP", sans-serif; font-size:15px; color:var(--ink); }
+  .addbtn{ flex:0 0 auto; width:44px; border:1.5px solid var(--ink); border-radius:10px; background:var(--ink); color:var(--paper); font-size:20px; cursor:pointer; }
+
+  .deck{ padding:14px 16px 10px; display:flex; flex-direction:column; gap:12px; }
+  .ticket{ position:relative; background:#F7F1DE; border:1.5px solid var(--line); border-radius:12px; padding:16px 16px 14px 18px;
+    display:flex; align-items:center; gap:10px; box-shadow: 0 1px 0 rgba(29,43,58,0.05); cursor:pointer; transition: box-shadow .2s ease, border-color .2s ease; }
+  .ticket::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--blue); border-radius:12px 0 0 12px; }
+  .ticket.custom::before{ background:var(--gold); }
+  .ticket.learned{ opacity:0.55; }
+  .ticket.learned::before{ background:var(--green); }
+  .ticket.now-playing{ border-color:var(--red); box-shadow:0 0 0 2px rgba(168,58,46,0.35); }
+  .pin-badge{ position:absolute; top:8px; right:10px; font-size:13px; }
+  .ticket-num{ font-family:"IBM Plex Mono", monospace; font-size:11px; color:var(--ink-soft); width:20px; flex:0 0 auto; }
+  .ticket-main{ flex:1 1 auto; min-width:0; }
+  .action-row{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .cat-tag{ font-family:"IBM Plex Mono", monospace; font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.05em; margin:0 0 3px; }
+  .ja{ font-family:"Fraunces", serif; font-weight:600; font-size:calc(17px * var(--fs-scale)); color:var(--ink); margin:0 0 6px; line-height:1.3; }
+  .phrase-row{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .phrase{ font-family:"Noto Sans SC","Noto Sans KR","Noto Sans JP", sans-serif; font-weight:600; font-size:calc(16px * var(--fs-scale)); color:var(--red); }
+  .kana{ font-family:"IBM Plex Mono", monospace; font-size:calc(12.5px * var(--fs-scale)); color:var(--ink-soft); }
+  .speak{ flex:0 0 auto; width:38px; height:38px; border-radius:50%; border:1.5px solid var(--ink); background:var(--ink); color:var(--paper);
+    display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; transition: transform .1s ease, background .15s ease; }
+  .speak:active{ transform:scale(0.92); }
+  .speak.playing{ background:var(--red); border-color:var(--red); }
+  .mini-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:transparent; color:var(--ink-soft);
+    font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .mini-btn.done{ background:var(--green); border-color:var(--green); color:var(--paper); }
+  .mini-btn.pinned{ background:var(--gold); border-color:var(--gold); color:var(--paper); }
+  .del{ position:absolute; top:8px; right:10px; width:22px; height:22px; border-radius:50%; border:1.5px solid var(--line);
+    background:rgba(255,255,255,0.6); color:var(--ink-soft); font-size:10px; cursor:pointer; }
+
+  footer{ text-align:center; font-family:"IBM Plex Mono", monospace; font-size:11px; color:var(--ink-soft); padding:18px 20px 0; opacity:.7; }
+  .empty{ text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:14px; }
+
+  .overlay{ position:fixed; inset:0; background:rgba(29,43,58,0.45); display:none; align-items:flex-end; justify-content:center; z-index:50; }
+  .overlay.open{ display:flex; }
+  .panel{ background:var(--paper); width:100%; max-width:480px; border-radius:20px 20px 0 0; padding:20px 20px 28px; max-height:86vh; overflow-y:auto; border-top:3px solid var(--red); }
+  .panel h2{ font-family:"Fraunces",serif; font-size:20px; margin:0 0 14px; display:flex; justify-content:space-between; align-items:center; }
+  .panel h2 button{ background:none; border:none; font-size:20px; color:var(--ink-soft); cursor:pointer; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-family:"IBM Plex Mono", monospace; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
+  .field input[type=text], .field select{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
+  .field input[type=range]{ width:100%; accent-color: var(--red); }
+  .rate-value{ font-family:"IBM Plex Mono", monospace; font-size:13px; color:var(--red); font-weight:600; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .submitbtn{ width:100%; padding:12px; border:none; border-radius:10px; background:var(--red); color:var(--paper); font-weight:600; font-size:15px; cursor:pointer; margin-top:6px; }
+  .hint{ font-size:12px; color:var(--ink-soft); margin-top:4px; line-height:1.5; }
+  .voice-lang-row{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .voice-lang-row:last-child{ border-bottom:none; }
+  .voice-lang-row .name{ font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--ink-soft); width:66px; flex:0 0 auto; }
+  .voice-lang-row select{ flex:1; min-width:0; padding:7px 8px; border:1.5px solid var(--line); border-radius:7px; font-size:12.5px; background:rgba(255,255,255,0.5); }
+  .voice-lang-row .preview-voice{ flex:0 0 auto; width:30px; height:30px; font-size:13px; }
+  .mini-btn.playing{ background:var(--red); border-color:var(--red); color:var(--paper); }
+  .order-row{ display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); }
+  .order-row:last-child{ border-bottom:none; }
+  .order-row .oname{ font-family:"IBM Plex Mono", monospace; font-size:13px; color:var(--ink); }
+  .order-btns button{ width:28px; height:28px; border-radius:6px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-size:13px; cursor:pointer; margin-left:4px; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+
+  .present-overlay{
+    position:fixed; inset:0; background:var(--ink); z-index:100;
+    display:none; flex-direction:column; align-items:center; justify-content:center;
+    padding:40px 24px; text-align:center;
+  }
+  .present-overlay.open{ display:flex; }
+  .present-close{
+    position:absolute; top:20px; right:20px; width:44px; height:44px; border-radius:50%;
+    border:1.5px solid rgba(236,227,206,0.4); background:rgba(236,227,206,0.08); color:var(--paper);
+    font-size:18px; cursor:pointer;
+  }
+  .present-body{ max-width:100%; }
+  .present-cat{ font-family:"IBM Plex Mono", monospace; font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); margin:0 0 14px; }
+  .present-ja{ font-family:"Noto Sans JP", sans-serif; font-size:clamp(16px,4.5vw,22px); color:rgba(236,227,206,0.65); margin:0 0 22px; }
+  .present-phrase{ font-family:"Noto Sans SC","Noto Sans KR","Fraunces", sans-serif; font-weight:700; font-size:clamp(32px,10vw,64px);
+    color:var(--paper); line-height:1.2; margin:0 0 16px; word-break:break-word; }
+  .present-kana{ font-family:"IBM Plex Mono", monospace; font-size:clamp(14px,3.5vw,18px); color:var(--gold); margin:0; }
+  .present-speak{
+    margin-top:34px; width:64px; height:64px; border-radius:50%; border:2px solid var(--paper);
+    background:var(--red); color:var(--paper); font-size:26px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .present-speak.playing{ background:var(--gold); }
+  .present-mini{ padding:10px 16px; border-radius:999px; border:1.5px solid rgba(236,227,206,0.5); background:transparent; color:var(--paper);
+    font-family:"IBM Plex Mono", monospace; font-size:12.5px; cursor:pointer; }
+  .present-mini.recording{ background:var(--red); border-color:var(--red); animation: pulse 1s infinite; }
+  .expand-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:transparent; color:var(--ink-soft); font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .mic-btn.listening{ background:var(--red) !important; color:var(--paper) !important; border-color:var(--red) !important; animation: pulse 1s infinite; }
+  @keyframes pulse{ 0%{ opacity:1; } 50%{ opacity:0.55; } 100%{ opacity:1; } }
+  .note-toggle{ margin-left:auto; padding:0; border:none; background:none; color:var(--blue); font-family:"IBM Plex Mono", monospace; font-size:11.5px; cursor:pointer; }
+  .note-text{ display:none; margin:8px 0 0; padding:10px 12px; background:rgba(47,76,122,0.08); border-left:3px solid var(--blue); border-radius:0 8px 8px 0; font-family:"Noto Sans JP", sans-serif; font-size:12.5px; line-height:1.6; color:var(--ink-soft); }
+  .note-text.open{ display:block; }
+  .tool-item{ width:100%; display:flex; align-items:center; gap:14px; padding:14px 10px; border:none; border-bottom:1px solid var(--line);
+    background:transparent; font-size:15px; color:var(--ink); text-align:left; cursor:pointer; }
+  .tool-item:last-child{ border-bottom:none; }
+  .tool-item span:first-child{ font-size:20px; width:28px; text-align:center; flex:0 0 auto; }
+  .currency-row{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .currency-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:16px; color:var(--ink); }
+  .currency-row select{ flex:0 0 auto; width:110px; padding:10px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink); }
+  .currency-swap{ text-align:center; color:var(--ink-soft); font-size:13px; margin:2px 0 10px; }
+  .currency-result{ font-family:"Fraunces", serif; font-weight:700; font-size:26px; color:var(--red); text-align:center; margin:10px 0; }
+  .filterbar{ display:flex; align-items:center; gap:8px; padding:10px 16px 0; flex-wrap:wrap; }
+  .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:8px; border:1.5px solid var(--line); background:transparent; color:var(--ink-soft); font-size:14px; cursor:pointer; }
+  .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
+  .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
+  .fs-slider-row{ display:flex; align-items:center; gap:10px; }
+  .fs-slider-row input[type=range]{ flex:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headtop">
+    <div>
+      <p class="eyebrow">Phrasebook · 日本語 → 9言語</p>
+      <h1>ことばの旅券</h1>
+      <p class="sub">タップして発音。カードの⤢で相手に見せられます。</p>
+    </div>
+    <button class="icon-btn" id="toolsBtn" aria-label="ツール">☰</button>
+  </div>
+</header>
+
+<div class="overlay" id="toolsOverlay">
+  <div class="panel">
+    <h2>ツール <button id="closeTools">✕</button></h2>
+    <button class="tool-item" id="menuWrite"><span>✎</span>書いて見せる</button>
+    <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
+    <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
+  </div>
+</div>
+
+<div class="overlay" id="writeOverlay">
+  <div class="panel">
+    <h2>書いて見せる <button id="closeWrite">✕</button></h2>
+    <div class="field">
+      <label>伝えたいこと</label>
+      <textarea id="writeText" rows="3" placeholder="辞書にない言葉でも、ここに書いて大きく表示できます" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); resize:vertical;"></textarea>
+      <button class="mic-btn" id="micWrite" type="button" style="margin-top:8px; padding:8px 14px; border:1.5px solid var(--ink); border-radius:8px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer;">🎤 音声で入力</button>
+    </div>
+    <button class="submitbtn" id="showWriteFullscreen">全画面で見せる</button>
+    <p class="hint">日本語で書けば日本語として、それ以外の言語で書けばその言語として読み上げます（読み上げは全画面表示の中で）。</p>
+  </div>
+</div>
+
+<div class="overlay" id="currencyOverlay">
+  <div class="panel">
+    <h2>通貨換算 <button id="closeCurrency">✕</button></h2>
+    <div class="currency-row">
+      <input type="number" id="currAmount" value="1000" inputmode="decimal">
+      <select id="currFrom"></select>
+    </div>
+    <p class="currency-swap">↓</p>
+    <div class="currency-row">
+      <div class="currency-result" id="currResult" style="flex:1;">—</div>
+      <select id="currTo"></select>
+    </div>
+    <p class="hint" id="currStatus">最新のレートを取得しています…</p>
+  </div>
+</div>
+
+<div class="present-overlay" id="presentOverlay">
+  <button class="present-close" id="presentClose" aria-label="閉じる">✕</button>
+  <div class="present-body">
+    <p class="present-cat" id="presentCat"></p>
+    <p class="present-ja" id="presentJa"></p>
+    <p class="present-phrase" id="presentPhrase"></p>
+    <p class="present-kana" id="presentKana"></p>
+  </div>
+  <button class="present-speak" id="presentSpeak" aria-label="発音を聞く">🔊</button>
+  <div style="display:flex; gap:14px; margin-top:16px;">
+    <button class="present-mini" id="presentRecord" aria-label="自分の発音を録音">🎙️ 録音</button>
+    <button class="present-mini" id="presentPlayback" aria-label="録音を再生" style="display:none;">▶ 自分の発音</button>
+  </div>
+</div>
+
+<div class="langbar">
+  <label>言語</label>
+  <button class="langselect" id="langPickerBtn" type="button">英語 ▾</button>
+</div>
+<div class="cats" id="cats"></div>
+
+<div class="overlay" id="langPickerOverlay">
+  <div class="panel">
+    <h2>言語を選ぶ <button id="closeLangPicker">✕</button></h2>
+    <p class="hint">タップで選択。ハンドル「⠿」を長押ししたままドラッグすると並び替えできます。</p>
+    <div id="langPickList"></div>
+  </div>
+</div>
+
+<div class="filterbar">
+  <button class="filter-icon" id="listenBtn" aria-label="聞き流し再生" title="聞き流し再生" style="width:44px;">▶</button>
+  <button class="filter-icon" id="pinnedToggle" aria-label="ピン留めのみ" title="📌のみ">📌</button>
+  <button class="filter-icon" id="unlearnedToggle" aria-label="未習得のみ" title="未習得のみ">✓</button>
+  <span class="progress-label" id="progressLabel" style="margin-left:auto;"></span>
+</div>
+
+<div class="searchwrap">
+  <input type="text" id="search" placeholder="日本語 or 現地語で検索">
+  <button class="addbtn mic-btn" id="micSearch" aria-label="音声入力" type="button">🎤</button>
+  <button class="addbtn" id="openAdd" aria-label="単語を追加">＋</button>
+</div>
+
+<div class="deck" id="deck"></div>
+
+<footer id="appFooter">41 phrases · 発音は端末の読み上げ機能を使用</footer>
+
+<div class="overlay" id="settingsOverlay">
+  <div class="panel">
+    <h2>設定 <button id="closeSettings">✕</button></h2>
+    <div class="field">
+      <label>再生速度 <span class="rate-value" id="rateLabel">1.0x</span></label>
+      <input type="range" id="rateSlider" min="0.5" max="2" step="0.05" value="1">
+    </div>
+    <div class="field">
+      <label>文字の大きさ <span class="rate-value" id="fsLabel">1.0x</span></label>
+      <div class="fs-slider-row">
+        <span style="font-size:12px;">A</span>
+        <input type="range" id="fsSlider" min="0.85" max="1.6" step="0.05" value="1">
+        <span style="font-size:20px;">A</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>聞き流しモード</label>
+      <div class="toggle-wrap" style="margin-bottom:10px;">
+        <span>最後まで行ったら最初に戻ってループする</span>
+        <div class="switch" id="loopToggle"></div>
+      </div>
+      <label>フレーズ間の間隔 <span class="rate-value" id="gapLabel">0.45秒</span></label>
+      <input type="range" id="gapSlider" min="0" max="3000" step="50" value="450">
+    </div>
+    <div class="field">
+      <label>言語ごとの声</label>
+      <div id="voiceList"></div>
+      <p class="hint">声の種類・性別は端末に入っている読み上げ音声次第です。iPhoneなら「設定→アクセシビリティ→音声コンテンツ→声」から言語ごとに追加ダウンロードできます。</p>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="addOverlay">
+  <div class="panel">
+    <h2>フレーズを追加 <button id="closeAdd">✕</button></h2>
+    <div class="field"><label>日本語（必須）</label><input type="text" id="addJa" placeholder="例：乾杯"></div>
+    <div class="field"><label>カテゴリ</label><select id="addCat"></select></div>
+    <div class="grid2" id="addFieldsGrid"></div>
+    <p class="hint">日本語以外は分かる言語だけ入力すればOK。空欄の言語はカードに表示されません。</p>
+    <button class="submitbtn" id="submitAdd">追加する</button>
+  </div>
+</div>
+
+<script>
+const LANGS = [
+  { code:"EN", label:"英語",       speech:"en-US", key:"en" },
+  { code:"KO", label:"韓国語",     speech:"ko-KR", key:"ko" },
+  { code:"DE", label:"ドイツ語",   speech:"de-DE", key:"de" },
+  { code:"RO", label:"ルーマニア語", speech:"ro-RO", key:"ro" },
+  { code:"ES", label:"スペイン語", speech:"es-ES", key:"es" },
+  { code:"FR", label:"フランス語", speech:"fr-FR", key:"fr" },
+  { code:"VI", label:"ベトナム語", speech:"vi-VN", key:"vi" },
+  { code:"ZH", label:"中国語",     speech:"zh-CN", key:"zh" },
+  { code:"PT", label:"ポルトガル語", speech:"pt-PT", key:"pt" },
+];
+
+const CATS = ["すべて","あいさつ","買い物・観光","自己紹介","気持ち","数字","緊急","豆知識","その他"];
+
+const BUILTIN = [
+{ja:"こんにちは",cat:"あいさつ",en:["Hello","ハロー"],ko:["안녕하세요","アンニョンハセヨ"],de:["Guten Tag","グーテン ターク"],ro:["Bună ziua","ブナ ズィウア"],es:["Hola","オラ"],fr:["Bonjour","ボンジュール"],vi:["Xin chào","シンチャオ"],zh:["你好","ニーハオ"],pt:["Olá","オラー"]},
+{ja:"ありがとう",cat:"あいさつ",en:["Thank you","サンキュー"],ko:["감사합니다","カムサハムニダ"],de:["Danke","ダンケ"],ro:["Mulțumesc","ムルツメスク"],es:["Gracias","グラシアス"],fr:["Merci","メルシー"],vi:["Cảm ơn","カムオン"],zh:["谢谢","シェシェ"],pt:["Obrigado","オブリガード"]},
+{ja:"すみません",cat:"あいさつ",en:["Excuse me","エクスキューズミー"],ko:["실례합니다","シルレハムニダ"],de:["Entschuldigung","エントシュルディグング"],ro:["Scuze","スクゼ"],es:["Perdón","ペルドン"],fr:["Excusez-moi","エクスキュゼモワ"],vi:["Xin lỗi","シンロイ"],zh:["不好意思","ブーハオイース"],pt:["Desculpe","デスクウピ"]},
+{ja:"ごめんなさい",cat:"あいさつ",en:["I'm sorry","アイム ソーリー"],ko:["죄송합니다","チェソンハムニダ"],de:["Entschuldigung","エントシュルディグング"],ro:["Îmi pare rău","ウムィ パレ ラウ"],es:["Lo siento","ロ シエント"],fr:["Je suis désolé","ジュ スュイ デゾレ"],vi:["Xin lỗi","シンロイ"],zh:["对不起","ドゥイブチー"],pt:["Sinto muito","シント ムイント"]},
+{ja:"これ",cat:"買い物・観光",en:["This","ディス"],ko:["이것","イゴッ"],de:["Das","ダス"],ro:["Asta","アスタ"],es:["Esto","エスト"],fr:["Ceci","スシ"],vi:["Cái này","カイナイ"],zh:["这个","ジェガ"],pt:["Isto","イスト"]},
+{ja:"あれ",cat:"買い物・観光",en:["That","ザット"],ko:["저것","チョゴッ"],de:["Das da","ダス ダー"],ro:["Aia","アヤ"],es:["Eso","エソ"],fr:["Cela","スラ"],vi:["Cái kia","カイキア"],zh:["那个","ナーガ"],pt:["Aquilo","アキーロ"]},
+{ja:"これはなんですか？",cat:"買い物・観光",en:["What is this?","ワット イズ ディス"],ko:["이게 뭐예요?","イゲ ムォエヨ"],de:["Was ist das?","ヴァス イスト ダス"],ro:["Ce este asta?","チェ イェステ アスタ"],es:["¿Qué es esto?","ケ エス エスト"],fr:["Qu'est-ce que c'est?","ケスクセ"],vi:["Đây là cái gì?","ダイラー カイジー"],zh:["这是什么？","ジャーシー シェンマ"],pt:["O que é isto?","オ ケ エ イスト"],note:"英語・独・仏・西・葡・ルーマニア語は疑問詞(What/Was/Qu'est-ce que/Qué/O que/Ce)を文頭に置きbe動詞+主語(this)と続けます。中国語・ベトナム語は語順を変えず疑問詞を後ろに置くだけ。韓国語「이게(これが) 뭐예요(何ですか)」は日本語と同じ語順です。"},
+{ja:"これいくらですか？",cat:"買い物・観光",en:["How much is this?","ハウ マッチ イズ ディス"],ko:["이거 얼마예요?","イゴ オルマエヨ"],de:["Was kostet das?","ヴァス コステット ダス"],ro:["Cât costă asta?","クゥト コスタ アスタ"],es:["¿Cuánto cuesta esto?","クアント クエスタ エスト"],fr:["Combien ça coûte?","コンビヤン サ クート"],vi:["Cái này giá bao nhiêu?","カイナイ ジャー バオニェウ"],zh:["这个多少钱？","ジェガ ドゥオシャオ チェン"],pt:["Quanto custa isto?","クアント クスタ イスト"],note:"「いくら」にあたる疑問詞(How much/Combien/Cuánto/Wie viel/Cât/Quanto)は英独仏西葡ルーマニア語すべて文頭。「値段がする」という動詞を使う言語(英独仏西)と、「値段はいくら？」と名詞的に聞く言語(中・韓・越)に分かれます。"},
+{ja:"またね",cat:"あいさつ",en:["See you","シー ユー"],ko:["또 만나요","ット マンナヨ"],de:["Bis später","ビス シュペーター"],ro:["Pe curând","ペ クルンド"],es:["Nos vemos","ノス ベモス"],fr:["À bientôt","ア ビヤント"],vi:["Hẹn gặp lại","ヘンガップライ"],zh:["再见","ザイジェン"],pt:["Até logo","アテ ロゴ"]},
+{ja:"元気ですか？",cat:"あいさつ",en:["How are you?","ハウ アー ユー"],ko:["잘 지내요?","チャル チネヨ"],de:["Wie geht's?","ヴィー ゲーツ"],ro:["Ce mai faci?","チェ マイ ファチ"],es:["¿Cómo estás?","コモ エスタス"],fr:["Comment ça va?","コモン サ ヴァ"],vi:["Bạn khỏe không?","バン クエ ホン"],zh:["你好吗？","ニーハオマ"],pt:["Como você está?","コモ ヴォセ エスタ"],note:"英語How are you/独Wie geht's(直訳:どう進んでいる)/仏Comment ça va(直訳:どう行っている)は「調子はどう」という発想。韓国語잘 지내요?は「よく過ごしていますか」、中国語你好吗？は「あなたは良いですか」と、直訳の発想が言語ごとに違います。"},
+{ja:"私は日本人です",cat:"自己紹介",en:["I am Japanese","アイ アム ジャパニーズ"],ko:["저는 일본 사람이에요","チョヌン イルボン サラミエヨ"],de:["Ich bin Japaner","イッヒ ビン ヤパーナー"],ro:["Sunt japonez","スント ヤポネズ"],es:["Soy japonés","ソイ ハポネス"],fr:["Je suis japonais","ジュ スュイ ジャポネ"],vi:["Tôi là người Nhật","トイラー グイニャット"],zh:["我是日本人","ウォーシー リーベンレン"],pt:["Sou japonês","ソウ ジャポネス"],note:"英独仏西葡ルーマニア語は「主語+be動詞(am/bin/suis/soy/sou/sunt)+国籍」の語順で共通。国籍を表す語は男性形(japonez, japonés等)で、女性が言う場合は語尾が変わります(japoneza等)。中韓越は性別で形が変わりません。"},
+{ja:"私はアキです",cat:"自己紹介",en:["I am Aki","アイ アム アキ"],ko:["저는 아키예요","チョヌン アキエヨ"],de:["Ich bin Aki","イッヒ ビン アキ"],ro:["Sunt Aki","スント アキ"],es:["Soy Aki","ソイ アキ"],fr:["Je suis Aki","ジュ スュイ アキ"],vi:["Tôi là Aki","トイラー アキ"],zh:["我是阿基","ウォーシー アージー"],pt:["Eu sou Aki","エウ ソウ アキ"]},
+{ja:"あなたの名前は？",cat:"自己紹介",en:["What is your name?","ワット イズ ユア ネーム"],ko:["이름이 뭐예요?","イルミ ムォエヨ"],de:["Wie heißt du?","ヴィー ハイスト ドゥ"],ro:["Cum te cheamă?","クム テ ケアマ"],es:["¿Cómo te llamas?","コモ テ ジャマス"],fr:["Comment tu t'appelles?","コモン テュ タペル"],vi:["Bạn tên là gì?","バン テン ラー ジー"],zh:["你叫什么名字？","ニージャオ シェンマ ミンズ"],pt:["Qual é o teu nome?","クアウ エ オ テウ ノミ"],note:"英語は疑問詞+be+所有格+name。独仏西は「あなたは何と呼ばれていますか(Wie heißt du / Comment tu t'appelles / Cómo te llamas)」という再帰動詞の発想。中国語你叫什么名字は動詞叫(呼ぶ)を使う構造です。"},
+{ja:"好きです",cat:"気持ち",en:["I like it","アイ ライク イット"],ko:["좋아해요","チョアヘヨ"],de:["Ich mag es","イッヒ マーク エス"],ro:["Îmi place","ウムィ プラチェ"],es:["Me gusta","メ グスタ"],fr:["J'aime ça","ジェム サ"],vi:["Tôi thích nó","トイ ティック ノー"],zh:["我喜欢","ウォーシーホワン"],pt:["Eu gosto disso","エウ ゴスト ジッソ"],note:"英Ilike itと独Ich mag esは主語+動詞+目的語のSVO。一方、西Me gustaと葡Eu gostoの元の形は「それが私を喜ばせる(gustar)」という逆転した発想。ルーマニア語Îmi placeも「私に対して気に入る」という間接目的語が主役の構造です。"},
+{ja:"あなたは可愛い",cat:"気持ち",en:["You are cute","ユー アー キュート"],ko:["귀여워요","クィヨウォヨ"],de:["Du bist süß","ドゥ ビスト ズュース"],ro:["Ești drăguță","イェシュティ ドラグツァ"],es:["Eres linda","エレス リンダ"],fr:["Tu es mignonne","テュ エ ミニョンヌ"],vi:["Bạn dễ thương","バン ゼ トゥオン"],zh:["你很可爱","ニーヘン クーアイ"],pt:["Você é fofa","ヴォセ エ フォファ"],note:"英独中韓越の形容詞は性別で変化しませんが、仏西葡ルーマニア語の形容詞は主語の性別に合わせ語尾が変わります(男性形mignon/lindo/fofo/drăguț、女性形mignonne/linda/fofa/drăguță)。ここではすべて女性形で統一しています。"},
+{ja:"あなたは綺麗",cat:"気持ち",en:["You are beautiful","ユー アー ビューティフル"],ko:["예뻐요","イェッポヨ"],de:["Du bist schön","ドゥ ビスト シェーン"],ro:["Ești frumoasă","イェシュティ フルモアサ"],es:["Eres hermosa","エレス エルモサ"],fr:["Tu es belle","テュ エ ベル"],vi:["Bạn thật xinh đẹp","バン タッ シン デップ"],zh:["你很漂亮","ニーヘン ピアオリアン"],pt:["Você é linda","ヴォセ エ リンダ"],note:"「可愛い」と同じ理由で、仏西葡ルーマニア語の形容詞は女性形(belle/hermosa/linda/frumoasă)になっています。"},
+{ja:"どこですか？",cat:"買い物・観光",en:["Where is it?","ウェア イズ イット"],ko:["어디예요?","オディエヨ"],de:["Wo ist es?","ヴォー イスト エス"],ro:["Unde este?","ウンデ イェステ"],es:["¿Dónde está?","ドンデ エスタ"],fr:["Où est-ce?","ウー エス"],vi:["Nó ở đâu?","ノー オー ダウ"],zh:["在哪里？","ザイ ナーリー"],pt:["Onde fica?","オンジ フィカ"],note:"疑問詞Where/Wo/Où/Dónde/Ondeを文頭に置きbe動詞+主語と続く語順が英独仏西葡ルーマニア語で共通。中国語在哪里は「〜にある」という動詞在の後ろに疑問詞哪里を置く語順です。"},
+{ja:"少し知ってます",cat:"自己紹介",en:["I know a little","アイ ノウ ア リトル"],ko:["조금 알아요","チョグム アラヨ"],de:["Ich weiß ein bisschen","イッヒ ヴァイス アイン ビスヒェン"],ro:["Știu puțin","シュティウ プツィン"],es:["Sé un poco","セ ウン ポコ"],fr:["Je sais un peu","ジュ セ アン プー"],vi:["Tôi biết một chút","トイ ビエット モット チュット"],zh:["我知道一点","ウォージーダオ イーディエン"],pt:["Sei um pouco","セイ ウン ポウコ"],note:"英独仏西葡ルーマニア語は「主語+知る動詞+少し(a little)」というSVOの語順で共通ですが、副詞の位置が動詞の直後に来る言語(独ein bisschen)と文末寄りに来る言語(仏un peu)で微妙に語順が異なります。"},
+{ja:"1〜10の数字",cat:"数字",en:["one, two, three, four, five, six, seven, eight, nine, ten","ワン トゥー スリー フォー ファイブ シックス セブン エイト ナイン テン"],ko:["일, 이, 삼, 사, 오, 육, 칠, 팔, 구, 십","イル イ サム サ オ ユク チル パル ク シプ"],de:["eins, zwei, drei, vier, fünf, sechs, sieben, acht, neun, zehn","アインス ツヴァイ ドライ フィア フュンフ ゼックス ズィーベン アハト ノイン ツェーン"],ro:["unu, doi, trei, patru, cinci, șase, șapte, opt, nouă, zece","ウヌ ドイ トレイ パトゥル チンチ シャセ シャプテ オプト ノウァ ゼチェ"],es:["uno, dos, tres, cuatro, cinco, seis, siete, ocho, nueve, diez","ウノ ドス トレス クアトロ シンコ セイス シエテ オチョ ヌエベ ディエス"],fr:["un, deux, trois, quatre, cinq, six, sept, huit, neuf, dix","アン ドゥ トロワ キャトル サンク シス セット ユイット ヌフ ディス"],vi:["một, hai, ba, bốn, năm, sáu, bảy, tám, chín, mười","モット ハイ バー ボン ナム サウ バイ タム チン ムオイ"],zh:["一, 二, 三, 四, 五, 六, 七, 八, 九, 十","イー アル サン スー ウー リュウ チー バー ジュウ シー"],pt:["um, dois, três, quatro, cinco, seis, sete, oito, nove, dez","ウン ドイス トレス クアトロ シンコ セイス セッチ オイト ノヴィ デス"]},
+{ja:"なるほど",cat:"その他",en:["I see","アイ シー"],ko:["그렇군요","クロクニョ"],de:["Ach so","アッハ ゾー"],ro:["Am înțeles","アム ウンツェレス"],es:["Ya veo","ジャ ベオ"],fr:["Je vois","ジュ ヴォワ"],vi:["Tôi hiểu rồi","トイ ヒエウ ゾイ"],zh:["原来如此","ユエンライ ルーツー"],pt:["Entendi","エンテンジ"]},
+{ja:"乾杯",cat:"あいさつ",en:["Cheers","チアーズ"],ko:["건배","コンベ"],de:["Prost","プロースト"],ro:["Noroc","ノロク"],es:["Salud","サルー"],fr:["Santé","サンテ"],vi:["Cạn ly","カンリー"],zh:["干杯","ガンベイ"],pt:["Saúde","サウージ"]},
+{ja:"はじめまして",cat:"自己紹介",en:["Nice to meet you","ナイス トゥ ミート ユー"],ko:["처음 뵙겠습니다","チョウム ペッケッスムニダ"],de:["Freut mich","フロイト ミッヒ"],ro:["Îmi pare bine","ウムィ パレ ビネ"],es:["Mucho gusto","ムーチョ グスト"],fr:["Enchanté","アンシャンテ"],vi:["Rất vui được gặp bạn","ザッ ヴーイ ドゥオック ガップ バン"],zh:["很高兴认识你","ヘン ガオシン レンシー ニー"],pt:["Prazer","プラゼール"]},
+{ja:"大丈夫です",cat:"あいさつ",en:["I'm fine","アイム ファイン"],ko:["괜찮아요","クェンチャナヨ"],de:["Alles gut","アレス グート"],ro:["E în regulă","エ ウン レグラ"],es:["Está bien","エスタ ビエン"],fr:["Ça va","サ ヴァ"],vi:["Không sao","ホン サオ"],zh:["我没事","ウォー メイシー"],pt:["Está tudo bem","エスタ トゥード ベン"]},
+{ja:"わかりません",cat:"自己紹介",en:["I don't understand","アイ ドント アンダースタンド"],ko:["모르겠어요","モルゲッソヨ"],de:["Ich verstehe nicht","イッヒ フェアシュテーエ ニヒト"],ro:["Nu înțeleg","ヌ ウンツェレグ"],es:["No entiendo","ノ エンティエンド"],fr:["Je ne comprends pas","ジュ ヌ コンプラン パ"],vi:["Tôi không hiểu","トイ ホン ヒエウ"],zh:["我不明白","ウォー ブー ミンバイ"],pt:["Não entendo","ナォン エンテンド"],note:"英独仏西葡は「主語+否定+理解する動詞」のSVO否定形。ルーマニア語Nu înțelegは否定語Nuを動詞の前に置くタイプ。中国語我不明白・ベトナム語Tôi không hiểuも否定語が動詞の直前に来ます。"},
+{ja:"トイレはどこですか？",cat:"買い物・観光",en:["Where is the toilet?","ウェア イズ ザ トイレット"],ko:["화장실이 어디예요?","ファジャンシリ オディエヨ"],de:["Wo ist die Toilette?","ヴォー イスト ディー トイレッテ"],ro:["Unde este toaleta?","ウンデ イェステ トアレタ"],es:["¿Dónde está el baño?","ドンデ エスタ エル バニョ"],fr:["Où sont les toilettes?","ウー ソン レ トワレット"],vi:["Nhà vệ sinh ở đâu?","ニャー ヴェシン オー ダウ"],zh:["洗手间在哪里？","シーショウジェン ザイ ナーリー"],pt:["Onde fica a casa de banho?","オンジ フィカ ア カザ デ バーニョ"],note:"「どこですか？」と同じ疑問詞+be動詞構文に名詞「トイレ」が加わった形。独Wo ist die Toiletteのように、多くの言語で名詞に性・冠詞(die)がつくのが日本語にない特徴です。"},
+{ja:"写真を撮ってもいいですか？",cat:"買い物・観光",en:["May I take a photo?","メイ アイ テイク ア フォト"],ko:["사진 찍어도 될까요?","サジン チゴド テルカヨ"],de:["Darf ich ein Foto machen?","ダーフ イッヒ アイン フォト マッヘン"],ro:["Pot să fac o poză?","ポット サ ファク オ ポザ"],es:["¿Puedo tomar una foto?","プエド トマール ウナ フォト"],fr:["Puis-je prendre une photo?","ピュイジュ プランドル ユヌ フォト"],vi:["Tôi có thể chụp ảnh không?","トイ コー テー チュップ アイン ホン"],zh:["我可以拍照吗？","ウォー クァイー パイジャオ マ"],pt:["Posso tirar uma foto?","ポッソ チラール ウマ フォト"],note:"「〜してもいいですか」という許可表現は、英May・独Darf・仏Puis-jeのような専用の助動詞を使う言語と、西Puedo・葡Posso(できる)を借用する言語に分かれます。中国語我可以拍照吗も「できる(可以)」を使うタイプです。"},
+{ja:"お会計お願いします",cat:"買い物・観光",en:["Check, please","チェック プリーズ"],ko:["계산해 주세요","ケサネ ジュセヨ"],de:["Die Rechnung, bitte","ディー レヒヌング ビッテ"],ro:["Nota de plată, vă rog","ノタ デ プラタ ヴァ ログ"],es:["La cuenta, por favor","ラ クエンタ ポル ファボール"],fr:["L'addition, s'il vous plaît","ラディシオン シルヴプレ"],vi:["Tính tiền giúp tôi","ティン ティエン ジュップ トイ"],zh:["买单","マイダン"],pt:["A conta, por favor","ア コンタ ポル ファボール"],note:"名詞(会計・勘定)+お願いします、という「名詞だけで頼む」パターンが英仏西葡ルーマニア語共通。中国語买单は「会計を買う」という動詞表現、韓国語계산해 주세요は「計算してください」という動詞表現で発想が違います。"},
+{ja:"助けてください",cat:"その他",en:["Please help me","プリーズ ヘルプ ミー"],ko:["도와주세요","トワジュセヨ"],de:["Bitte helfen Sie mir","ビッテ ヘルフェン ズィー ミア"],ro:["Vă rog ajutați-mă","ヴァ ログ アジュタツィマ"],es:["Ayúdeme, por favor","アユデメ ポル ファボール"],fr:["Aidez-moi, s'il vous plaît","エデモワ シルヴプレ"],vi:["Xin hãy giúp tôi","シン ハイ ジュップ トイ"],zh:["请帮帮我","チン バンバン ウォ"],pt:["Por favor, me ajude","ポル ファボール ミ アジュージ"],note:"help+meの動詞+目的語の語順が共通。独仏西のように「あなた(丁寧形)」に対する命令形(helfen Sie/Aidez-moi/Ayúdeme)を使う言語は、見知らぬ人への丁寧な依頼に適した形です。"},
+{ja:"気をつけて",cat:"あいさつ",en:["Take care","テイク ケア"],ko:["조심하세요","チョシムハセヨ"],de:["Pass auf dich auf","パス アウフ ディッヒ アウフ"],ro:["Ai grijă","アイ グリジャ"],es:["Cuídate","クイダテ"],fr:["Prends soin de toi","プラン ソワン ドゥ トワ"],vi:["Hãy cẩn thận","ハイ カンタン"],zh:["保重","バオジョン"],pt:["Cuide-se","クイジシ"]},
+{ja:"頑張って",cat:"気持ち",en:["Good luck","グッド ラック"],ko:["화이팅","ファイティン"],de:["Viel Erfolg","フィール エアフォルク"],ro:["Baftă","バフタ"],es:["¡Ánimo!","アニモ"],fr:["Bonne chance","ボンヌ シャンス"],vi:["Cố lên","コー レン"],zh:["加油","ジャヨウ"],pt:["Boa sorte","ボア ソルチ"]},
+{ja:"美味しい",cat:"気持ち",en:["Delicious","デリシャス"],ko:["맛있어요","マシッソヨ"],de:["Lecker","レッカー"],ro:["Delicios","デリチョス"],es:["Delicioso","デリシオソ"],fr:["Délicieux","デリシュー"],vi:["Ngon","ゴン"],zh:["好吃","ハオチー"],pt:["Delicioso","デリシオゾ"]},
+{ja:"楽しかったです",cat:"気持ち",en:["I had a great time","アイ ハッド ア グレート タイム"],ko:["즐거웠어요","チュルゴウォッソヨ"],de:["Es hat mir Spaß gemacht","エス ハット ミア シュパース ゲマハト"],ro:["M-am distrat bine","マム ディストラット ビネ"],es:["Lo pasé genial","ロ パセ ヘニアル"],fr:["Je me suis bien amusé","ジュ ム スュイ ビヤン アミューゼ"],vi:["Tôi đã có khoảng thời gian vui vẻ","トイ ダー コー ホアン トイザン ヴーイヴェ"],zh:["我玩得很开心","ウォー ワン デァ ヘン カイシン"],pt:["Eu me diverti muito","エウ ミ ヂヴェルチ ムイント"],note:"英語やベトナム語の訳は直訳的に「良い時間を持った」という表現。独Es hat mir Spaß gemacht(それが私に楽しさを作った)、西Lo pasé genial(それをすばらしく過ごした)、葡Eu me diverti(自分自身を楽しませた=再帰動詞)など、発想が国ごとに大きく違います。"},
+{ja:"具合が悪いです",cat:"緊急",en:["I feel sick","アイ フィール シック"],ko:["몸이 안 좋아요","モミ アン ジョアヨ"],de:["Mir ist schlecht","ミア イスト シュレヒト"],ro:["Mă simt rău","マ シムト ラウ"],es:["Me siento mal","メ シエント マル"],fr:["Je ne me sens pas bien","ジュ ヌ ム サン パ ビヤン"],vi:["Tôi cảm thấy không khỏe","トイ カムタイ ホン クエ"],zh:["我不舒服","ウォー ブー シューフー"],pt:["Não me sinto bem","ナォン ミ シント ベン"]},
+{ja:"救急車を呼んでください",cat:"緊急",en:["Please call an ambulance","プリーズ コール アン アンビュランス"],ko:["구급차를 불러주세요","クグプチャルル プロジュセヨ"],de:["Rufen Sie einen Krankenwagen","ルーフェン ズィー アイネン クランケンヴァーゲン"],ro:["Chemați o ambulanță","ケマツィ オ アンブランツァ"],es:["Llame a una ambulancia","ジャメ ア ウナ アンブランシア"],fr:["Appelez une ambulance","アプレ ユヌ アンビュランス"],vi:["Xin gọi xe cấp cứu","シン ゴイ セー カプクー"],zh:["请叫救护车","チン ジャオ ジウフーチョー"],pt:["Chame uma ambulância","シャメ ウマ アンブランシア"]},
+{ja:"警察を呼んでください",cat:"緊急",en:["Please call the police","プリーズ コール ザ ポリース"],ko:["경찰을 불러주세요","キョンチャルル プロジュセヨ"],de:["Rufen Sie die Polizei","ルーフェン ズィー ディー ポリツァイ"],ro:["Chemați poliția","ケマツィ ポリツィア"],es:["Llame a la policía","ジャメ ア ラ ポリシーア"],fr:["Appelez la police","アプレ ラ ポリス"],vi:["Xin gọi cảnh sát","シン ゴイ カインサット"],zh:["请叫警察","チン ジャオ ジンチャー"],pt:["Chame a polícia","シャメ ア ポリシア"]},
+{ja:"パスポートをなくしました",cat:"緊急",en:["I lost my passport","アイ ロスト マイ パスポート"],ko:["여권을 잃어버렸어요","ヨグォヌル イロボリョッソヨ"],de:["Ich habe meinen Reisepass verloren","イッヒ ハーベ マイネン ライゼパス フェアローレン"],ro:["Mi-am pierdut pașaportul","ミアム ピエルドゥット パシャポルトゥル"],es:["Perdí mi pasaporte","ペルディ ミ パサポルテ"],fr:["J'ai perdu mon passeport","ジェ ペルデュ モン パスポール"],vi:["Tôi bị mất hộ chiếu","トイ ビ マット ホーチエウ"],zh:["我的护照丢了","ウォーダ フーチャオ ディウラ"],pt:["Perdi o meu passaporte","ペルディ オ メウ パサポルチ"]},
+{ja:"アレルギーがあります",cat:"緊急",en:["I have an allergy","アイ ハブ アン アラジー"],ko:["알레르기가 있어요","アルレルギガ イッソヨ"],de:["Ich habe eine Allergie","イッヒ ハーベ アイネ アレルギー"],ro:["Am o alergie","アム オ アレルジエ"],es:["Tengo una alergia","テンゴ ウナ アレルヒア"],fr:["J'ai une allergie","ジェ ユヌ アレルジー"],vi:["Tôi bị dị ứng","トイ ビ ジーウン"],zh:["我有过敏","ウォー ヨウ グォミン"],pt:["Tenho uma alergia","テニョ ウマ アレルジア"]},{ja:"お疲れ様",cat:"豆知識",en:["Good job today","グッド ジョブ トゥデイ"],ko:["수고하셨어요","スゴハショッソヨ"],de:["Gute Arbeit","グーテ アルバイト"],ro:["Bună treabă","ブナ トレアバ"],es:["Buen trabajo","ブエン トラバホ"],fr:["Bon travail","ボン トラバイユ"],vi:["Vất vả rồi","ヴァットヴァー ゾイ"],zh:["辛苦了","シンクーラ"],pt:["Bom trabalho","ボン トラバーリョ"],note:"英独仏西葡には「相手の苦労をねぎらう」専用の決まり文句がなく「良い仕事だったね」と結果を褒めるしかありません。一方、韓国語수고하셨어요・中国語辛苦了・ベトナム語Vất vả rồいは、日本語の「お疲れ様」とほぼ同じニュアンスで日常的に使われ、東アジア・東南アジアに共通する労いの文化がうかがえます。"},
+{ja:"いただきます",cat:"豆知識",en:["(no direct equivalent — see note)","（対応する言葉なし）"],ko:["잘 먹겠습니다","チャル モッケッスムニダ"],de:["Guten Appetit","グーテン アペティート"],ro:["Poftă bună","ポフタ ブナ"],es:["Buen provecho","ブエン プロベチョ"],fr:["Bon appétit","ボナペティ"],vi:["Mời cả nhà ăn cơm","モーイ カーニャー アンコム"],zh:["开动了","カイドンラ"],pt:["Bom apetite","ボン アペチッチ"],note:"いただきますは食べる本人が食べ物や作り手に感謝して言う言葉ですが、独ロ西仏葡のGuten Appetit/Bon appétit系はすべて逆に、食べない周りの人が食べる人にかける言葉です。主語の向きが真逆なのが面白いところ。韓国語잘 먹겠습니다だけが「自分から言う」日本語と同じ構造を持っています。"},
+{ja:"もったいない",cat:"豆知識",en:["What a waste!","ワット ア ウェイスト"],ko:["아깝다","アッカプタ"],de:["Wie schade","ヴィー シャーデ"],ro:["Ce păcat","チェ パカット"],es:["Qué desperdicio","ケ デスペルディシオ"],fr:["Quel gâchis","ケル ガシ"],vi:["Thật lãng phí","タット ランフィー"],zh:["太可惜了","タイ クーシーラ"],pt:["Que desperdício","ケ デスペルディシオ"],note:"もったいないは単なる「無駄」だけでなく、その物・行為への敬意や愛着まで含む言葉です。2004年にケニアの環境活動家ワンガリ・マータイ氏が国連でこの言葉をそのまま国際共通語として紹介し、世界的に知られるようになりました。韓国語아깝다はニュアンスが最も近い言葉のひとつです。"},
+{ja:"空気を読む",cat:"豆知識",en:["Read the room","リード ザ ルーム"],ko:["눈치를 보다","ヌンチルル ボダ"],de:["die Situation erfassen","ディー ジトゥアツィオーン エルファッセン"],ro:["a simți atmosfera","ア シムツィ アトモスフェラ"],es:["leer el ambiente","レエル エル アンビエンテ"],fr:["lire l'atmosphère","リール ラトモスフェール"],vi:["nhìn tình hình","ニン ティンヒン"],zh:["察言观色","チャーイェングァンサー"],pt:["ler o ambiente","レール オ アンビエンチ"],note:"英語read the roomや中国語の四字熟語察言観色（言葉を観察し顔色をうかがう）など似た慣用句を持つ言語がある一方、韓国語の「눈치（ヌンチ）」は動詞句ではなく「空気を読む力」そのものを指す名詞で、この一語がテーマの本が海外で出版されるほど独自の文化的重みを持つ言葉です。"},
+];
+
+let customData = [];
+let learned = {};
+let pinned = {};
+let currentLang = "en";
+let currentCat = "すべて";
+let showUnlearnedOnly = false;
+let showPinnedOnly = false;
+let rate = 1.0;
+let fsScale = 1.0;
+let listenLoop = false;
+let listenGap = 450;
+let voiceMap = {};
+let langOrder = LANGS.map(l=>l.key);
+let synth = window.speechSynthesis;
+let availableVoices = [];
+let listenState = { active:false, list:[], index:0 };
+let currentUtter = null;
+
+// Claude Artifact 環境では window.storage、通常ブラウザでは localStorage を使う
+const store = (window.storage && typeof window.storage.get === "function")
+  ? window.storage
+  : {
+      async get(key){ const v = localStorage.getItem(key); return v===null ? null : { value:v }; },
+      async set(key, value){ localStorage.setItem(key, value); }
+    };
+
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function keyOf(d){ return d.id || d.ja; }
+
+async function loadState(){
+  try{ const s = await store.get('phrasebook-settings');
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; }
+  }catch(e){}
+  try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
+  try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
+  try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
+  LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
+  // 既存のカスタムフレーズに一意IDを付与（同じ日本語のフレーズ同士の衝突防止）
+  let migrated = false;
+  customData.forEach((d, i)=>{
+    if(!d.id){
+      d.id = "c" + Date.now().toString(36) + "-" + i;
+      if(learned[d.ja]) learned[d.id] = true;
+      if(pinned[d.ja]) pinned[d.id] = true;
+      migrated = true;
+    }
+  });
+  if(migrated){ saveCustom(); saveLearned(); savePinned(); }
+}
+async function safeSet(key, value){
+  for(let attempt=0; attempt<2; attempt++){
+    try{ await store.set(key, value); return; }
+    catch(e){
+      if(attempt===0){ await new Promise(r=>setTimeout(r,300)); }
+      else{ console.error("storage save failed after retry:", key, e); }
+    }
+  }
+}
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, fsScale, listenLoop, listenGap, voiceMap, langOrder, currentLang})); }
+async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
+async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
+async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
+
+function allData(){ return BUILTIN.concat(customData); }
+function orderedLangs(){ return langOrder.map(k=>LANGS.find(l=>l.key===k)).filter(Boolean); }
+
+function renderLangButton(){
+  const btn = document.getElementById("langPickerBtn");
+  const meta = LANGS.find(l=>l.key===currentLang);
+  btn.textContent = (meta ? meta.label : currentLang) + " ▾";
+}
+
+function selectLanguage(key){
+  stopListening();
+  currentLang = key;
+  saveSettings();
+  renderLangButton();
+  renderDeck();
+  document.getElementById("langPickerOverlay").classList.remove("open");
+}
+
+function renderLangPickList(){
+  const wrap = document.getElementById("langPickList");
+  wrap.innerHTML = "";
+  orderedLangs().forEach(l=>{
+    const row = document.createElement("div");
+    row.className = "lang-row";
+    row.dataset.key = l.key;
+    row.innerHTML = `<span class="handle">⠿</span><span class="lp-label">${l.label}</span><span class="lp-check">${l.key===currentLang?'✓':''}</span>`;
+    attachRowDrag(row);
+    wrap.appendChild(row);
+  });
+}
+
+function attachRowDrag(row){
+  row.addEventListener("pointerdown", (e)=>{
+    if(e.target.closest(".lp-check")) return;
+    const startX = e.clientX, startY = e.clientY;
+    let dragging = false;
+    const list = document.getElementById("langPickList");
+
+    const longPressTimer = setTimeout(()=>{
+      dragging = true;
+      row.classList.add("dragging");
+      try{ row.setPointerCapture(e.pointerId); }catch(err){}
+    }, 380);
+
+    function onMove(ev){
+      if(!dragging){
+        if(Math.abs(ev.clientX-startX) > 10 || Math.abs(ev.clientY-startY) > 10){
+          clearTimeout(longPressTimer);
+          cleanup();
+        }
+        return;
+      }
+      ev.preventDefault();
+      const rows = Array.from(list.querySelectorAll(".lang-row")).filter(r=>r!==row);
+      let target = null;
+      for(const r of rows){
+        const rect = r.getBoundingClientRect();
+        if(ev.clientY < rect.top + rect.height/2){ target = r; break; }
+      }
+      if(target){ list.insertBefore(row, target); } else { list.appendChild(row); }
+    }
+
+    function onUp(ev){
+      clearTimeout(longPressTimer);
+      if(dragging){
+        row.classList.remove("dragging");
+        langOrder = Array.from(list.querySelectorAll(".lang-row")).map(r=>r.dataset.key);
+        saveSettings();
+      } else {
+        const dx = Math.abs(ev.clientX-startX), dy = Math.abs(ev.clientY-startY);
+        if(dx < 10 && dy < 10){ selectLanguage(row.dataset.key); }
+      }
+      cleanup();
+    }
+
+    function onCancel(){
+      clearTimeout(longPressTimer);
+      if(dragging){ row.classList.remove("dragging"); dragging = false; }
+      cleanup();
+    }
+
+    function cleanup(){
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onCancel);
+    }
+
+    document.addEventListener("pointermove", onMove, {passive:false});
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onCancel);
+  });
+}
+
+function renderCats(){
+  const wrap = document.getElementById("cats");
+  wrap.innerHTML = "";
+  CATS.forEach(c=>{
+    const btn = document.createElement("button");
+    btn.className = "cat" + (c===currentCat ? " active" : "");
+    btn.textContent = c;
+    btn.onclick = ()=>{ stopListening(); currentCat = c; renderCats(); renderDeck(); };
+    wrap.appendChild(btn);
+  });
+}
+
+function populateAddCatSelect(){
+  document.getElementById("addCat").innerHTML = CATS.filter(c=>c!=="すべて").map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+
+function buildAddFields(){
+  const grid = document.getElementById("addFieldsGrid");
+  grid.innerHTML = LANGS.map(l=>`
+    <div class="field"><label>${l.label}</label><input type="text" id="add_${l.key}" placeholder=""></div>
+    <div class="field"><label>${l.label}カナ</label><input type="text" id="add_${l.key}_kana" placeholder=""></div>
+  `).join('');
+}
+
+function voiceQualityScore(v){
+  const n = v.name.toLowerCase();
+  let s = 0;
+  if(n.includes("natural")) s += 5;
+  if(n.includes("neural")) s += 5;
+  if(n.includes("online")) s += 4;
+  if(n.includes("premium")) s += 4;
+  if(n.includes("enhanced")) s += 3;
+  if(n.includes("google")) s += 2;
+  if(n.includes("compact")) s -= 3;
+  if(n.includes("microsoft") && n.includes("desktop")) s -= 1;
+  return s;
+}
+
+function pickVoice(langKey){
+  const meta = LANGS.find(l=>l.key===langKey);
+  const wanted = voiceMap[langKey];
+  if(wanted){ const v = availableVoices.find(v=>v.voiceURI===wanted); if(v) return v; }
+  const prefix = meta.speech.split('-')[0];
+  const candidates = availableVoices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(prefix));
+  if(candidates.length===0) return null;
+  return candidates.slice().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a))[0];
+}
+
+function speak(text, langKey, btn, onDone){
+  const meta = LANGS.find(l=>l.key===langKey);
+  speakRaw(text, meta ? meta.speech : "en-US", btn, onDone, langKey);
+}
+
+function speakRaw(text, speechLang, btn, onDone, langKeyForVoice){
+  if(!synth){ if(onDone) onDone(); return; }
+  synth.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  currentUtter = utter; // Chromeで参照が消えるとonendが発火しなくなる問題への対策
+  const voice = langKeyForVoice ? pickVoice(langKeyForVoice) : null;
+  if(voice) utter.voice = voice;
+  utter.lang = speechLang;
+  utter.rate = rate;
+  if(btn) btn.classList.add("playing");
+  utter.onend = ()=> { if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
+  utter.onerror = ()=> { if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
+  synth.speak(utter);
+}
+
+function openPresent({cat, ja, phrase, kana, speechLang}){
+  document.getElementById("presentCat").textContent = cat || "";
+  document.getElementById("presentCat").style.display = cat ? "" : "none";
+  document.getElementById("presentJa").textContent = ja || "";
+  document.getElementById("presentJa").style.display = ja ? "" : "none";
+  document.getElementById("presentPhrase").textContent = phrase;
+  document.getElementById("presentKana").textContent = kana || "";
+  document.getElementById("presentKana").style.display = kana ? "" : "none";
+  const overlay = document.getElementById("presentOverlay");
+  overlay.classList.add("open");
+  const speakBtn = document.getElementById("presentSpeak");
+  speakBtn.onclick = ()=> speakRaw(phrase, speechLang, speakBtn);
+  document.getElementById("presentPlayback").style.display = "none";
+}
+function closePresent(){
+  if(synth) synth.cancel();
+  document.getElementById("presentOverlay").classList.remove("open");
+}
+
+function computeFiltered(){
+  const q = document.getElementById("search").value.trim();
+  const ql = q.toLowerCase();
+  const data = allData();
+  let filtered = data.filter(d => d[currentLang]);
+  if(currentCat !== "すべて"){ filtered = filtered.filter(d => (d.cat||"その他")===currentCat); }
+  if(q){
+    filtered = filtered.filter(d=>{
+      if(d.ja.includes(q)) return true;
+      return LANGS.some(l=>{
+        const pair = d[l.key];
+        if(!pair) return false;
+        const [text, kana] = pair;
+        return (text && text.toLowerCase().includes(ql)) || (kana && kana.toLowerCase().includes(ql));
+      });
+    });
+  }
+  if(showPinnedOnly){ filtered = filtered.filter(d=>pinned[keyOf(d)]); }
+  if(showUnlearnedOnly){ filtered = filtered.filter(d=>!learned[keyOf(d)]); }
+  // pinned-first stable sort
+  filtered = filtered.map((d,i)=>({d,i})).sort((a,b)=>{
+    const pa = pinned[keyOf(a.d)] ? 0 : 1, pb = pinned[keyOf(b.d)] ? 0 : 1;
+    if(pa !== pb) return pa-pb;
+    return a.i - b.i;
+  }).map(x=>x.d);
+  return filtered;
+}
+
+function updateProgressLabel(data){
+  const total = data.length;
+  const done = data.filter(d=>learned[keyOf(d)]).length;
+  document.getElementById("progressLabel").textContent = `覚えた ${done} / ${total}`;
+}
+
+function renderDeck(){
+  const deck = document.getElementById("deck");
+  deck.innerHTML = "";
+  const filtered = computeFiltered();
+  updateProgressLabel(filtered);
+  document.getElementById("appFooter").textContent = allData().length + " phrases · 発音は端末の読み上げ機能を使用";
+
+  if(filtered.length===0){ deck.innerHTML = `<div class="empty">条件に一致するフレーズが見つかりません</div>`; return; }
+
+  filtered.forEach((d, i)=>{
+    const [phrase, kana] = d[currentLang];
+    const isCustom = customData.includes(d);
+    const isLearned = !!learned[keyOf(d)];
+    const isPinned = !!pinned[keyOf(d)];
+    const card = document.createElement("div");
+    card.className = "ticket" + (isCustom ? " custom" : "") + (isLearned ? " learned" : "");
+    card.dataset.key = keyOf(d);
+    card.innerHTML = `
+      ${isPinned ? '<span class="pin-badge">📌</span>' : ''}
+      <div class="ticket-num">${String(i+1).padStart(2,"0")}</div>
+      <div class="ticket-main">
+        <p class="cat-tag">${esc(d.cat || "その他")}</p>
+        <p class="ja">${esc(d.ja)}</p>
+        <div class="phrase-row"><span class="phrase">${esc(phrase)}</span><span class="kana">${esc(kana || "")}</span></div>
+        <div class="action-row">
+          <button class="mini-btn" aria-label="全画面で見せる" data-role="expand">⤢</button>
+          <button class="mini-btn ${isPinned?'pinned':''}" aria-label="ピン留め" data-role="pin">📌</button>
+          <button class="mini-btn ${isLearned?'done':''}" aria-label="覚えた" data-role="learn">✓</button>
+          ${d.note ? `<button class="note-toggle" data-role="note" type="button">📖 解説</button>` : ''}
+        </div>
+        ${d.note ? `<p class="note-text">${esc(d.note)}</p>` : ''}
+      </div>
+      <button class="speak" aria-label="発音を聞く">🔊</button>
+      ${isCustom ? '<button class="del" aria-label="削除">✕</button>' : ''}
+    `;
+    if(d.note){
+      card.querySelector('[data-role="note"]').addEventListener("click", (e)=>{
+        e.stopPropagation();
+        card.querySelector(".note-text").classList.toggle("open");
+      });
+    }
+    card.addEventListener("click", (e)=>{
+      if(e.target.closest('[data-role]') || e.target.closest(".del")) return;
+      stopListening();
+      speak(phrase, currentLang, card.querySelector(".speak"));
+    });
+    card.querySelector('[data-role="learn"]').addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const k = keyOf(d);
+      if(learned[k]) delete learned[k]; else learned[k] = true;
+      saveLearned(); renderDeck();
+    });
+    card.querySelector('[data-role="pin"]').addEventListener("click", (e)=>{
+      e.stopPropagation();
+      const k = keyOf(d);
+      if(pinned[k]) delete pinned[k]; else pinned[k] = true;
+      savePinned(); renderDeck();
+    });
+    card.querySelector('[data-role="expand"]').addEventListener("click", (e)=>{
+      e.stopPropagation();
+      stopListening();
+      openPresent({ cat:d.cat||"その他", ja:d.ja, phrase, kana, speechLang: LANGS.find(l=>l.key===currentLang).speech });
+    });
+    if(isCustom){
+      card.querySelector(".del").addEventListener("click", (e)=>{
+        e.stopPropagation();
+        customData = customData.filter(x=>x!==d);
+        saveCustom(); renderDeck();
+      });
+    }
+    deck.appendChild(card);
+  });
+}
+
+function updateListenButton(){
+  const btn = document.getElementById("listenBtn");
+  if(listenState.active){
+    btn.textContent = "■";
+    btn.title = `再生中 ${listenState.index+1}/${listenState.list.length}`;
+    btn.classList.add("listen-on");
+  }else{
+    btn.textContent = "▶";
+    btn.title = "聞き流し再生";
+    btn.classList.remove("listen-on");
+  }
+}
+
+function highlightPlaying(key){
+  document.querySelectorAll(".ticket.now-playing").forEach(el=>el.classList.remove("now-playing"));
+  const el = document.querySelector(`.ticket[data-key="${CSS.escape(key)}"]`);
+  if(el){ el.classList.add("now-playing"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
+}
+
+function playStep(){
+  if(!listenState.active) return;
+  if(listenState.index >= listenState.list.length){
+    if(listenLoop){ listenState.index = 0; } else { stopListening(); return; }
+  }
+  const d = listenState.list[listenState.index];
+  const [phrase] = d[currentLang];
+  highlightPlaying(keyOf(d));
+  updateListenButton();
+  speak(phrase, currentLang, null, ()=>{
+    if(!listenState.active) return;
+    setTimeout(()=>{
+      listenState.index++;
+      playStep();
+    }, listenGap);
+  });
+}
+
+function startListening(){
+  const list = computeFiltered();
+  if(list.length===0){ alert("再生できるフレーズがありません（絞り込み条件を確認してください）"); return; }
+  listenState = { active:true, list, index:0 };
+  playStep();
+}
+function stopListening(){
+  if(!listenState.active) return;
+  listenState.active = false;
+  if(synth) synth.cancel();
+  document.querySelectorAll(".ticket.now-playing").forEach(el=>el.classList.remove("now-playing"));
+  updateListenButton();
+}
+
+function renderVoiceList(){
+  const wrap = document.getElementById("voiceList");
+  wrap.innerHTML = "";
+  LANGS.forEach(l=>{
+    const prefix = l.speech.split('-')[0];
+    const opts = availableVoices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(prefix))
+      .slice().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a));
+    const row = document.createElement("div");
+    row.className = "voice-lang-row";
+    const current = voiceMap[l.key] || (opts[0] ? opts[0].voiceURI : "");
+    row.innerHTML = `<span class="name">${l.label}</span>
+      <select data-lang="${l.key}">
+        ${opts.length ? opts.map(v=>`<option value="${esc(v.voiceURI)}" ${v.voiceURI===current?'selected':''}>${esc(v.name)}</option>`).join('')
+                      : '<option value="">声が見つかりません</option>'}
+      </select>
+      <button class="mini-btn preview-voice" type="button" aria-label="試聴">🔊</button>`;
+    row.querySelector("select").onchange = (e)=>{ voiceMap[l.key] = e.target.value; saveSettings(); };
+    row.querySelector(".preview-voice").onclick = (e)=>{
+      const sel = row.querySelector("select");
+      const voiceURI = sel.value;
+      const sample = (BUILTIN[0][l.key] || ["Hello",""])[0];
+      const voice = availableVoices.find(v=>v.voiceURI===voiceURI);
+      if(!synth) return;
+      synth.cancel();
+      const utter = new SpeechSynthesisUtterance(sample);
+      currentUtter = utter;
+      if(voice) utter.voice = voice;
+      utter.lang = l.speech;
+      utter.rate = rate;
+      const btn = e.currentTarget;
+      btn.classList.add("playing");
+      utter.onend = ()=> btn.classList.remove("playing");
+      utter.onerror = ()=> btn.classList.remove("playing");
+      synth.speak(utter);
+    };
+    wrap.appendChild(row);
+  });
+}
+
+function refreshVoices(){ availableVoices = synth ? synth.getVoices() : []; renderVoiceList(); }
+
+document.getElementById("search").addEventListener("input", ()=>{ stopListening(); renderDeck(); });
+
+// --- Tools menu ---
+function closeAllOverlays(){
+  ["writeOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
+    document.getElementById(id).classList.remove("open");
+  });
+}
+document.getElementById("toolsBtn").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.add("open"));
+document.getElementById("closeTools").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.remove("open"));
+document.getElementById("menuWrite").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("writeOverlay").classList.add("open");
+  document.getElementById("writeText").focus();
+});
+document.getElementById("menuCurrency").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("currencyOverlay").classList.add("open");
+  initCurrencyConverter();
+});
+document.getElementById("menuSettings").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("settingsOverlay").classList.add("open");
+  refreshVoices();
+});
+
+document.getElementById("closeWrite").addEventListener("click", ()=> document.getElementById("writeOverlay").classList.remove("open"));
+document.getElementById("showWriteFullscreen").addEventListener("click", ()=>{
+  const text = document.getElementById("writeText").value.trim();
+  if(!text){ alert("表示したい文章を入力してください"); return; }
+  const isJapanese = /[\u3040-\u30FF\u4E00-\u9FFF]/.test(text);
+  const speechLang = isJapanese ? "ja-JP" : (LANGS.find(l=>l.key===currentLang)||{speech:"en-US"}).speech;
+  document.getElementById("writeOverlay").classList.remove("open");
+  openPresent({ cat:"メモ", ja:"", phrase:text, kana:"", speechLang });
+});
+document.getElementById("presentClose").addEventListener("click", closePresent);
+
+// Escキー・背景タップでオーバーレイを閉じる
+document.querySelectorAll(".overlay").forEach(ov=>{
+  ov.addEventListener("click", (e)=>{ if(e.target === ov) ov.classList.remove("open"); });
+});
+document.addEventListener("keydown", (e)=>{
+  if(e.key !== "Escape") return;
+  if(document.getElementById("presentOverlay").classList.contains("open")){ closePresent(); return; }
+  document.querySelectorAll(".overlay.open").forEach(ov=>ov.classList.remove("open"));
+});
+
+// --- Currency converter ---
+const CURRENCY_MAP = { en:"USD", ko:"KRW", de:"EUR", ro:"RON", es:"EUR", fr:"EUR", vi:"VND", zh:"CNY", pt:"EUR" };
+let currencyRates = null;
+let currencyInited = false;
+
+function populateCurrencySelects(){
+  const codes = ["JPY", ...new Set(Object.values(CURRENCY_MAP))];
+  const fromSel = document.getElementById("currFrom");
+  const toSel = document.getElementById("currTo");
+  fromSel.innerHTML = codes.map(c=>`<option value="${c}">${c}</option>`).join('');
+  toSel.innerHTML = codes.map(c=>`<option value="${c}">${c}</option>`).join('');
+  fromSel.value = "JPY";
+  toSel.value = CURRENCY_MAP[currentLang] || "USD";
+}
+
+async function initCurrencyConverter(){
+  if(!currencyInited){
+    populateCurrencySelects();
+    currencyInited = true;
+  } else {
+    document.getElementById("currTo").value = CURRENCY_MAP[currentLang] || document.getElementById("currTo").value;
+  }
+  if(!currencyRates){
+    document.getElementById("currStatus").textContent = "最新のレートを取得しています…";
+    try{
+      const res = await fetch("https://api.frankfurter.app/latest?from=JPY");
+      const data = await res.json();
+      currencyRates = data.rates;
+      currencyRates.JPY = 1;
+      document.getElementById("currStatus").textContent = `為替レート取得日: ${data.date}（JPY基準）`;
+      safeSet('phrasebook-rates', JSON.stringify({ date: data.date, rates: currencyRates }));
+    }catch(e){
+      console.error(e);
+      try{
+        const cached = await store.get('phrasebook-rates');
+        if(cached && cached.value){
+          const p = JSON.parse(cached.value);
+          currencyRates = p.rates;
+          document.getElementById("currStatus").textContent = `オフライン: ${p.date}時点の保存済みレートで換算しています`;
+        }else{
+          document.getElementById("currStatus").textContent = "レートを取得できませんでした。ネット接続を確認してください。";
+        }
+      }catch(e2){
+        document.getElementById("currStatus").textContent = "レートを取得できませんでした。ネット接続を確認してください。";
+      }
+    }
+  }
+  updateCurrencyResult();
+}
+
+function updateCurrencyResult(){
+  const amount = parseFloat(document.getElementById("currAmount").value) || 0;
+  const from = document.getElementById("currFrom").value;
+  const to = document.getElementById("currTo").value;
+  const resultEl = document.getElementById("currResult");
+  if(!currencyRates || !(from in currencyRates) || !(to in currencyRates)){
+    resultEl.textContent = "—";
+    return;
+  }
+  const jpyAmount = amount / currencyRates[from];
+  const result = jpyAmount * currencyRates[to];
+  resultEl.textContent = result.toLocaleString(undefined, {maximumFractionDigits:2}) + " " + to;
+}
+["currAmount","currFrom","currTo"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", updateCurrencyResult);
+});
+document.getElementById("closeCurrency").addEventListener("click", ()=> document.getElementById("currencyOverlay").classList.remove("open"));
+
+// --- Voice input (speech-to-text) ---
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micSupported = !!SpeechRecognitionAPI;
+
+function setupMic(buttonEl, onResult){
+  if(!micSupported){
+    buttonEl.addEventListener("click", ()=>{
+      alert("この端末・ブラウザは音声入力（Web Speech API）に対応していません。iPhoneの場合、キーボード上のマイクアイコン（ディクテーション）をタップして入力してください。");
+    });
+    return;
+  }
+  const recognition = new SpeechRecognitionAPI();
+  recognition.lang = "ja-JP";
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  let listening = false;
+
+  buttonEl.addEventListener("click", ()=>{
+    if(listening){ recognition.stop(); return; }
+    try{ recognition.start(); }catch(e){ console.error(e); }
+  });
+  recognition.onstart = ()=>{ listening = true; buttonEl.classList.add("listening"); };
+  recognition.onend = ()=>{ listening = false; buttonEl.classList.remove("listening"); };
+  recognition.onerror = (e)=>{ listening = false; buttonEl.classList.remove("listening"); console.error("speech recognition error:", e.error); };
+  recognition.onresult = (e)=>{
+    const transcript = e.results[0][0].transcript;
+    onResult(transcript);
+  };
+}
+
+setupMic(document.getElementById("micSearch"), (text)=>{
+  const input = document.getElementById("search");
+  input.value = text;
+  input.dispatchEvent(new Event("input"));
+});
+
+setupMic(document.getElementById("micWrite"), (text)=>{
+  const ta = document.getElementById("writeText");
+  ta.value = (ta.value ? ta.value + " " : "") + text;
+});
+
+// --- Record & compare own pronunciation (in the fullscreen present view) ---
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordedAudioURL = null;
+let isRecording = false;
+
+async function toggleRecording(){
+  const recordBtn = document.getElementById("presentRecord");
+  const playbackBtn = document.getElementById("presentPlayback");
+  if(isRecording){
+    mediaRecorder.stop();
+    return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e)=>{ if(e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{
+      isRecording = false;
+      recordBtn.classList.remove("recording");
+      recordBtn.textContent = "🎙️ 録音";
+      stream.getTracks().forEach(t=>t.stop());
+      const blob = new Blob(recordedChunks, { type:"audio/webm" });
+      if(recordedAudioURL) URL.revokeObjectURL(recordedAudioURL);
+      recordedAudioURL = URL.createObjectURL(blob);
+      playbackBtn.style.display = "inline-block";
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    recordBtn.classList.add("recording");
+    recordBtn.textContent = "■ 停止";
+    playbackBtn.style.display = "none";
+  }catch(e){
+    console.error(e);
+    alert("マイクを使用できませんでした。ブラウザのマイク許可設定を確認してください。");
+  }
+}
+document.getElementById("presentRecord").addEventListener("click", toggleRecording);
+document.getElementById("presentPlayback").addEventListener("click", ()=>{
+  if(!recordedAudioURL) return;
+  const audio = new Audio(recordedAudioURL);
+  audio.play();
+});
+
+document.getElementById("closeSettings").addEventListener("click", ()=> document.getElementById("settingsOverlay").classList.remove("open"));
+document.getElementById("langPickerBtn").addEventListener("click", ()=>{ renderLangPickList(); document.getElementById("langPickerOverlay").classList.add("open"); });
+document.getElementById("closeLangPicker").addEventListener("click", ()=> document.getElementById("langPickerOverlay").classList.remove("open"));
+document.getElementById("rateSlider").addEventListener("input", (e)=>{ rate = parseFloat(e.target.value); document.getElementById("rateLabel").textContent = rate.toFixed(2).replace(/0$/,'') + "x"; });
+document.getElementById("rateSlider").addEventListener("change", saveSettings);
+document.getElementById("fsSlider").addEventListener("input", (e)=>{
+  fsScale = parseFloat(e.target.value);
+  document.getElementById("fsLabel").textContent = fsScale.toFixed(2).replace(/0$/,'') + "x";
+  document.documentElement.style.setProperty("--fs-scale", fsScale);
+});
+document.getElementById("fsSlider").addEventListener("change", saveSettings);
+document.getElementById("loopToggle").addEventListener("click", (e)=>{
+  listenLoop = !listenLoop;
+  e.currentTarget.classList.toggle("on", listenLoop);
+  saveSettings();
+});
+document.getElementById("gapSlider").addEventListener("input", (e)=>{
+  listenGap = parseInt(e.target.value, 10);
+  document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
+});
+document.getElementById("gapSlider").addEventListener("change", saveSettings);
+document.getElementById("openAdd").onclick = ()=> document.getElementById("addOverlay").classList.add("open");
+document.getElementById("closeAdd").onclick = ()=> document.getElementById("addOverlay").classList.remove("open");
+document.getElementById("unlearnedToggle").addEventListener("click", (e)=>{ stopListening(); showUnlearnedOnly = !showUnlearnedOnly; e.currentTarget.classList.toggle("on", showUnlearnedOnly); renderDeck(); });
+document.getElementById("pinnedToggle").addEventListener("click", (e)=>{ stopListening(); showPinnedOnly = !showPinnedOnly; e.currentTarget.classList.toggle("on", showPinnedOnly); renderDeck(); });
+document.getElementById("listenBtn").addEventListener("click", ()=>{ if(listenState.active) stopListening(); else startListening(); });
+
+document.getElementById("submitAdd").onclick = ()=>{
+  const ja = document.getElementById("addJa").value.trim();
+  if(!ja){ alert("日本語のフレーズを入力してください"); return; }
+  const cat = document.getElementById("addCat").value;
+  const entry = { id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2,6), ja, cat };
+  LANGS.forEach(l=>{
+    const text = document.getElementById(`add_${l.key}`).value.trim();
+    const kana = document.getElementById(`add_${l.key}_kana`).value.trim();
+    if(text) entry[l.key] = [text, kana];
+  });
+  customData.push(entry);
+  saveCustom();
+  document.getElementById("addOverlay").classList.remove("open");
+  LANGS.forEach(l=>{ document.getElementById(`add_${l.key}`).value=""; document.getElementById(`add_${l.key}_kana`).value=""; });
+  document.getElementById("addJa").value = "";
+  renderDeck();
+};
+
+(async function init(){
+  await loadState();
+  document.getElementById("rateSlider").value = rate;
+  document.getElementById("rateLabel").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
+  document.getElementById("fsSlider").value = fsScale;
+  document.getElementById("fsLabel").textContent = fsScale.toFixed(2).replace(/0$/,'') + "x";
+  document.documentElement.style.setProperty("--fs-scale", fsScale);
+  document.getElementById("loopToggle").classList.toggle("on", listenLoop);
+  document.getElementById("gapSlider").value = listenGap;
+  document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
+  populateAddCatSelect();
+  buildAddFields();
+  renderLangButton();
+  renderCats();
+  renderDeck();
+  if(synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; }
+})();
+</script>
+
+</body>
+</html>
