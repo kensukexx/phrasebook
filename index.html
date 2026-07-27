@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#FF6B6B">
+<meta name="referrer" content="no-referrer">
 <title>ことばの旅券 — 言語別あいさつ帳</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -540,6 +541,7 @@ let synth = window.speechSynthesis;
 let availableVoices = [];
 let listenState = { active:false, list:[], index:0 };
 let currentUtter = null;
+let currentTTSAudio = null;
 
 // Claude Artifact 環境では window.storage、通常ブラウザでは localStorage を使う
 const store = (window.storage && typeof window.storage.get === "function")
@@ -759,19 +761,90 @@ function speak(text, langKey, btn, onDone){
   speakRaw(text, meta ? meta.speech : "en-US", btn, onDone, langKey);
 }
 
-function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
-  if(!synth){ if(onDone) onDone(); return; }
-  synth.cancel();
+// --- 発音再生: オンライン時はGoogle翻訳の音声合成（自然な声）、失敗・オフライン時は端末のTTSにフォールバック ---
+const TTS_LANG_CODES = { en:"en", ko:"ko", de:"de", ro:"ro", es:"es", fr:"fr", vi:"vi", zh:"zh-CN", pt:"pt", ja:"ja" };
+
+function ttsLangFor(langKeyForVoice, speechLang){
+  if(langKeyForVoice && TTS_LANG_CODES[langKeyForVoice]) return TTS_LANG_CODES[langKeyForVoice];
+  if(!speechLang) return null;
+  const lower = speechLang.toLowerCase();
+  if(lower.startsWith("ja")) return "ja";
+  if(lower.startsWith("zh")) return "zh-CN";
+  return TTS_LANG_CODES[lower.split('-')[0]] || null;
+}
+
+// Google翻訳の音声合成エンドポイントは1リクエストあたりの文字数に上限があるため、
+// 長い文章は単語の区切りで分割し、順番に再生してつなげる。
+function splitForTTS(text, maxLen){
+  if(text.length <= maxLen) return [text];
+  const parts = [];
+  let remaining = text.trim();
+  while(remaining.length > maxLen){
+    let cut = remaining.lastIndexOf(' ', maxLen);
+    if(cut <= 0) cut = maxLen;
+    parts.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut).trim();
+  }
+  if(remaining) parts.push(remaining);
+  return parts;
+}
+
+function playGoogleTTS(text, ttsLang, rateVal){
+  return new Promise((resolve, reject)=>{
+    const chunks = splitForTTS(text, 180);
+    const audio = new Audio();
+    audio.playbackRate = rateVal || 1;
+    currentTTSAudio = audio;
+    let idx = 0;
+    const playNext = ()=>{
+      if(idx >= chunks.length){ resolve(); return; }
+      const url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(ttsLang) + "&client=tw-ob&q=" + encodeURIComponent(chunks[idx]);
+      idx++;
+      audio.src = url;
+      audio.play().catch(reject);
+    };
+    audio.onended = playNext;
+    audio.onerror = ()=> reject(new Error("google tts playback failed"));
+    playNext();
+  });
+}
+
+function stopAllAudio(){
+  if(synth) synth.cancel();
+  if(currentTTSAudio){
+    currentTTSAudio.onended = null;
+    currentTTSAudio.onerror = null;
+    currentTTSAudio.pause();
+    currentTTSAudio = null;
+  }
+}
+
+function speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish){
+  if(!synth){ finish(); return; }
   const utter = new SpeechSynthesisUtterance(text);
   currentUtter = utter; // Chromeで参照が消えるとonendが発火しなくなる問題への対策
   const voice = langKeyForVoice ? pickVoice(langKeyForVoice) : pickVoiceByPrefix(speechLang.split('-')[0].toLowerCase());
   if(voice) utter.voice = voice;
   utter.lang = speechLang;
-  utter.rate = rateOverride || rate;
-  if(btn) btn.classList.add("playing");
-  utter.onend = ()=> { if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
-  utter.onerror = ()=> { if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
+  utter.rate = rateVal;
+  utter.onend = finish;
+  utter.onerror = finish;
   synth.speak(utter);
+}
+
+function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
+  stopAllAudio();
+  const rateVal = rateOverride || rate;
+  if(btn) btn.classList.add("playing");
+  const finish = ()=>{ if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
+  const ttsLang = ttsLangFor(langKeyForVoice, speechLang);
+  if(ttsLang && navigator.onLine !== false){
+    playGoogleTTS(text, ttsLang, rateVal).then(finish).catch(()=>{
+      speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish);
+    });
+  } else {
+    speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish);
+  }
 }
 
 function openPresent({cat, ja, phrase, kana, speechLang, onSave}){
@@ -792,7 +865,7 @@ function openPresent({cat, ja, phrase, kana, speechLang, onSave}){
   saveBtn.onclick = onSave || null;
 }
 function closePresent(){
-  if(synth) synth.cancel();
+  stopAllAudio();
   document.getElementById("presentOverlay").classList.remove("open");
 }
 
@@ -983,7 +1056,7 @@ function startListening(){
 function stopListening(){
   if(!listenState.active) return;
   listenState.active = false;
-  if(synth) synth.cancel();
+  stopAllAudio();
   document.querySelectorAll(".ticket.now-playing").forEach(el=>el.classList.remove("now-playing"));
   updateListenButton();
 }
