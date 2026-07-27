@@ -3,33 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#FF6B6B">
 <title>ことばの旅券 — 言語別あいさつ帳</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --paper: #ECE3CE; --ink: #1D2B3A; --ink-soft: #46566A; --red: #A83A2E; --blue: #2F4C7A; --gold: #A9822F; --green: #4C7A52; --line: rgba(29,43,58,0.18);
+    --paper: #FFF9F2; --ink: #2F3542; --ink-soft: #8395A7; --red: #FF6B6B; --blue: #4D96FF; --gold: #FFA502; --green: #20BF6B; --line: rgba(47,53,66,0.12);
     --fs-scale: 1;
   }
   *{box-sizing:border-box;}
   body{ margin:0; background: var(--paper);
-    background-image: repeating-linear-gradient(0deg, rgba(29,43,58,0.02) 0px, rgba(29,43,58,0.02) 1px, transparent 1px, transparent 3px);
-    color:var(--ink); font-family:"Noto Sans JP","Noto Sans KR","Noto Sans SC", sans-serif; min-height:100vh; padding-bottom:70px; }
-  header{ position:relative; background:var(--ink); color:var(--paper); padding:22px 20px 26px; overflow:hidden; }
-  header::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:8px;
-    background: repeating-linear-gradient(-45deg, var(--red) 0 14px, var(--paper) 14px 20px, var(--blue) 20px 34px, var(--paper) 34px 40px); }
+    background-image: radial-gradient(rgba(255,107,107,0.07) 1.5px, transparent 1.5px);
+    background-size: 22px 22px;
+    color:var(--ink); font-family:"Zen Maru Gothic","Noto Sans JP","Noto Sans KR","Noto Sans SC", sans-serif; min-height:100vh; padding-bottom:70px; }
+  header{ position:relative; background: linear-gradient(135deg, #FF6B6B 0%, #FF9F43 70%, #FEC84D 100%); color:#fff; padding:22px 20px 26px; overflow:hidden; }
+  header::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:7px;
+    background: linear-gradient(90deg, #FF6B6B, #F7B731, #20BF6B, #0FB9B1, #4D96FF, #A55EEA, #FF6FA5); }
   .headtop{ display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
-  .eyebrow{ font-family:"IBM Plex Mono", monospace; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--gold); margin:0 0 6px; }
-  h1{ font-family:"Fraunces", serif; font-weight:600; font-size:clamp(26px,7vw,34px); margin:0 0 4px; letter-spacing:.01em; }
-  header p.sub{ margin:0; font-size:13.5px; color:rgba(236,227,206,0.75); }
-  .icon-btn{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:1.5px solid rgba(236,227,206,0.4);
-    background:rgba(236,227,206,0.08); color:var(--paper); font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .eyebrow{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:rgba(255,255,255,0.9); margin:0 0 6px; }
+  h1{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:900; font-size:clamp(26px,7vw,34px); margin:0 0 4px; letter-spacing:.02em; text-shadow:0 2px 0 rgba(0,0,0,0.08); }
+  header p.sub{ margin:0; font-size:13.5px; color:rgba(255,255,255,0.92); }
+  .icon-btn{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:none;
+    background:rgba(255,255,255,0.25); color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .icon-btn:active{ transform:scale(0.94); }
 
   .langbar{ display:flex; align-items:center; gap:10px; padding:16px 16px 4px; }
-  .langbar label{ font-family:"IBM Plex Mono", monospace; font-size:11px; color:var(--ink-soft); flex:0 0 auto; }
-  .langselect{ flex:1; padding:11px 14px; border:2px solid var(--ink); border-radius:999px; background:var(--red); color:var(--paper);
-    font-family:"IBM Plex Mono", monospace; font-size:14px; font-weight:600; text-align:center; cursor:pointer; }
+  .langbar label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-soft); flex:0 0 auto; }
+  .langselect{ flex:1; padding:12px 14px; border:none; border-radius:999px; background:#fff; color:var(--ink);
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:14.5px; font-weight:700; text-align:center; cursor:pointer;
+    box-shadow:0 3px 12px rgba(47,53,66,0.12); }
 
   .lang-row{ display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid var(--line); touch-action:pan-y; user-select:none; -webkit-user-select:none; background:transparent; border-radius:8px; }
   .lang-row:last-child{ border-bottom:none; }
@@ -38,47 +41,54 @@
   .lang-row .lp-label{ flex:1; font-size:15px; color:var(--ink); }
   .lang-row .lp-check{ color:var(--red); font-weight:700; width:20px; text-align:center; flex:0 0 auto; }
 
-  .cats{ display:flex; gap:8px; padding:12px 16px 2px; overflow-x:auto; -webkit-overflow-scrolling:touch; }
-  .cat{ flex:0 0 auto; padding:6px 12px; border:1.5px solid var(--blue); border-radius:999px; background:transparent;
-    font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--blue); cursor:pointer; white-space:nowrap; }
-  .cat.active{ background:var(--blue); color:var(--paper); }
+  .cats{ position:sticky; top:0; z-index:30; display:flex; gap:8px; padding:12px 14px 10px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--paper); scrollbar-width:none;
+    box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
+  .cats::-webkit-scrollbar{ display:none; }
+  .cat{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:9px 15px; border:none; border-radius:999px; background:#fff;
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; font-weight:700; color:var(--ink); cursor:pointer; white-space:nowrap;
+    box-shadow:0 2px 8px rgba(47,53,66,0.08); transition: transform .1s ease; }
+  .cat:active{ transform:scale(0.95); }
+  .cat .cat-ico{ font-size:15px; }
+  .cat.active{ color:#fff; box-shadow:0 4px 14px rgba(47,53,66,0.22); }
 
   .listenbar{ padding:12px 16px 0; }
   .listenbtn{ width:100%; padding:12px; border:2px solid var(--ink); border-radius:12px; background:var(--ink); color:var(--paper);
-    font-family:"IBM Plex Mono", monospace; font-weight:600; font-size:14px; cursor:pointer; }
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:600; font-size:14px; cursor:pointer; }
   .listenbtn.active{ background:var(--red); border-color:var(--red); }
 
   .toolrow{ padding:10px 16px 0; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .toggles{ display:flex; gap:14px; }
-  .toggle-wrap{ display:flex; align-items:center; gap:7px; font-family:"IBM Plex Mono", monospace; font-size:11.5px; color:var(--ink-soft); }
+  .toggle-wrap{ display:flex; align-items:center; gap:7px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
   .switch{ position:relative; width:36px; height:21px; background:rgba(29,43,58,0.2); border-radius:999px; cursor:pointer; flex:0 0 auto; }
   .switch::after{ content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%; background:var(--paper); transition:transform .15s ease; }
   .switch.on{ background:var(--green); }
   .switch.on::after{ transform:translateX(15px); }
-  .progress-label{ font-family:"IBM Plex Mono", monospace; font-size:11.5px; color:var(--ink-soft); }
+  .progress-label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
 
   .searchwrap{ padding:10px 16px 4px; display:flex; gap:8px; }
-  .searchwrap input{ flex:1; padding:11px 14px; border:1.5px solid var(--line); border-radius:10px; background:rgba(255,255,255,0.4);
-    font-family:"Noto Sans JP", sans-serif; font-size:15px; color:var(--ink); }
-  .addbtn{ flex:0 0 auto; width:44px; border:1.5px solid var(--ink); border-radius:10px; background:var(--ink); color:var(--paper); font-size:20px; cursor:pointer; }
+  .searchwrap input{ flex:1; padding:11px 16px; border:none; border-radius:999px; background:#fff;
+    font-family:"Zen Maru Gothic","Noto Sans JP", sans-serif; font-size:15px; color:var(--ink); box-shadow:0 2px 10px rgba(47,53,66,0.08); }
+  .addbtn{ flex:0 0 auto; width:44px; border:none; border-radius:999px; background:var(--red); color:#fff; font-size:20px; cursor:pointer; box-shadow:0 3px 10px rgba(255,107,107,0.35); }
 
   .deck{ padding:14px 16px 10px; display:flex; flex-direction:column; gap:12px; }
-  .ticket{ position:relative; background:#F7F1DE; border:1.5px solid var(--line); border-radius:12px; padding:16px 16px 14px 18px;
-    display:flex; align-items:center; gap:10px; box-shadow: 0 1px 0 rgba(29,43,58,0.05); cursor:pointer; transition: box-shadow .2s ease, border-color .2s ease; }
-  .ticket::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:5px; background:var(--blue); border-radius:12px 0 0 12px; }
+  .ticket{ position:relative; background:#fff; border:none; border-radius:20px; padding:16px 16px 14px 20px;
+    display:flex; align-items:center; gap:10px; box-shadow: 0 4px 16px rgba(47,53,66,0.08); cursor:pointer; transition: box-shadow .2s ease, transform .1s ease; }
+  .ticket:active{ transform:scale(0.985); }
+  .ticket::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--cat-color, var(--blue)); border-radius:20px 0 0 20px; }
   .ticket.custom::before{ background:var(--gold); }
   .ticket.learned{ opacity:0.55; }
   .ticket.learned::before{ background:var(--green); }
-  .ticket.now-playing{ border-color:var(--red); box-shadow:0 0 0 2px rgba(168,58,46,0.35); }
+  .ticket.now-playing{ box-shadow:0 0 0 3px rgba(255,107,107,0.5), 0 4px 16px rgba(47,53,66,0.12); }
   .pin-badge{ position:absolute; top:8px; right:10px; font-size:13px; }
-  .ticket-num{ font-family:"IBM Plex Mono", monospace; font-size:11px; color:var(--ink-soft); width:20px; flex:0 0 auto; }
+  .ticket-num{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-soft); width:20px; flex:0 0 auto; }
   .ticket-main{ flex:1 1 auto; min-width:0; }
   .action-row{ display:flex; align-items:center; gap:8px; margin-top:8px; }
-  .cat-tag{ font-family:"IBM Plex Mono", monospace; font-size:10px; color:var(--blue); text-transform:uppercase; letter-spacing:.05em; margin:0 0 3px; }
-  .ja{ font-family:"Fraunces", serif; font-weight:600; font-size:calc(17px * var(--fs-scale)); color:var(--ink); margin:0 0 6px; line-height:1.3; }
+  .cat-tag{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:10px; font-weight:700; color:var(--cat-color, var(--blue)); text-transform:uppercase; letter-spacing:.05em; margin:0 0 3px; }
+  .ja{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:600; font-size:calc(17px * var(--fs-scale)); color:var(--ink); margin:0 0 6px; line-height:1.3; }
   .phrase-row{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
   .phrase{ font-family:"Noto Sans SC","Noto Sans KR","Noto Sans JP", sans-serif; font-weight:600; font-size:calc(16px * var(--fs-scale)); color:var(--red); }
-  .kana{ font-family:"IBM Plex Mono", monospace; font-size:calc(12.5px * var(--fs-scale)); color:var(--ink-soft); }
+  .kana{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:calc(12.5px * var(--fs-scale)); color:var(--ink-soft); }
   .speak{ flex:0 0 auto; width:38px; height:38px; border-radius:50%; border:1.5px solid var(--ink); background:var(--ink); color:var(--paper);
     display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; transition: transform .1s ease, background .15s ease; }
   .speak:active{ transform:scale(0.92); }
@@ -90,31 +100,31 @@
   .del{ position:absolute; top:8px; right:10px; width:22px; height:22px; border-radius:50%; border:1.5px solid var(--line);
     background:rgba(255,255,255,0.6); color:var(--ink-soft); font-size:10px; cursor:pointer; }
 
-  footer{ text-align:center; font-family:"IBM Plex Mono", monospace; font-size:11px; color:var(--ink-soft); padding:18px 20px 0; opacity:.7; }
+  footer{ text-align:center; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-soft); padding:18px 20px 0; opacity:.7; }
   .empty{ text-align:center; padding:40px 20px; color:var(--ink-soft); font-size:14px; }
 
   .overlay{ position:fixed; inset:0; background:rgba(29,43,58,0.45); display:none; align-items:flex-end; justify-content:center; z-index:50; }
   .overlay.open{ display:flex; }
-  .panel{ background:var(--paper); width:100%; max-width:480px; border-radius:20px 20px 0 0; padding:20px 20px 28px; max-height:86vh; overflow-y:auto; border-top:3px solid var(--red); }
-  .panel h2{ font-family:"Fraunces",serif; font-size:20px; margin:0 0 14px; display:flex; justify-content:space-between; align-items:center; }
+  .panel{ background:var(--paper); width:100%; max-width:480px; border-radius:26px 26px 0 0; padding:20px 20px 28px; max-height:86vh; overflow-y:auto; border-top:4px solid var(--red); }
+  .panel h2{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:20px; margin:0 0 14px; display:flex; justify-content:space-between; align-items:center; }
   .panel h2 button{ background:none; border:none; font-size:20px; color:var(--ink-soft); cursor:pointer; }
   .field{ margin-bottom:14px; }
-  .field label{ display:block; font-family:"IBM Plex Mono", monospace; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
+  .field label{ display:block; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
   .field input[type=text], .field select{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
   .field input[type=range]{ width:100%; accent-color: var(--red); }
-  .rate-value{ font-family:"IBM Plex Mono", monospace; font-size:13px; color:var(--red); font-weight:600; }
+  .rate-value{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; color:var(--red); font-weight:600; }
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .submitbtn{ width:100%; padding:12px; border:none; border-radius:10px; background:var(--red); color:var(--paper); font-weight:600; font-size:15px; cursor:pointer; margin-top:6px; }
   .hint{ font-size:12px; color:var(--ink-soft); margin-top:4px; line-height:1.5; }
   .voice-lang-row{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
   .voice-lang-row:last-child{ border-bottom:none; }
-  .voice-lang-row .name{ font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--ink-soft); width:66px; flex:0 0 auto; }
+  .voice-lang-row .name{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12px; color:var(--ink-soft); width:66px; flex:0 0 auto; }
   .voice-lang-row select{ flex:1; min-width:0; padding:7px 8px; border:1.5px solid var(--line); border-radius:7px; font-size:12.5px; background:rgba(255,255,255,0.5); }
   .voice-lang-row .preview-voice{ flex:0 0 auto; width:30px; height:30px; font-size:13px; }
   .mini-btn.playing{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .order-row{ display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); }
   .order-row:last-child{ border-bottom:none; }
-  .order-row .oname{ font-family:"IBM Plex Mono", monospace; font-size:13px; color:var(--ink); }
+  .order-row .oname{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; color:var(--ink); }
   .order-btns button{ width:28px; height:28px; border-radius:6px; border:1.5px solid var(--line); background:transparent; color:var(--ink); font-size:13px; cursor:pointer; margin-left:4px; }
 
   @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
@@ -131,11 +141,11 @@
     font-size:18px; cursor:pointer;
   }
   .present-body{ max-width:100%; }
-  .present-cat{ font-family:"IBM Plex Mono", monospace; font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); margin:0 0 14px; }
+  .present-cat{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; letter-spacing:.1em; text-transform:uppercase; color:var(--gold); margin:0 0 14px; }
   .present-ja{ font-family:"Noto Sans JP", sans-serif; font-size:clamp(16px,4.5vw,22px); color:rgba(236,227,206,0.65); margin:0 0 22px; }
-  .present-phrase{ font-family:"Noto Sans SC","Noto Sans KR","Fraunces", sans-serif; font-weight:700; font-size:clamp(32px,10vw,64px);
+  .present-phrase{ font-family:"Zen Maru Gothic","Noto Sans SC","Noto Sans KR", sans-serif; font-weight:900; font-size:clamp(32px,10vw,64px);
     color:var(--paper); line-height:1.2; margin:0 0 16px; word-break:break-word; }
-  .present-kana{ font-family:"IBM Plex Mono", monospace; font-size:clamp(14px,3.5vw,18px); color:var(--gold); margin:0; }
+  .present-kana{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:clamp(14px,3.5vw,18px); color:var(--gold); margin:0; }
   .present-speak{
     margin-top:34px; width:64px; height:64px; border-radius:50%; border:2px solid var(--paper);
     background:var(--red); color:var(--paper); font-size:26px; cursor:pointer;
@@ -143,12 +153,17 @@
   }
   .present-speak.playing{ background:var(--gold); }
   .present-mini{ padding:10px 16px; border-radius:999px; border:1.5px solid rgba(236,227,206,0.5); background:transparent; color:var(--paper);
-    font-family:"IBM Plex Mono", monospace; font-size:12.5px; cursor:pointer; }
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; cursor:pointer; }
   .present-mini.recording{ background:var(--red); border-color:var(--red); animation: pulse 1s infinite; }
   .expand-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:transparent; color:var(--ink-soft); font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .mic-btn.listening{ background:var(--red) !important; color:var(--paper) !important; border-color:var(--red) !important; animation: pulse 1s infinite; }
   @keyframes pulse{ 0%{ opacity:1; } 50%{ opacity:0.55; } 100%{ opacity:1; } }
-  .note-toggle{ margin-left:auto; padding:0; border:none; background:none; color:var(--blue); font-family:"IBM Plex Mono", monospace; font-size:11.5px; cursor:pointer; }
+  @keyframes slideInR{ from{ transform:translateX(44px); opacity:0; } to{ transform:none; opacity:1; } }
+  @keyframes slideInL{ from{ transform:translateX(-44px); opacity:0; } to{ transform:none; opacity:1; } }
+  .deck.slide-in-right{ animation: slideInR .25s ease; }
+  .deck.slide-in-left{ animation: slideInL .25s ease; }
+  @media (prefers-reduced-motion: reduce){ .deck.slide-in-right, .deck.slide-in-left{ animation:none; } }
+  .note-toggle{ margin-left:auto; padding:0; border:none; background:none; color:var(--blue); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; cursor:pointer; }
   .note-text{ display:none; margin:8px 0 0; padding:10px 12px; background:rgba(47,76,122,0.08); border-left:3px solid var(--blue); border-radius:0 8px 8px 0; font-family:"Noto Sans JP", sans-serif; font-size:12.5px; line-height:1.6; color:var(--ink-soft); }
   .note-text.open{ display:block; }
   .tool-item{ width:100%; display:flex; align-items:center; gap:14px; padding:14px 10px; border:none; border-bottom:1px solid var(--line);
@@ -159,9 +174,9 @@
   .currency-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:16px; color:var(--ink); }
   .currency-row select{ flex:0 0 auto; width:110px; padding:10px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink); }
   .currency-swap{ text-align:center; color:var(--ink-soft); font-size:13px; margin:2px 0 10px; }
-  .currency-result{ font-family:"Fraunces", serif; font-weight:700; font-size:26px; color:var(--red); text-align:center; margin:10px 0; }
+  .currency-result{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:26px; color:var(--red); text-align:center; margin:10px 0; }
   .filterbar{ display:flex; align-items:center; gap:8px; padding:10px 16px 0; flex-wrap:wrap; }
-  .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:8px; border:1.5px solid var(--line); background:transparent; color:var(--ink-soft); font-size:14px; cursor:pointer; }
+  .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:12px; border:none; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(47,53,66,0.08); }
   .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
   .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .fs-slider-row{ display:flex; align-items:center; gap:10px; }
@@ -175,7 +190,7 @@
     <div>
       <p class="eyebrow">Phrasebook · 日本語 → 9言語</p>
       <h1>ことばの旅券</h1>
-      <p class="sub">タップして発音。カードの⤢で相手に見せられます。</p>
+      <p class="sub">タップして発音、左右スワイプでカテゴリ切替。⤢で相手に見せられます。</p>
     </div>
     <button class="icon-btn" id="toolsBtn" aria-label="ツール">☰</button>
   </div>
@@ -322,6 +337,20 @@ const LANGS = [
 ];
 
 const CATS = ["すべて","あいさつ","リアクション","買い物・観光","自己紹介","気持ち","数字","緊急","豆知識","その他"];
+
+const CAT_META = {
+  "すべて":      { icon:"🎫", color:"#576574" },
+  "あいさつ":    { icon:"👋", color:"#FF6B6B" },
+  "リアクション": { icon:"😲", color:"#F7B731" },
+  "買い物・観光": { icon:"🛍️", color:"#4D96FF" },
+  "自己紹介":    { icon:"🙋", color:"#A55EEA" },
+  "気持ち":      { icon:"💖", color:"#FF6FA5" },
+  "数字":        { icon:"🔢", color:"#0FB9B1" },
+  "緊急":        { icon:"🚨", color:"#EB3B5A" },
+  "豆知識":      { icon:"💡", color:"#20BF6B" },
+  "その他":      { icon:"📎", color:"#8395A7" },
+};
+function catMeta(c){ return CAT_META[c] || { icon:"🏷️", color:"#8395A7" }; }
 
 const BUILTIN = [
 {ja:"こんにちは",cat:"あいさつ",en:["Hello","ハロー"],ko:["안녕하세요","アンニョンハセヨ"],de:["Guten Tag","グーテン ターク"],ro:["Bună ziua","ブナ ズィウア"],es:["Hola","オラ"],fr:["Bonjour","ボンジュール"],vi:["Xin chào","シンチャオ"],zh:["你好","ニーハオ"],pt:["Olá","オラー"]},
@@ -555,13 +584,34 @@ function attachRowDrag(row){
 function renderCats(){
   const wrap = document.getElementById("cats");
   wrap.innerHTML = "";
+  let activeBtn = null;
   CATS.forEach(c=>{
+    const m = catMeta(c);
     const btn = document.createElement("button");
     btn.className = "cat" + (c===currentCat ? " active" : "");
-    btn.textContent = c;
+    btn.innerHTML = `<span class="cat-ico">${m.icon}</span>${esc(c)}`;
+    if(c===currentCat){ btn.style.background = m.color; activeBtn = btn; }
     btn.onclick = ()=>{ stopListening(); currentCat = c; renderCats(); renderDeck(); };
     wrap.appendChild(btn);
   });
+  // 選択中のカテゴリがバーの中央に来るよう横スクロール
+  if(activeBtn){
+    requestAnimationFrame(()=>{
+      wrap.scrollTo({ left: activeBtn.offsetLeft - wrap.clientWidth/2 + activeBtn.clientWidth/2, behavior:"smooth" });
+    });
+  }
+}
+
+function switchCategory(dir){
+  stopListening();
+  const i = CATS.indexOf(currentCat);
+  currentCat = CATS[(i + dir + CATS.length) % CATS.length];
+  renderCats();
+  renderDeck();
+  const deck = document.getElementById("deck");
+  deck.classList.remove("slide-in-left","slide-in-right");
+  void deck.offsetWidth;
+  deck.classList.add(dir===1 ? "slide-in-right" : "slide-in-left");
 }
 
 function populateAddCatSelect(){
@@ -690,6 +740,7 @@ function renderDeck(){
     const card = document.createElement("div");
     card.className = "ticket" + (isCustom ? " custom" : "") + (isLearned ? " learned" : "");
     card.dataset.key = keyOf(d);
+    card.style.setProperty("--cat-color", catMeta(d.cat||"その他").color);
     card.innerHTML = `
       ${isPinned ? '<span class="pin-badge">📌</span>' : ''}
       <div class="ticket-num">${String(i+1).padStart(2,"0")}</div>
@@ -840,6 +891,23 @@ function renderVoiceList(){
 function refreshVoices(){ availableVoices = synth ? synth.getVoices() : []; renderVoiceList(); }
 
 document.getElementById("search").addEventListener("input", ()=>{ stopListening(); renderDeck(); });
+
+// --- カード一覧の左右スワイプでカテゴリ切替 ---
+(function(){
+  const deck = document.getElementById("deck");
+  let sx = 0, sy = 0, st = 0;
+  deck.addEventListener("touchstart", (e)=>{
+    const t = e.touches[0];
+    sx = t.clientX; sy = t.clientY; st = Date.now();
+  }, {passive:true});
+  deck.addEventListener("touchend", (e)=>{
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx, dy = t.clientY - sy;
+    if(Math.abs(dx) > 70 && Math.abs(dy) < Math.abs(dx)*0.5 && Date.now()-st < 600){
+      switchCategory(dx < 0 ? 1 : -1);
+    }
+  }, {passive:true});
+})();
 
 // --- Tools menu ---
 function closeAllOverlays(){
