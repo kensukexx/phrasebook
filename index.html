@@ -6,6 +6,11 @@
 <meta name="theme-color" content="#FF6B6B">
 <meta name="referrer" content="no-referrer">
 <title>ことばの旅券 — 言語別あいさつ帳</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ことばの旅券">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -1716,6 +1721,13 @@ document.getElementById("submitAdd").onclick = ()=>{
   renderDeck();
   if(synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; }
 })();
+
+// オフラインでもアプリを開けるようにする（GitHub Pagesの1ページのみキャッシュ）
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("./sw.js").catch(e=>console.error("SW registration failed:", e));
+  });
+}
 </script>
 
 </body>
