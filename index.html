@@ -324,7 +324,7 @@
     <div class="field"><label>日本語（必須）</label><input type="text" id="addJa" placeholder="例：乾杯"></div>
     <div class="field"><label>カテゴリ</label><select id="addCat"></select></div>
     <div class="grid2" id="addFieldsGrid"></div>
-    <p class="hint">日本語以外は分かる言語だけ入力すればOK。空欄の言語はカードに表示されません。</p>
+    <p class="hint">日本語以外は分かる言語だけ入力すればOK。翻訳が空欄の言語のビューには表示されません。日本語だけで追加した場合は全言語で表示され、日本語で読み上げます。</p>
     <button class="submitbtn" id="submitAdd">追加する</button>
   </div>
 </div>
@@ -556,6 +556,8 @@ async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
 
 function allData(){ return BUILTIN.concat(customData); }
+// どの言語も未入力（日本語のみ）のフレーズかどうか
+function isJaOnly(d){ return !LANGS.some(l=>d[l.key]); }
 function orderedLangs(){ return langOrder.map(k=>LANGS.find(l=>l.key===k)).filter(Boolean); }
 
 function renderLangButton(){
@@ -764,7 +766,7 @@ function computeFiltered(){
   const q = document.getElementById("search").value.trim();
   const ql = q.toLowerCase();
   const data = allData();
-  let filtered = data.filter(d => d[currentLang]);
+  let filtered = data.filter(d => d[currentLang] || isJaOnly(d));
   if(currentCat !== "すべて"){ filtered = filtered.filter(d => (d.cat||"その他")===currentCat); }
   if(q){
     filtered = filtered.filter(d=>{
@@ -804,7 +806,9 @@ function renderDeck(){
   if(filtered.length===0){ deck.innerHTML = `<div class="empty">条件に一致するフレーズが見つかりません</div>`; return; }
 
   filtered.forEach((d, i)=>{
-    const [phrase, kana] = d[currentLang];
+    const pair = d[currentLang];
+    const jaOnly = !pair;
+    const [phrase, kana] = pair || [d.ja, ""];
     const isCustom = customData.includes(d);
     const isLearned = !!learned[keyOf(d)];
     const isPinned = !!pinned[keyOf(d)];
@@ -818,7 +822,7 @@ function renderDeck(){
       <div class="ticket-main">
         <p class="cat-tag">${esc(d.cat || "その他")}</p>
         <p class="ja">${esc(d.ja)}</p>
-        <div class="phrase-row"><span class="phrase">${esc(phrase)}</span><span class="kana">${esc(kana || "")}</span></div>
+        <div class="phrase-row">${jaOnly ? '<span class="kana">翻訳未入力・タップで日本語読み上げ</span>' : `<span class="phrase">${esc(phrase)}</span><span class="kana">${esc(kana || "")}</span>`}</div>
         <div class="action-row">
           <button class="mini-btn" aria-label="全画面で見せる" data-role="expand">⤢</button>
           <button class="mini-btn ${isPinned?'pinned':''}" aria-label="ピン留め" data-role="pin">📌</button>
@@ -839,7 +843,8 @@ function renderDeck(){
     card.addEventListener("click", (e)=>{
       if(e.target.closest('[data-role]') || e.target.closest(".del")) return;
       stopListening();
-      speak(phrase, currentLang, card.querySelector(".speak"));
+      if(jaOnly){ speakRaw(d.ja, "ja-JP", card.querySelector(".speak")); }
+      else{ speak(phrase, currentLang, card.querySelector(".speak")); }
     });
     card.querySelector('[data-role="learn"]').addEventListener("click", (e)=>{
       e.stopPropagation();
@@ -856,7 +861,8 @@ function renderDeck(){
     card.querySelector('[data-role="expand"]').addEventListener("click", (e)=>{
       e.stopPropagation();
       stopListening();
-      openPresent({ cat:d.cat||"その他", ja:d.ja, phrase, kana, speechLang: LANGS.find(l=>l.key===currentLang).speech });
+      if(jaOnly){ openPresent({ cat:d.cat||"その他", ja:"", phrase:d.ja, kana:"", speechLang:"ja-JP" }); }
+      else{ openPresent({ cat:d.cat||"その他", ja:d.ja, phrase, kana, speechLang: LANGS.find(l=>l.key===currentLang).speech }); }
     });
     if(isCustom){
       card.querySelector(".del").addEventListener("click", (e)=>{
@@ -894,7 +900,8 @@ function playStep(){
     if(listenLoop){ listenState.index = 0; } else { stopListening(); return; }
   }
   const d = listenState.list[listenState.index];
-  const [phrase] = d[currentLang];
+  const pair = d[currentLang];
+  const phrase = pair ? pair[0] : d.ja;
   highlightPlaying(keyOf(d));
   updateListenButton();
   const goNext = ()=>{
@@ -910,9 +917,9 @@ function playStep(){
       }
     }, listenGap);
   };
-  speak(phrase, currentLang, null, ()=>{
+  const afterMain = ()=>{
     if(!listenState.active) return;
-    if(listenJaMode){
+    if(listenJaMode && pair){
       // 現地語→（短い間）→日本語→（設定した間隔）→次のフレーズ
       setTimeout(()=>{
         if(!listenState.active) return;
@@ -922,7 +929,9 @@ function playStep(){
     } else {
       goNext();
     }
-  });
+  };
+  if(pair){ speak(phrase, currentLang, null, afterMain); }
+  else{ speakRaw(d.ja, "ja-JP", null, afterMain); }
 }
 
 function startListening(){
