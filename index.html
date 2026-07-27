@@ -199,6 +199,7 @@
 <div class="overlay" id="toolsOverlay">
   <div class="panel">
     <h2>ツール <button id="closeTools">✕</button></h2>
+    <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuWrite"><span>✎</span>書いて見せる</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
@@ -215,6 +216,19 @@
     </div>
     <button class="submitbtn" id="showWriteFullscreen">全画面で見せる</button>
     <p class="hint">日本語で書けば日本語として、それ以外の言語で書けばその言語として読み上げます（読み上げは全画面表示の中で）。</p>
+  </div>
+</div>
+
+<div class="overlay" id="speakOverlay">
+  <div class="panel">
+    <h2>話す <button id="closeSpeak">✕</button></h2>
+    <div class="field">
+      <label>日本語で入力</label>
+      <textarea id="speakText" rows="3" placeholder="伝えたいことを日本語で入力、または🎤で話す" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); resize:vertical;"></textarea>
+      <button class="mic-btn" id="micSpeak" type="button" style="margin-top:8px; padding:8px 14px; border:1.5px solid var(--ink); border-radius:8px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer;">🎤 音声で入力</button>
+    </div>
+    <button class="submitbtn" id="doSpeakTranslate" style="background:var(--blue);">🌐 <span id="speakTargetLabel">英語</span>に翻訳して話す</button>
+    <p class="hint">今選んでいる言語（ヘッダー下の言語選択で切替）に翻訳して発音します。英語のみ、発音の目安としてカタカナも自動表示します（機械的な近似なので参考程度に）。</p>
   </div>
 </div>
 
@@ -246,6 +260,7 @@
   <div style="display:flex; gap:14px; margin-top:16px;">
     <button class="present-mini" id="presentRecord" aria-label="自分の発音を録音">🎙️ 録音</button>
     <button class="present-mini" id="presentPlayback" aria-label="録音を再生" style="display:none;">▶ 自分の発音</button>
+    <button class="present-mini" id="presentSave" aria-label="フレーズ帳に追加" style="display:none;">★ フレーズ帳に追加</button>
   </div>
 </div>
 
@@ -744,7 +759,7 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   synth.speak(utter);
 }
 
-function openPresent({cat, ja, phrase, kana, speechLang}){
+function openPresent({cat, ja, phrase, kana, speechLang, onSave}){
   document.getElementById("presentCat").textContent = cat || "";
   document.getElementById("presentCat").style.display = cat ? "" : "none";
   document.getElementById("presentJa").textContent = ja || "";
@@ -757,6 +772,9 @@ function openPresent({cat, ja, phrase, kana, speechLang}){
   const speakBtn = document.getElementById("presentSpeak");
   speakBtn.onclick = ()=> speakRaw(phrase, speechLang, speakBtn);
   document.getElementById("presentPlayback").style.display = "none";
+  const saveBtn = document.getElementById("presentSave");
+  saveBtn.style.display = onSave ? "inline-block" : "none";
+  saveBtn.onclick = onSave || null;
 }
 function closePresent(){
   if(synth) synth.cancel();
@@ -1017,12 +1035,19 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["writeOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
+  ["writeOverlay","speakOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
 document.getElementById("toolsBtn").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.add("open"));
 document.getElementById("closeTools").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.remove("open"));
+document.getElementById("menuSpeak").addEventListener("click", ()=>{
+  closeAllOverlays();
+  updateSpeakTargetLabel();
+  document.getElementById("speakOverlay").classList.add("open");
+  document.getElementById("speakText").focus();
+});
+document.getElementById("closeSpeak").addEventListener("click", ()=> document.getElementById("speakOverlay").classList.remove("open"));
 document.getElementById("menuWrite").addEventListener("click", ()=>{
   closeAllOverlays();
   document.getElementById("writeOverlay").classList.add("open");
@@ -1169,6 +1194,11 @@ setupMic(document.getElementById("micWrite"), (text)=>{
   ta.value = (ta.value ? ta.value + " " : "") + text;
 });
 
+setupMic(document.getElementById("micSpeak"), (text)=>{
+  const ta = document.getElementById("speakText");
+  ta.value = (ta.value ? ta.value + " " : "") + text;
+});
+
 // --- Record & compare own pronunciation (in the fullscreen present view) ---
 let mediaRecorder = null;
 let recordedChunks = [];
@@ -1274,6 +1304,263 @@ async function translateText(text, target){
   const data = await res.json();
   return data[0].map(seg=>seg[0]).join("").trim();
 }
+
+// --- 英語の綴りからカタカナ読みを近似生成する（発音の目安。完璧ではありません） ---
+const EN_KANA_EXCEPTIONS = {
+  "i":"アイ","a":"ア","an":"アン","the":"ザ","to":"トゥ","you":"ユー","your":"ユア","yours":"ユアーズ",
+  "i'm":"アイム","i'll":"アイル","i've":"アイヴ","i'd":"アイド",
+  "you're":"ユア","you'll":"ユール","you've":"ユーヴ",
+  "is":"イズ","are":"アー","am":"アム","be":"ビー","being":"ビーイング","been":"ビーン",
+  "do":"ドゥ","does":"ダズ","did":"ディド","don't":"ドント","doesn't":"ダズント","didn't":"ディドント",
+  "have":"ハブ","has":"ハズ","had":"ハド","haven't":"ハブント",
+  "was":"ワズ","were":"ワー","will":"ウィル","would":"ウッド","won't":"ウォント",
+  "can":"キャン","can't":"キャント","cannot":"キャノット","could":"クッド","couldn't":"クッドント",
+  "should":"シュッド","must":"マスト","may":"メイ","might":"マイト",
+  "please":"プリーズ","thank":"サンク","thanks":"サンクス","thank you":"サンキュー",
+  "sorry":"ソーリー","excuse":"イクスキューズ","hello":"ハロー","hi":"ハイ","bye":"バイ","goodbye":"グッバイ",
+  "yes":"イエス","no":"ノー","okay":"オーケー","ok":"オーケー",
+  "of":"オブ","for":"フォー","with":"ウィズ","without":"ウィズアウト","and":"アンド","or":"オア","but":"バット",
+  "not":"ノット","in":"イン","on":"オン","at":"アット","by":"バイ","from":"フロム","about":"アバウト",
+  "up":"アップ","down":"ダウン","out":"アウト","into":"イントゥ","near":"ニア","next":"ネクスト",
+  "what":"ワット","where":"ウェア","when":"ウェン","who":"フー","why":"ホワイ","which":"ウィッチ","how":"ハウ",
+  "this":"ディス","that":"ザット","these":"ジーズ","those":"ゾーズ","here":"ヒア","there":"ゼア",
+  "want":"ウォント","need":"ニード","like":"ライク","love":"ラブ","know":"ノウ","think":"シンク",
+  "look":"ルック","feel":"フィール","take":"テイク","give":"ギブ","find":"ファインド","use":"ユーズ",
+  "make":"メイク","made":"メイド","tell":"テル","said":"セッド","says":"セズ","ask":"アスク",
+  "stay":"ステイ","wait":"ウェイト","meet":"ミート","speak":"スピーク","talk":"トーク","walk":"ウォーク",
+  "sit":"シット","stand":"スタンド","open":"オープン","close":"クローズ","start":"スタート","stop":"ストップ",
+  "go":"ゴー","goes":"ゴーズ","going":"ゴーイング","went":"ウェント","come":"カム","coming":"カミング",
+  "eat":"イート","drink":"ドリンク","buy":"バイ","pay":"ペイ","help":"ヘルプ","show":"ショー","slow":"スロー",
+  "hotel":"ホテル","restaurant":"レストラン","station":"ステーション","airport":"エアポート",
+  "ticket":"チケット","room":"ルーム","bathroom":"バスルーム","toilet":"トイレット",
+  "water":"ウォーター","food":"フード","money":"マネー","time":"タイム","today":"トゥデイ","tomorrow":"トゥモロー",
+  "morning":"モーニング","night":"ナイト","address":"アドレス","phone":"フォン","passport":"パスポート",
+  "bus":"バス","train":"トレイン","taxi":"タクシー","price":"プライス","discount":"ディスカウント",
+  "good":"グッド","bad":"バッド","big":"ビッグ","small":"スモール","hot":"ホット","cold":"コールド",
+  "delicious":"デリシャス","expensive":"エクスペンシブ","cheap":"チープ",
+  "left":"レフト","right":"ライト","straight":"ストレート",
+  "one":"ワン","two":"トゥー","three":"スリー","four":"フォー","five":"ファイブ",
+  "six":"シックス","seven":"セブン","eight":"エイト","nine":"ナイン","ten":"テン",
+  "window":"ウィンドウ","follow":"フォロー","yellow":"イエロー",
+  "nice":"ナイス","house":"ハウス","mouse":"マウス","cause":"コーズ","because":"ビコーズ",
+  "large":"ラージ","change":"チェンジ","strange":"ストレンジ","orange":"オレンジ","village":"ヴィレッジ",
+  "college":"カレッジ","image":"イメージ","message":"メッセージ","package":"パッケージ",
+  "question":"クエスチョン","reservation":"レザベーション","menu":"メニュー","coffee":"コーヒー",
+  "very":"ベリー","much":"マッチ","cute":"キュート","interview":"インタビュー",
+};
+const EN_KANA_TABLE = {
+  "":  ["ア","イ","ウ","エ","オ"],
+  "k": ["カ","キ","ク","ケ","コ"], "g": ["ガ","ギ","グ","ゲ","ゴ"],
+  "s": ["サ","シ","ス","セ","ソ"], "z": ["ザ","ジ","ズ","ゼ","ゾ"],
+  "t": ["タ","ティ","トゥ","テ","ト"], "d": ["ダ","ディ","ドゥ","デ","ド"],
+  "n": ["ナ","ニ","ヌ","ネ","ノ"], "h": ["ハ","ヒ","フ","ヘ","ホ"],
+  "b": ["バ","ビ","ブ","ベ","ボ"], "p": ["パ","ピ","プ","ペ","ポ"],
+  "m": ["マ","ミ","ム","メ","モ"], "y": ["ヤ","イ","ユ","イェ","ヨ"],
+  "r": ["ラ","リ","ル","レ","ロ"], "l": ["ラ","リ","ル","レ","ロ"],
+  "w": ["ワ","ウィ","ウ","ウェ","ウォ"], "f": ["ファ","フィ","フ","フェ","フォ"],
+  "v": ["ヴァ","ヴィ","ヴ","ヴェ","ヴォ"], "j": ["ジャ","ジ","ジュ","ジェ","ジョ"],
+  "ch":["チャ","チ","チュ","チェ","チョ"], "sh":["シャ","シ","シュ","シェ","ショ"],
+  "th":["サ","シ","ス","セ","ソ"],
+};
+const EN_CODA_KANA = { s:"ス",k:"ク",g:"グ",p:"プ",b:"ブ",m:"ム",l:"ル",r:"ル",f:"フ",v:"ヴ",t:"ト",d:"ド",n:"ン",ch:"チ",sh:"シュ",th:"ス",j:"ジ" };
+
+function enWordToKatakana(wordRaw){
+  const word = wordRaw.toLowerCase();
+  if(EN_KANA_EXCEPTIONS[word]) return EN_KANA_EXCEPTIONS[word];
+  if(!/[a-z]/.test(word)) return wordRaw;
+
+  let w = word;
+  // magic-e: vowel + single consonant + silent e at end (name, nice, hope, cute) -> mark the
+  // vowel as "magic" (long vowel/diphthong) in place with an uppercase placeholder, rather than
+  // deleting it - deleting it would strip the syllable of its vowel entirely.
+  const magicMatch = w.match(/^(.*)([aeiou])([bcdfghjklmnpqrstvwxyz])e$/);
+  if(magicMatch && magicMatch[3] !== 'v' && magicMatch[3] !== 'w'){
+    w = magicMatch[1] + magicMatch[2].toUpperCase() + magicMatch[3];
+  } else if(/[bcdfghjklmnpqrstvwxyz]e$/.test(w) && /[aeiou]/.test(w.slice(0, -2))){
+    // trailing silent e that isn't a simple CVCe (large, else, change) - just drop it,
+    // otherwise it gets read out loud as an extra vowel
+    w = w.slice(0, -1);
+  }
+  // c -> s (before e/i/y) or k (elsewhere, but not before h - keep "ch"/"tch" intact)
+  w = w.replace(/c(?=[eiy])/g, 's').replace(/c(?!h)/g, 'k');
+  // collapse doubled consonants (letter, not to be confused with vowel digraphs like "ee")
+  w = w.replace(/([bdfgklmnpqrstvz])\1/g, '$1');
+
+  // tokenize into consonant / vowel tokens, merging known digraphs into single tokens
+  const DIGRAPHS = ["tion","sion","tch","dge","ck","ph","wh","th","sh","ch","ng","qu"];
+  const DIGRAPH_VALUE = { tion:"sh+on", sion:"j+on", tch:"ch", dge:"j", ck:"k", ph:"f", wh:"w", ng:"n_g", qu:"k_w" };
+  let i = 0;
+  const tokens = [];
+  while(i < w.length){
+    let matched = null;
+    for(const d of DIGRAPHS){ if(w.startsWith(d, i)){ matched = d; break; } }
+    if(matched){
+      tokens.push({ t:"C", v: DIGRAPH_VALUE[matched] || matched });
+      i += matched.length;
+      continue;
+    }
+    const c = w[i];
+    if(/[AEIOU]/.test(c)){ tokens.push({t:"V", v:c.toLowerCase(), magic:true}); }
+    else if("aeiou".includes(c)){ tokens.push({t:"V", v:c}); }
+    else if(c === 'y'){
+      const prevIsConsonant = tokens.length && tokens[tokens.length-1].t === "C";
+      tokens.push(prevIsConsonant ? {t:"V", v:"i"} : {t:"C", v:"y"});
+    }
+    else { tokens.push({t:"C", v:c}); }
+    i++;
+  }
+
+  // group into syllable-ish CV units. `pending` keeps consonant *tokens* (not raw chars) so
+  // digraphs like "sh" stay intact instead of being split into 's'+'h'.
+  let out = "";
+  let pending = [];
+  let lastVowelWasShort = false;
+  for(let idx=0; idx<tokens.length; idx++){
+    const tok = tokens[idx];
+    if(tok.t === "C"){
+      pending.push(tok.v);
+    } else if(tok.magic){
+      // magic-e long vowel/diphthong: name->nei, nice->nai, hope->hoo, cute->kyuu
+      const MAGIC_ROW = { a:3, i:0, o:4, u:2, e:1 };
+      const MAGIC_TAIL = { a:"イ", i:"イ", o:"ー", u:"ー", e:"ー" };
+      out += enConsonantVowelToKana(pending, MAGIC_ROW[tok.v]) + MAGIC_TAIL[tok.v];
+      pending = [];
+      lastVowelWasShort = false;
+    } else {
+      // vowel cluster: check for diphthong with next vowel token
+      let vowelSeq = tok.v;
+      let consumedNext = false;
+      const next = tokens[idx+1];
+      if(next && next.t === "V"){
+        const pair = vowelSeq + next.v;
+        if(["ee","ea","ie","ai","ay","oa","oe","oo","ou","ow","oi","oy","au","aw","ue","ui"].includes(pair)){
+          vowelSeq = pair; consumedNext = true;
+        }
+      }
+      const vowelKana = enVowelClusterToKana(vowelSeq);
+      const consKey = pending;
+      pending = [];
+
+      // r-controlled vowel (car/for/her/bird/turn): vowel+r with no following vowel
+      let rControlled = false;
+      if(!vowelKana.special && vowelSeq.length === 1){
+        const afterVowelIdx = idx + (consumedNext ? 1 : 0) + 1;
+        const rTok = tokens[afterVowelIdx];
+        const afterR = tokens[afterVowelIdx + 1];
+        if(rTok && rTok.t === "C" && rTok.v === "r" && (!afterR || afterR.t === "C")){
+          rControlled = true;
+          if(consumedNext) idx++;
+          idx++; // consume the r
+        }
+      }
+      const col = rControlled ? (vowelSeq === "o" ? 4 : 0) : vowelKana.col;
+      out += enConsonantVowelToKana(consKey, col);
+      if(rControlled) out += "ー";
+      lastVowelWasShort = vowelKana.short === true;
+      if(!rControlled && consumedNext) idx++;
+    }
+  }
+  // leftover trailing consonants (coda): geminate stop consonants after a short vowel (it->イット, bag->バッグ)
+  if(pending.length){
+    if(lastVowelWasShort && pending.length===1 && "tkpgdb".includes(pending[0])){ out += "ッ"; }
+    out += enCodaToKana(pending);
+  }
+  return out || wordRaw;
+}
+
+function enVowelClusterToKana(seq){
+  const map = {
+    a:{col:0, short:true}, e:{col:3, short:true}, i:{col:1, short:true}, o:{col:4, short:true}, u:{col:0, short:true},
+    ee:{special:"イー"}, ea:{special:"イー"}, ie:{special:"アイ"},
+    ai:{special:"エイ"}, ay:{special:"エイ"}, oa:{special:"オウ"}, oe:{special:"オウ"},
+    oo:{special:"ウー"}, ou:{special:"アウ"}, ow:{special:"アウ"}, oi:{special:"オイ"},
+    oy:{special:"オイ"}, au:{special:"オー"}, aw:{special:"オー"}, ue:{special:"ユー"}, ui:{special:"ウイ"},
+  };
+  return map[seq] || {col:0, short:true};
+}
+// consArr: array of consonant-token strings (0+). All but the last get an epenthetic "u" vowel
+// (matches how loanwords split consonant clusters: "st" -> su+ta). The last one combines with
+// the syllable's actual vowel (col).
+function enConsonantVowelToKana(consArr, col){
+  if(col === undefined) col = 0;
+  if(!consArr || consArr.length === 0) return enSingleConsKana("", col);
+  let out = "";
+  for(let i=0; i<consArr.length-1; i++){ out += enSingleConsKana(consArr[i], 2); }
+  out += enSingleConsKana(consArr[consArr.length-1], col);
+  return out;
+}
+function enSingleConsKana(cons, col){
+  if(cons === "sh+on") return "ション";
+  if(cons === "j+on") return "ジョン";
+  const base = cons === "k_w" ? "k" : cons === "n_g" ? "n" : cons;
+  const table = EN_KANA_TABLE[base];
+  if(!table) return "";
+  if(typeof col === "object") return col.special || table[0];
+  return table[col];
+}
+function enCodaToKana(consArr){
+  let out = "";
+  for(let i=0; i<consArr.length; i++){
+    const ch = consArr[i];
+    const hasNext = i < consArr.length-1;
+    if(ch === 'n'){ out += "ン"; }
+    else if(ch === 'm'){ out += hasNext ? "ン" : "ム"; }
+    else if(ch === 'n_g'){ out += "ング"; }
+    else if(ch === 'sh+on'){ out += "ション"; }
+    else if(ch === 'j+on'){ out += "ジョン"; }
+    else { out += EN_CODA_KANA[ch] || ""; }
+  }
+  return out;
+}
+function englishToKatakana(text){
+  if(!text) return "";
+  return text.split(/(\s+)/).map(tok=>{
+    if(/^\s+$/.test(tok)) return " ";
+    const m = tok.match(/^([A-Za-z']+)([.,!?;:]*)$/);
+    if(!m) return tok;
+    return enWordToKatakana(m[1]) + m[2];
+  }).join("").replace(/\s+/g," ").trim();
+}
+
+// --- 話す（今すぐ翻訳して発音） ---
+function updateSpeakTargetLabel(){
+  const meta = LANGS.find(l=>l.key===currentLang) || LANGS[0];
+  document.getElementById("speakTargetLabel").textContent = meta.label;
+}
+document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>{
+  const ja = document.getElementById("speakText").value.trim();
+  if(!ja){ alert("日本語を入力してください"); return; }
+  const targetMeta = LANGS.find(l=>l.key===currentLang) || LANGS[0];
+  const btn = document.getElementById("doSpeakTranslate");
+  const originalLabel = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = "翻訳中…";
+  try{
+    const translated = await translateText(ja, GOOGLE_LANG_CODES[targetMeta.key]);
+    const kana = targetMeta.key === "en" ? englishToKatakana(translated) : "";
+    document.getElementById("speakOverlay").classList.remove("open");
+    openPresent({
+      cat: "話す",
+      ja,
+      phrase: translated,
+      kana,
+      speechLang: targetMeta.speech,
+      onSave: ()=>{
+        closePresent();
+        openAddPanel(null);
+        document.getElementById("addJa").value = ja;
+        document.getElementById(`add_${targetMeta.key}`).value = translated;
+        document.getElementById(`add_${targetMeta.key}_kana`).value = kana;
+      }
+    });
+  }catch(e){
+    console.error("speak-translate error:", e);
+    alert("翻訳に失敗しました。ネット接続を確認してもう一度お試しください。");
+  }finally{
+    btn.disabled = false;
+    btn.innerHTML = originalLabel;
+  }
+});
 
 document.getElementById("autoTranslate").onclick = async ()=>{
   const ja = document.getElementById("addJa").value.trim();
