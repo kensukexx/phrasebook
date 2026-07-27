@@ -305,6 +305,8 @@
         <span>最後まで行ったら最初に戻ってループする</span>
         <div class="switch" id="loopToggle"></div>
       </div>
+      <label>同じフレーズの繰り返し <span class="rate-value" id="repeatLabel">1回</span></label>
+      <input type="range" id="repeatSlider" min="1" max="3" step="1" value="1" style="margin-bottom:10px;">
       <label>フレーズ間の間隔 <span class="rate-value" id="gapLabel">0.45秒</span></label>
       <input type="range" id="gapSlider" min="0" max="3000" step="50" value="450">
     </div>
@@ -440,6 +442,7 @@ let rate = 1.0;
 let fsScale = 1.0;
 let listenLoop = false;
 let listenJaMode = false;
+let listenRepeat = 1;
 let listenGap = 450;
 let voiceMap = {};
 let langOrder = LANGS.map(l=>l.key);
@@ -461,7 +464,7 @@ function keyOf(d){ return d.id || d.ja; }
 
 async function loadState(){
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
@@ -488,7 +491,7 @@ async function safeSet(key, value){
     }
   }
 }
-async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, fsScale, listenLoop, listenJaMode, listenGap, voiceMap, langOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, langOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
@@ -838,8 +841,14 @@ function playStep(){
   const goNext = ()=>{
     if(!listenState.active) return;
     setTimeout(()=>{
-      listenState.index++;
-      playStep();
+      listenState.rep = (listenState.rep || 0) + 1;
+      if(listenState.rep < listenRepeat){
+        playStep(); // 同じフレーズをもう一度
+      } else {
+        listenState.rep = 0;
+        listenState.index++;
+        playStep();
+      }
     }, listenGap);
   };
   speak(phrase, currentLang, null, ()=>{
@@ -859,7 +868,7 @@ function playStep(){
 function startListening(){
   const list = computeFiltered();
   if(list.length===0){ alert("再生できるフレーズがありません（絞り込み条件を確認してください）"); return; }
-  listenState = { active:true, list, index:0 };
+  listenState = { active:true, list, index:0, rep:0 };
   playStep();
 }
 function stopListening(){
@@ -1150,6 +1159,11 @@ document.getElementById("jaToggle").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", listenJaMode);
   saveSettings();
 });
+document.getElementById("repeatSlider").addEventListener("input", (e)=>{
+  listenRepeat = parseInt(e.target.value, 10);
+  document.getElementById("repeatLabel").textContent = listenRepeat + "回";
+});
+document.getElementById("repeatSlider").addEventListener("change", saveSettings);
 document.getElementById("gapSlider").addEventListener("input", (e)=>{
   listenGap = parseInt(e.target.value, 10);
   document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
@@ -1190,6 +1204,8 @@ document.getElementById("submitAdd").onclick = ()=>{
   document.getElementById("jaToggle").classList.toggle("on", listenJaMode);
   document.getElementById("unlearnedToggle").classList.toggle("on", showUnlearnedOnly);
   document.getElementById("pinnedToggle").classList.toggle("on", showPinnedOnly);
+  document.getElementById("repeatSlider").value = listenRepeat;
+  document.getElementById("repeatLabel").textContent = listenRepeat + "回";
   document.getElementById("gapSlider").value = listenGap;
   document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
   populateAddCatSelect();
