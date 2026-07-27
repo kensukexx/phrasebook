@@ -298,6 +298,10 @@
     <div class="field">
       <label>聞き流しモード</label>
       <div class="toggle-wrap" style="margin-bottom:10px;">
+        <span>日本語も続けて読み上げる（現地語→日本語）</span>
+        <div class="switch" id="jaToggle"></div>
+      </div>
+      <div class="toggle-wrap" style="margin-bottom:10px;">
         <span>最後まで行ったら最初に戻ってループする</span>
         <div class="switch" id="loopToggle"></div>
       </div>
@@ -435,6 +439,7 @@ let showPinnedOnly = false;
 let rate = 1.0;
 let fsScale = 1.0;
 let listenLoop = false;
+let listenJaMode = false;
 let listenGap = 450;
 let voiceMap = {};
 let langOrder = LANGS.map(l=>l.key);
@@ -456,7 +461,7 @@ function keyOf(d){ return d.id || d.ja; }
 
 async function loadState(){
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
@@ -483,7 +488,7 @@ async function safeSet(key, value){
     }
   }
 }
-async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, fsScale, listenLoop, listenGap, voiceMap, langOrder, currentLang})); }
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, fsScale, listenLoop, listenJaMode, listenGap, voiceMap, langOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
@@ -591,7 +596,7 @@ function renderCats(){
     btn.className = "cat" + (c===currentCat ? " active" : "");
     btn.innerHTML = `<span class="cat-ico">${m.icon}</span>${esc(c)}`;
     if(c===currentCat){ btn.style.background = m.color; activeBtn = btn; }
-    btn.onclick = ()=>{ stopListening(); currentCat = c; renderCats(); renderDeck(); };
+    btn.onclick = ()=>{ stopListening(); currentCat = c; saveSettings(); renderCats(); renderDeck(); };
     wrap.appendChild(btn);
   });
   // 選択中のカテゴリがバーの中央に来るよう横スクロール
@@ -606,6 +611,7 @@ function switchCategory(dir){
   stopListening();
   const i = CATS.indexOf(currentCat);
   currentCat = CATS[(i + dir + CATS.length) % CATS.length];
+  saveSettings();
   renderCats();
   renderDeck();
   const deck = document.getElementById("deck");
@@ -640,14 +646,17 @@ function voiceQualityScore(v){
   return s;
 }
 
+function pickVoiceByPrefix(prefix){
+  const candidates = availableVoices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(prefix));
+  if(candidates.length===0) return null;
+  return candidates.slice().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a))[0];
+}
+
 function pickVoice(langKey){
   const meta = LANGS.find(l=>l.key===langKey);
   const wanted = voiceMap[langKey];
   if(wanted){ const v = availableVoices.find(v=>v.voiceURI===wanted); if(v) return v; }
-  const prefix = meta.speech.split('-')[0];
-  const candidates = availableVoices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(prefix));
-  if(candidates.length===0) return null;
-  return candidates.slice().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a))[0];
+  return pickVoiceByPrefix(meta.speech.split('-')[0].toLowerCase());
 }
 
 function speak(text, langKey, btn, onDone){
@@ -660,7 +669,7 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice){
   synth.cancel();
   const utter = new SpeechSynthesisUtterance(text);
   currentUtter = utter; // Chromeで参照が消えるとonendが発火しなくなる問題への対策
-  const voice = langKeyForVoice ? pickVoice(langKeyForVoice) : null;
+  const voice = langKeyForVoice ? pickVoice(langKeyForVoice) : pickVoiceByPrefix(speechLang.split('-')[0].toLowerCase());
   if(voice) utter.voice = voice;
   utter.lang = speechLang;
   utter.rate = rate;
@@ -826,12 +835,24 @@ function playStep(){
   const [phrase] = d[currentLang];
   highlightPlaying(keyOf(d));
   updateListenButton();
-  speak(phrase, currentLang, null, ()=>{
+  const goNext = ()=>{
     if(!listenState.active) return;
     setTimeout(()=>{
       listenState.index++;
       playStep();
     }, listenGap);
+  };
+  speak(phrase, currentLang, null, ()=>{
+    if(!listenState.active) return;
+    if(listenJaMode){
+      // 現地語→（短い間）→日本語→（設定した間隔）→次のフレーズ
+      setTimeout(()=>{
+        if(!listenState.active) return;
+        speakRaw(d.ja, "ja-JP", null, goNext);
+      }, Math.min(listenGap, 350));
+    } else {
+      goNext();
+    }
   });
 }
 
@@ -1124,6 +1145,11 @@ document.getElementById("loopToggle").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", listenLoop);
   saveSettings();
 });
+document.getElementById("jaToggle").addEventListener("click", (e)=>{
+  listenJaMode = !listenJaMode;
+  e.currentTarget.classList.toggle("on", listenJaMode);
+  saveSettings();
+});
 document.getElementById("gapSlider").addEventListener("input", (e)=>{
   listenGap = parseInt(e.target.value, 10);
   document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
@@ -1131,8 +1157,8 @@ document.getElementById("gapSlider").addEventListener("input", (e)=>{
 document.getElementById("gapSlider").addEventListener("change", saveSettings);
 document.getElementById("openAdd").onclick = ()=> document.getElementById("addOverlay").classList.add("open");
 document.getElementById("closeAdd").onclick = ()=> document.getElementById("addOverlay").classList.remove("open");
-document.getElementById("unlearnedToggle").addEventListener("click", (e)=>{ stopListening(); showUnlearnedOnly = !showUnlearnedOnly; e.currentTarget.classList.toggle("on", showUnlearnedOnly); renderDeck(); });
-document.getElementById("pinnedToggle").addEventListener("click", (e)=>{ stopListening(); showPinnedOnly = !showPinnedOnly; e.currentTarget.classList.toggle("on", showPinnedOnly); renderDeck(); });
+document.getElementById("unlearnedToggle").addEventListener("click", (e)=>{ stopListening(); showUnlearnedOnly = !showUnlearnedOnly; e.currentTarget.classList.toggle("on", showUnlearnedOnly); saveSettings(); renderDeck(); });
+document.getElementById("pinnedToggle").addEventListener("click", (e)=>{ stopListening(); showPinnedOnly = !showPinnedOnly; e.currentTarget.classList.toggle("on", showPinnedOnly); saveSettings(); renderDeck(); });
 document.getElementById("listenBtn").addEventListener("click", ()=>{ if(listenState.active) stopListening(); else startListening(); });
 
 document.getElementById("submitAdd").onclick = ()=>{
@@ -1161,6 +1187,9 @@ document.getElementById("submitAdd").onclick = ()=>{
   document.getElementById("fsLabel").textContent = fsScale.toFixed(2).replace(/0$/,'') + "x";
   document.documentElement.style.setProperty("--fs-scale", fsScale);
   document.getElementById("loopToggle").classList.toggle("on", listenLoop);
+  document.getElementById("jaToggle").classList.toggle("on", listenJaMode);
+  document.getElementById("unlearnedToggle").classList.toggle("on", showUnlearnedOnly);
+  document.getElementById("pinnedToggle").classList.toggle("on", showPinnedOnly);
   document.getElementById("gapSlider").value = listenGap;
   document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
   populateAddCatSelect();
