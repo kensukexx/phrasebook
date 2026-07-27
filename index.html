@@ -667,7 +667,7 @@ function speak(text, langKey, btn, onDone){
   speakRaw(text, meta ? meta.speech : "en-US", btn, onDone, langKey);
 }
 
-function speakRaw(text, speechLang, btn, onDone, langKeyForVoice){
+function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   if(!synth){ if(onDone) onDone(); return; }
   synth.cancel();
   const utter = new SpeechSynthesisUtterance(text);
@@ -675,7 +675,7 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice){
   const voice = langKeyForVoice ? pickVoice(langKeyForVoice) : pickVoiceByPrefix(speechLang.split('-')[0].toLowerCase());
   if(voice) utter.voice = voice;
   utter.lang = speechLang;
-  utter.rate = rate;
+  utter.rate = rateOverride || rate;
   if(btn) btn.classList.add("playing");
   utter.onend = ()=> { if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
   utter.onerror = ()=> { if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
@@ -857,7 +857,8 @@ function playStep(){
       // 現地語→（短い間）→日本語→（設定した間隔）→次のフレーズ
       setTimeout(()=>{
         if(!listenState.active) return;
-        speakRaw(d.ja, "ja-JP", null, goNext);
+        // 日本語は意味確認用なので現地語より少し速く読み上げる
+        speakRaw(d.ja, "ja-JP", null, goNext, null, Math.min(rate * 1.25, 2));
       }, Math.min(listenGap, 350));
     } else {
       goNext();
