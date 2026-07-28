@@ -266,7 +266,15 @@
   <div class="panel">
     <div id="practiceListView">
       <h2>練習ノート <button id="closePractice">✕</button></h2>
-      <p class="hint" style="margin:0 0 14px;">覚えた単語や表現をもとに、Claudeに「〇〇を使って例文作って」と頼むと、意味・例文・カナ・文法解説つきでここに追加されます。</p>
+      <div class="field">
+        <label>新しく練習ノートを作る</label>
+        <div style="display:flex; gap:8px;">
+          <select id="practiceGenLang" style="flex:0 0 auto; padding:10px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);"></select>
+          <input type="text" id="practiceGenWord" placeholder="例：without" style="flex:1;">
+        </div>
+        <button class="submitbtn" id="practiceGenBtn" style="background:var(--blue); margin-top:8px;">✨ AIで例文セットを作る</button>
+        <p class="hint" id="practiceGenHint">設定画面でGemini APIキーを登録すると、その場でAIが例文セットを生成します（オンライン時のみ）。</p>
+      </div>
       <div id="practiceList"></div>
     </div>
     <div id="practiceDetailView" class="practice-detail" style="display:none;">
@@ -385,6 +393,11 @@
       <label>言語ごとの声</label>
       <div id="voiceList"></div>
       <p class="hint">声の種類・性別は端末に入っている読み上げ音声次第です。iPhoneなら「設定→アクセシビリティ→音声コンテンツ→声」から言語ごとに追加ダウンロードできます。</p>
+    </div>
+    <div class="field">
+      <label>Gemini APIキー（練習ノートのAI生成用）</label>
+      <input type="text" id="geminiKeyInput" placeholder="AIza...">
+      <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>でGoogleアカウントのみ・クレジットカード登録不要で無料発行できます（1日あたりの無料利用回数に上限あり）。入力するとこの端末に保存されます。</p>
     </div>
   </div>
 </div>
@@ -640,6 +653,7 @@ const PRACTICE_PACKS = [
 ];
 
 let customData = [];
+let customPracticePacks = [];
 let learned = {};
 let pinned = {};
 let currentLang = "en";
@@ -654,6 +668,7 @@ let listenJaMode = false;
 let listenRepeat = 1;
 let listenGap = 450;
 let voiceMap = {};
+let geminiApiKey = "";
 let langOrder = LANGS.map(l=>l.key);
 let synth = window.speechSynthesis;
 let availableVoices = [];
@@ -674,9 +689,10 @@ function keyOf(d){ return d.id || d.ja; }
 
 async function loadState(){
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
+  try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
   try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
@@ -701,8 +717,9 @@ async function safeSet(key, value){
     }
   }
 }
-async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, langOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
+async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
 
@@ -1256,29 +1273,44 @@ document.getElementById("menuSpeak").addEventListener("click", ()=>{
 document.getElementById("closeSpeak").addEventListener("click", ()=> document.getElementById("speakOverlay").classList.remove("open"));
 
 // --- 練習ノート ---
+function allPracticePacks(){ return PRACTICE_PACKS.concat(customPracticePacks); }
+
 function renderPracticeList(){
   const wrap = document.getElementById("practiceList");
-  if(PRACTICE_PACKS.length === 0){
-    wrap.innerHTML = '<p class="practice-empty">まだ練習ノートがありません。<br>Claudeに「〇〇を使って例文作って」と頼んでみましょう。</p>';
+  const all = allPracticePacks();
+  if(all.length === 0){
+    wrap.innerHTML = '<p class="practice-empty">まだ練習ノートがありません。<br>上の欄に単語を入れて作ってみましょう。</p>';
     return;
   }
-  wrap.innerHTML = PRACTICE_PACKS.map((p,i)=>{
+  wrap.innerHTML = all.map((p,i)=>{
     const meta = LANGS.find(l=>l.key===p.lang);
-    return `<button class="practice-card" data-idx="${i}">
-      <span class="lang-badge">${esc(meta ? meta.label : p.lang)}</span>
-      <span class="pc-main">
-        <span class="pc-word">${esc(p.word)}</span>
-        <span class="pc-meaning">${esc(p.meaning)}</span>
-      </span>
-    </button>`;
+    return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+      <button class="practice-card" data-idx="${i}" style="margin-bottom:0;">
+        <span class="lang-badge">${esc(meta ? meta.label : p.lang)}</span>
+        <span class="pc-main">
+          <span class="pc-word">${esc(p.word)}</span>
+          <span class="pc-meaning">${esc(p.meaning)}</span>
+        </span>
+      </button>
+      ${p.custom ? `<button class="mini-btn" data-del-idx="${i}" aria-label="削除" style="flex:0 0 auto;">✕</button>` : ''}
+    </div>`;
   }).join('');
   wrap.querySelectorAll('.practice-card').forEach(btn=>{
     btn.addEventListener('click', ()=> openPracticeDetail(parseInt(btn.dataset.idx,10)));
   });
+  wrap.querySelectorAll('[data-del-idx]').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      const i = parseInt(btn.dataset.delIdx,10);
+      const pack = allPracticePacks()[i];
+      customPracticePacks = customPracticePacks.filter(p=>p.id!==pack.id);
+      await savePracticePacks();
+      renderPracticeList();
+    });
+  });
 }
 
 function openPracticeDetail(idx){
-  const pack = PRACTICE_PACKS[idx];
+  const pack = allPracticePacks()[idx];
   if(!pack) return;
   const meta = LANGS.find(l=>l.key===pack.lang);
   document.getElementById("practiceListView").style.display = "none";
@@ -1311,6 +1343,108 @@ function openPracticeDetail(idx){
     });
   });
 }
+
+// --- 練習ノートのAI生成（Gemini API、無料枠・APIキーはユーザー自身が設定画面で登録） ---
+const PRACTICE_PACK_SCHEMA = {
+  type: "object",
+  properties: {
+    word: { type: "string" },
+    wordKana: { type: "string" },
+    meaning: { type: "string" },
+    groups: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          note: { type: "string" },
+          examples: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                text: { type: "string" },
+                kana: { type: "string" },
+                ja: { type: "string" },
+              },
+              required: ["text","kana","ja"],
+            },
+          },
+        },
+        required: ["title","examples"],
+      },
+    },
+  },
+  required: ["word","wordKana","meaning","groups"],
+};
+
+async function generatePracticePack(langKey, word){
+  const meta = LANGS.find(l=>l.key===langKey);
+  const prompt = `あなたは日本語話者向けの語学講師です。次の単語・表現について、旅行フレーズブックアプリに載せる練習ノートを作成してください。
+
+対象言語：${meta ? meta.label : langKey}
+単語・表現："${word}"
+
+方針：
+- meaning は日本語で簡潔に（「〜なしで」のようなカギ括弧つきの短い訳）
+- groups は「基本の例文」から始め、用法パターンごとに2〜4グループに分ける（例：品詞や文型で使い方が変わる場合はパターン別に）
+- 各グループの examples は自然でよく使われる例文を2〜3個
+- 例文には対象言語の文（text）、カタカナでの発音表記（kana）、日本語訳（ja）を必ずつける
+- 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
+- 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + encodeURIComponent(geminiApiKey);
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: PRACTICE_PACK_SCHEMA },
+    }),
+  });
+  if(!res.ok){
+    const errText = await res.text().catch(()=>"");
+    throw new Error("API_ERROR:" + res.status + ":" + errText.slice(0,300));
+  }
+  const data = await res.json();
+  const text = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+  if(!text) throw new Error("EMPTY_RESPONSE");
+  return JSON.parse(text);
+}
+
+document.getElementById("practiceGenBtn").addEventListener("click", async ()=>{
+  const word = document.getElementById("practiceGenWord").value.trim();
+  const langKey = document.getElementById("practiceGenLang").value;
+  if(!word){ alert("単語・表現を入力してください"); return; }
+  if(!geminiApiKey){ alert("設定画面（⚙）でGemini APIキーを登録してください。Google AI Studioで無料発行できます。"); return; }
+  const btn = document.getElementById("practiceGenBtn");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "生成中…";
+  try{
+    const parsed = await generatePracticePack(langKey, word);
+    const pack = {
+      id: langKey + "-" + word.toLowerCase().replace(/\s+/g,"_") + "-" + Date.now().toString(36),
+      lang: langKey, word: parsed.word || word, wordKana: parsed.wordKana || "",
+      meaning: parsed.meaning || "", groups: parsed.groups || [], custom: true,
+    };
+    customPracticePacks.push(pack);
+    await savePracticePacks();
+    document.getElementById("practiceGenWord").value = "";
+    renderPracticeList();
+    openPracticeDetail(allPracticePacks().length - 1);
+  }catch(e){
+    console.error("practice pack generation error:", e);
+    let msg = "生成に失敗しました。時間をおいてもう一度お試しください。";
+    const m = String(e.message || "");
+    if(m.includes("API_ERROR:429")) msg = "無料枠の利用上限に達したようです。しばらく待ってから試してください。";
+    else if(m.includes("API_ERROR:400") || m.includes("API_ERROR:403")) msg = "APIキーが正しくないか、権限がない可能性があります。設定画面でキーを確認してください。";
+    else if(navigator.onLine === false) msg = "オフラインのようです。ネット接続を確認してください。";
+    alert(msg);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
 
 document.getElementById("menuPractice").addEventListener("click", ()=>{
   closeAllOverlays();
@@ -1531,6 +1665,7 @@ document.getElementById("rateSlider").addEventListener("input", (e)=>{ rate = pa
 document.getElementById("rateSlider").addEventListener("change", saveSettings);
 document.getElementById("jaRateSlider").addEventListener("input", (e)=>{ jaRate = parseFloat(e.target.value); document.getElementById("jaRateLabel").textContent = jaRate.toFixed(2).replace(/0$/,'') + "x"; });
 document.getElementById("jaRateSlider").addEventListener("change", saveSettings);
+document.getElementById("geminiKeyInput").addEventListener("change", (e)=>{ geminiApiKey = e.target.value.trim(); saveSettings(); });
 document.getElementById("fsSlider").addEventListener("input", (e)=>{
   fsScale = parseFloat(e.target.value);
   document.getElementById("fsLabel").textContent = fsScale.toFixed(2).replace(/0$/,'') + "x";
@@ -1905,6 +2040,9 @@ document.getElementById("submitAdd").onclick = ()=>{
   document.getElementById("repeatLabel").textContent = listenRepeat + "回";
   document.getElementById("gapSlider").value = listenGap;
   document.getElementById("gapLabel").textContent = (listenGap/1000).toFixed(2) + "秒";
+  document.getElementById("geminiKeyInput").value = geminiApiKey;
+  document.getElementById("practiceGenLang").innerHTML = LANGS.map(l=>`<option value="${l.key}">${l.label}</option>`).join('');
+  document.getElementById("practiceGenLang").value = currentLang;
   populateAddCatSelect();
   buildAddFields();
   renderLangButton();
