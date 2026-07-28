@@ -176,6 +176,29 @@
     background:transparent; font-size:15px; color:var(--ink); text-align:left; cursor:pointer; }
   .tool-item:last-child{ border-bottom:none; }
   .tool-item span:first-child{ font-size:20px; width:28px; text-align:center; flex:0 0 auto; }
+  .practice-card{ width:100%; text-align:left; display:flex; align-items:center; gap:12px; padding:13px 12px; border:1.5px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.5); margin-bottom:10px; cursor:pointer; }
+  .practice-card .lang-badge{ flex:0 0 auto; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; padding:4px 8px; border-radius:8px; background:var(--blue); color:#fff; }
+  .practice-card .pc-main{ flex:1; min-width:0; }
+  .practice-card .pc-word{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:16px; }
+  .practice-card .pc-meaning{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .practice-empty{ text-align:center; color:var(--ink-soft); font-size:13px; padding:30px 10px; line-height:1.7; }
+  .practice-detail .pd-head{ display:flex; align-items:center; gap:10px; margin-bottom:4px; }
+  .practice-detail .pd-word{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:900; font-size:24px; }
+  .practice-detail .pd-kana{ color:var(--ink-soft); font-size:13px; }
+  .practice-detail .pd-meaning{ margin:8px 0 18px; font-size:14.5px; background:rgba(47,76,122,0.08); border-left:3px solid var(--blue); border-radius:0 8px 8px 0; padding:10px 12px; }
+  .practice-group{ margin-bottom:18px; }
+  .practice-group h4{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; color:var(--red); margin:0 0 8px; }
+  .practice-group .pg-note{ font-size:12px; color:var(--ink-soft); margin:0 0 8px; line-height:1.6; }
+  .practice-ex{ display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+  .practice-ex:last-child{ border-bottom:none; }
+  .practice-ex .pe-text-wrap{ flex:1; min-width:0; }
+  .practice-ex .pe-text{ font-size:14.5px; font-weight:600; }
+  .practice-ex .pe-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .practice-ex .pe-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .practice-ex .pe-speak{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--red); cursor:pointer; }
+  .practice-ex .pe-speak.playing{ background:var(--red); color:#fff; border-color:var(--red); }
+  .back-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+  .back-row button{ background:none; border:none; font-size:14px; color:var(--ink-soft); cursor:pointer; padding:4px 0; }
   .currency-row{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
   .currency-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:16px; color:var(--ink); }
   .currency-row select{ flex:0 0 auto; width:110px; padding:10px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink); }
@@ -206,6 +229,7 @@
   <div class="panel">
     <h2>ツール <button id="closeTools">✕</button></h2>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
+    <button class="tool-item" id="menuPractice"><span>🎓</span>練習ノート</button>
     <button class="tool-item" id="menuWrite"><span>✎</span>書いて見せる</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
@@ -235,6 +259,28 @@
     </div>
     <button class="submitbtn" id="doSpeakTranslate" style="background:var(--blue);">🌐 <span id="speakTargetLabel">英語</span>に翻訳して話す</button>
     <p class="hint">今選んでいる言語（ヘッダー下の言語選択で切替）に翻訳して発音します。英語のみ、発音の目安としてカタカナも自動表示します（機械的な近似なので参考程度に）。</p>
+  </div>
+</div>
+
+<div class="overlay" id="practiceOverlay">
+  <div class="panel">
+    <div id="practiceListView">
+      <h2>練習ノート <button id="closePractice">✕</button></h2>
+      <p class="hint" style="margin:0 0 14px;">覚えた単語や表現をもとに、Claudeに「〇〇を使って例文作って」と頼むと、意味・例文・カナ・文法解説つきでここに追加されます。</p>
+      <div id="practiceList"></div>
+    </div>
+    <div id="practiceDetailView" class="practice-detail" style="display:none;">
+      <div class="back-row">
+        <button id="backToPracticeList">← 一覧へ戻る</button>
+      </div>
+      <div class="pd-head">
+        <span class="pd-word" id="pdWord"></span>
+        <button class="mini-btn" id="pdSpeak" aria-label="発音を聞く" style="width:34px;height:34px;">🔊</button>
+      </div>
+      <div class="pd-kana" id="pdKana"></div>
+      <div class="pd-meaning" id="pdMeaning"></div>
+      <div id="pdGroups"></div>
+    </div>
   </div>
 </div>
 
@@ -550,6 +596,47 @@ const BUILTIN = [
 {ja:"金曜日",cat:"曜日",en:["Friday","フライデイ"],ko:["금요일","クミョイル"],de:["Freitag","フライターク"],ro:["vineri","ヴィネリ"],es:["viernes","ビエルネス"],fr:["vendredi","ヴァンドルディ"],vi:["thứ sáu","トゥーサウ"],zh:["星期五","シンチーウー"],pt:["sexta-feira","セスタフェイラ"],note:"Friday＝北欧神話の女神Frigg（フリッグ）の日。金曜日にあたるロマンス語(仏vendredi等)の由来である金星の女神ヴィーナスと同じく、愛や豊穣を司る女神が割り当てられています。"},
 {ja:"土曜日",cat:"曜日",en:["Saturday","サタデイ"],ko:["토요일","トヨイル"],de:["Samstag","ザムスターク"],ro:["sâmbătă","スンバタ"],es:["sábado","サバド"],fr:["samedi","サムディ"],vi:["thứ bảy","トゥーバイ"],zh:["星期六","シンチーリウ"],pt:["sábado","サバド"],note:"Saturday＝ローマ神話の農耕神Saturn（サターン、土星）の日。英語の曜日名の中で唯一、北欧神話ではなくローマ神話の神の名がそのまま残っている例です。"},
 {ja:"日曜日",cat:"曜日",en:["Sunday","サンデイ"],ko:["일요일","イリョイル"],de:["Sonntag","ゾンターク"],ro:["duminică","ドゥミニカ"],es:["domingo","ドミンゴ"],fr:["dimanche","ディマンシュ"],vi:["chủ nhật","チューニャット"],zh:["星期天","シンチーティエン"],pt:["domingo","ドミンゴ"],note:"Sunday＝Sun(太陽)の日。日本語の「日曜日」も同じ発想で、月曜日とあわせて英語圏と東アジアの両方で太陽と月が週の始まりに置かれている共通点があります。"},
+];
+
+// 練習ノート：覚えた単語・表現をもとにした例文集。Claudeに「〇〇を使って例文作って」と頼んで追加していく。
+const PRACTICE_PACKS = [
+  {
+    id: "en-without",
+    lang: "en",
+    word: "without",
+    wordKana: "ウィズアウト",
+    meaning: "「〜なしで」「〜せずに」",
+    groups: [
+      {
+        title: "基本の例文",
+        examples: [
+          { text:"I can't live without coffee.", kana:"アイ キャント リブ ウィズアウト コーヒー", ja:"コーヒーなしでは生きられません。" },
+          { text:"I went out without an umbrella.", kana:"アイ ウェント アウト ウィズアウト アン アンブレラ", ja:"傘を持たずに出かけました。" },
+        ],
+      },
+      {
+        title: "パターン1：「〜なしで」（物）",
+        examples: [
+          { text:"I can't sleep without music.", kana:"アイ キャント スリープ ウィズアウト ミュージック", ja:"音楽なしでは眠れません。" },
+          { text:"He drives without glasses.", kana:"ヒー ドライブズ ウィズアウト グラシズ", ja:"彼は眼鏡なしで運転します。" },
+        ],
+      },
+      {
+        title: "パターン2：「〜せずに」（動詞は〜ing）",
+        note: "\"without\" の後に動詞を続けるときは \"〜ing\" の形にします。",
+        examples: [
+          { text:"I left without saying goodbye.", kana:"アイ レフト ウィズアウト セイング グッバイ", ja:"さよならを言わずに出発しました。" },
+          { text:"She did it without asking for help.", kana:"シー ディド イット ウィズアウト アスキング フォー ヘルプ", ja:"彼女は助けを求めずにそれをやりました。" },
+        ],
+      },
+      {
+        title: "自分のフレーズと組み合わせて練習",
+        examples: [
+          { text:"I got up without an alarm.", kana:"アイ ガット アップ ウィズアウト アン アラーム", ja:"目覚まし時計なしで起きました。" },
+        ],
+      },
+    ],
+  },
 ];
 
 let customData = [];
@@ -1154,7 +1241,7 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["writeOverlay","speakOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
+  ["writeOverlay","speakOverlay","practiceOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
@@ -1167,6 +1254,80 @@ document.getElementById("menuSpeak").addEventListener("click", ()=>{
   document.getElementById("speakText").focus();
 });
 document.getElementById("closeSpeak").addEventListener("click", ()=> document.getElementById("speakOverlay").classList.remove("open"));
+
+// --- 練習ノート ---
+function renderPracticeList(){
+  const wrap = document.getElementById("practiceList");
+  if(PRACTICE_PACKS.length === 0){
+    wrap.innerHTML = '<p class="practice-empty">まだ練習ノートがありません。<br>Claudeに「〇〇を使って例文作って」と頼んでみましょう。</p>';
+    return;
+  }
+  wrap.innerHTML = PRACTICE_PACKS.map((p,i)=>{
+    const meta = LANGS.find(l=>l.key===p.lang);
+    return `<button class="practice-card" data-idx="${i}">
+      <span class="lang-badge">${esc(meta ? meta.label : p.lang)}</span>
+      <span class="pc-main">
+        <span class="pc-word">${esc(p.word)}</span>
+        <span class="pc-meaning">${esc(p.meaning)}</span>
+      </span>
+    </button>`;
+  }).join('');
+  wrap.querySelectorAll('.practice-card').forEach(btn=>{
+    btn.addEventListener('click', ()=> openPracticeDetail(parseInt(btn.dataset.idx,10)));
+  });
+}
+
+function openPracticeDetail(idx){
+  const pack = PRACTICE_PACKS[idx];
+  if(!pack) return;
+  const meta = LANGS.find(l=>l.key===pack.lang);
+  document.getElementById("practiceListView").style.display = "none";
+  document.getElementById("practiceDetailView").style.display = "block";
+  document.getElementById("pdWord").textContent = pack.word;
+  document.getElementById("pdKana").textContent = pack.wordKana || "";
+  document.getElementById("pdMeaning").textContent = pack.meaning;
+  document.getElementById("pdSpeak").onclick = ()=> speakRaw(pack.word, meta ? meta.speech : "en-US", document.getElementById("pdSpeak"), null, pack.lang);
+  document.getElementById("pdGroups").innerHTML = pack.groups.map(g=>`
+    <div class="practice-group">
+      <h4>${esc(g.title)}</h4>
+      ${g.note ? `<p class="pg-note">${esc(g.note)}</p>` : ''}
+      ${g.examples.map(ex=>`
+        <div class="practice-ex">
+          <div class="pe-text-wrap">
+            <div class="pe-text">${esc(ex.text)}</div>
+            <div class="pe-kana">${esc(ex.kana || "")}</div>
+            <div class="pe-ja">${esc(ex.ja || "")}</div>
+          </div>
+          <button class="pe-speak" aria-label="発音を聞く">🔊</button>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+  document.getElementById("pdGroups").querySelectorAll('.practice-ex').forEach((row, i)=>{
+    const allExamples = pack.groups.flatMap(g=>g.examples);
+    const ex = allExamples[i];
+    row.querySelector('.pe-speak').addEventListener('click', (e)=>{
+      speakRaw(ex.text, meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
+    });
+  });
+}
+
+document.getElementById("menuPractice").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("practiceListView").style.display = "block";
+  document.getElementById("practiceDetailView").style.display = "none";
+  renderPracticeList();
+  document.getElementById("practiceOverlay").classList.add("open");
+});
+document.getElementById("closePractice").addEventListener("click", ()=>{
+  stopAllAudio();
+  document.getElementById("practiceOverlay").classList.remove("open");
+});
+document.getElementById("backToPracticeList").addEventListener("click", ()=>{
+  stopAllAudio();
+  document.getElementById("practiceDetailView").style.display = "none";
+  document.getElementById("practiceListView").style.display = "block";
+});
 document.getElementById("menuWrite").addEventListener("click", ()=>{
   closeAllOverlays();
   document.getElementById("writeOverlay").classList.add("open");
