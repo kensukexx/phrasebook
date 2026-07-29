@@ -22,6 +22,22 @@
 スマホでは「ホーム画面に追加」しておくとアプリのように起動できます。
 翻訳・Google音声・為替レート取得など外部通信が必要な機能のみ、オンライン時に限られます。
 
+## テスト
+
+`tests/` にPlaywrightベースの自動テストがあります(アプリ本体はテスト不要でそのまま動きます。テストは別ツールとして分離)。
+
+```bash
+npm install
+npx playwright install chromium webkit
+npm test              # 全テスト実行（chromium・mobile/webkitの2構成）
+npm run test:data     # データ整合性チェックのみ（ブラウザ不要・数秒で完了）
+npm run test:ui       # Playwrightのインタラクティブ UI で実行
+```
+
+`node tests/data-integrity.test.js` は `index.html` 内の158フレーズ全件が9言語分そろっているか等を検証します
+（数字・曜日カードが英語だけ入っていて他言語で消えていた不具合の再発防止）。
+GitHub Actions (`.github/workflows/test.yml`) で push・PR時に自動実行されます。
+
 ## 更新の反映
 
 GitHub Pages で公開しています。`index.html` を編集して push すると、
