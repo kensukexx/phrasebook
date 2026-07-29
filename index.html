@@ -1352,7 +1352,7 @@ async function generatePracticePack(langKey, word){
 - 例文には対象言語の文（text）、カタカナでの発音表記（kana）、日本語訳（ja）を必ずつける
 - 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
 - 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=" + encodeURIComponent(geminiApiKey);
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(geminiApiKey);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
