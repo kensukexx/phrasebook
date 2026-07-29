@@ -904,6 +904,60 @@ function playGoogleTTS(text, ttsLang, rateVal){
   });
 }
 
+// GeminiのTTSは生PCM(16bit/24kHz/モノラル)をbase64で返すのでWAVヘッダーを自分で付ける
+function pcm16ToWavBlob(base64Pcm, sampleRate, numChannels){
+  const binary = atob(base64Pcm);
+  const pcmBytes = new Uint8Array(binary.length);
+  for(let i=0; i<binary.length; i++) pcmBytes[i] = binary.charCodeAt(i);
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = pcmBytes.length;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str)=>{ for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
+  writeStr(0, "RIFF"); view.setUint32(4, 36 + dataSize, true); writeStr(8, "WAVE");
+  writeStr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true);
+  writeStr(36, "data"); view.setUint32(40, dataSize, true);
+  new Uint8Array(buffer, 44).set(pcmBytes);
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+// Google翻訳の音声合成が失敗した時、Geminiキーがあれば次善のフォールバックとして使う
+// （"-preview"モデルのためモデル名が変わる可能性あり。失敗時は自動で端末TTSへ進むので安全）。
+async function playGeminiTTS(text, rateVal){
+  const chunks = splitForTTS(text, 400);
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=" + encodeURIComponent(geminiApiKey);
+  const audio = new Audio();
+  audio.playbackRate = rateVal || 1;
+  currentTTSAudio = audio;
+  for(const chunk of chunks){
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: chunk }] }],
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
+      }),
+    });
+    if(!res.ok) throw new Error("gemini tts failed: " + res.status);
+    const data = await res.json();
+    const part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0];
+    const b64 = part && part.inlineData && part.inlineData.data;
+    if(!b64) throw new Error("gemini tts: no audio data in response");
+    const blob = pcm16ToWavBlob(b64, 24000, 1);
+    const blobUrl = URL.createObjectURL(blob);
+    await new Promise((resolve, reject)=>{
+      audio.src = blobUrl;
+      audio.onended = ()=>{ URL.revokeObjectURL(blobUrl); resolve(); };
+      audio.onerror = ()=>{ URL.revokeObjectURL(blobUrl); reject(new Error("gemini tts playback failed")); };
+      audio.play().catch(reject);
+    });
+  }
+}
+
 function stopAllAudio(){
   if(synth) synth.cancel();
   if(currentTTSAudio){
@@ -934,12 +988,19 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   if(btn) btn.classList.add("playing");
   const finish = ()=>{ if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
   const ttsLang = ttsLangFor(langKeyForVoice, speechLang);
+  const viaDevice = ()=> speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish);
+  // Google翻訳の音声合成→（失敗時、キーがあれば）Gemini音声合成→端末TTS、の3段フォールバック
+  const viaGeminiThenDevice = ()=>{
+    if(geminiApiKey && navigator.onLine !== false){
+      playGeminiTTS(text, rateVal).then(finish).catch(viaDevice);
+    } else {
+      viaDevice();
+    }
+  };
   if(ttsLang && navigator.onLine !== false){
-    playGoogleTTS(text, ttsLang, rateVal).then(finish).catch(()=>{
-      speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish);
-    });
+    playGoogleTTS(text, ttsLang, rateVal).then(finish).catch(viaGeminiThenDevice);
   } else {
-    speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish);
+    viaGeminiThenDevice();
   }
 }
 
@@ -1719,14 +1780,32 @@ function openAddPanel(entry){
 document.getElementById("openAdd").onclick = ()=> openAddPanel(null);
 document.getElementById("closeAdd").onclick = ()=> document.getElementById("addOverlay").classList.remove("open");
 
-// Google翻訳の無料エンドポイントで日本語から各言語へ翻訳
+// Google翻訳の無料エンドポイントで日本語から各言語へ翻訳。
+// 失敗時、Gemini APIキーが設定されていればGeminiに翻訳させるフォールバック付き
+// （Google翻訳は非公式エンドポイントのため、将来的に予告なく仕様変更・遮断される可能性がある）。
 const GOOGLE_LANG_CODES = { en:"en", ko:"ko", de:"de", ro:"ro", es:"es", fr:"fr", vi:"vi", zh:"zh-CN", pt:"pt" };
 async function translateText(text, target){
-  const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=" + encodeURIComponent(target) + "&dt=t&q=" + encodeURIComponent(text);
-  const res = await fetch(url);
-  if(!res.ok) throw new Error("translate failed: " + res.status);
-  const data = await res.json();
-  return data[0].map(seg=>seg[0]).join("").trim();
+  try{
+    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=" + encodeURIComponent(target) + "&dt=t&q=" + encodeURIComponent(text);
+    const res = await fetch(url);
+    if(!res.ok) throw new Error("translate failed: " + res.status);
+    const data = await res.json();
+    return data[0].map(seg=>seg[0]).join("").trim();
+  }catch(e){
+    if(!geminiApiKey) throw e;
+    console.warn("Google翻訳に失敗したためGeminiにフォールバックします:", e);
+    return await translateViaGemini(text, target);
+  }
+}
+
+async function translateViaGemini(text, googleCode){
+  const langKey = Object.keys(GOOGLE_LANG_CODES).find(k => GOOGLE_LANG_CODES[k] === googleCode);
+  const meta = LANGS.find(l => l.key === langKey);
+  const label = meta ? meta.label : googleCode;
+  const prompt = `次の日本語を${label}に翻訳してください。訳文だけを出力し、説明や引用符・元の日本語は含めないでください。\n\n日本語：「${text}」`;
+  const schema = { type: "object", properties: { translation: { type: "string" } }, required: ["translation"] };
+  const result = await callGeminiJSON(prompt, schema);
+  return result.translation;
 }
 
 // --- 英語の綴りからカタカナ読みを近似生成する（発音の目安。完璧ではありません） ---
