@@ -278,7 +278,7 @@
   <div class="panel">
     <h2>話す <button id="closeSpeak">✕</button></h2>
     <div class="field">
-      <label>翻訳先の言語</label>
+      <label>会話する言語</label>
       <select id="speakLangSel" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink);"></select>
     </div>
     <div class="field">
@@ -288,6 +288,12 @@
     </div>
     <button class="submitbtn" id="doSpeakTranslate" style="background:var(--blue);">🌐 <span id="speakTargetLabel">英語</span>に翻訳して話す</button>
     <p class="hint">選んだ言語に翻訳して発音します（この選択はこの画面だけで使われ、フレーズ一覧の表示言語には影響しません）。英語のみ、発音の目安としてカタカナも自動表示します（機械的な近似なので参考程度に）。</p>
+
+    <div class="field" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--line);">
+      <label>相手の番</label>
+      <button class="mic-btn" id="speakListenBtn" type="button" style="width:100%; padding:12px; border:1.5px solid var(--green); border-radius:8px; background:transparent; color:var(--green); font-size:14px; font-weight:700; cursor:pointer;">🎤 <span id="speakListenLabel">英語</span>で話してもらって日本語に翻訳</button>
+      <p class="hint">上で選んだ言語で相手に話してもらうと、聞き取って日本語に翻訳して表示します（会話を交互に一往復ずつ翻訳する形で、常時の同時通訳ではありません）。</p>
+    </div>
   </div>
 </div>
 
@@ -356,7 +362,7 @@
 
     <div class="manual-section">
       <h3>🗣️ 話す（翻訳して発音）</h3>
-      <p>その場で伝えたい日本語を入力・音声入力すると、選んだ言語に翻訳して発音してくれます。オーバーレイ上部の言語選択でその都度言語を切替可能（一覧の表示言語とは独立しています）。翻訳後の画面で★を押すとフレーズ帳に保存できます。</p>
+      <p>その場で伝えたい日本語を入力・音声入力すると、選んだ言語に翻訳して発音してくれます。オーバーレイ上部の言語選択でその都度言語を切替可能（一覧の表示言語とは独立しています）。翻訳後の画面で★を押すとフレーズ帳に保存できます。「相手の番」ボタンを使うと、選んだ言語で相手に話してもらった内容を聞き取り、日本語に翻訳して表示できます（交互に一往復ずつ翻訳する会話モード）。</p>
     </div>
 
     <div class="manual-section">
@@ -1467,7 +1473,10 @@ document.getElementById("menuSpeak").addEventListener("click", ()=>{
   document.getElementById("speakText").focus();
 });
 document.getElementById("speakLangSel").addEventListener("change", updateSpeakTargetLabel);
-document.getElementById("closeSpeak").addEventListener("click", ()=> document.getElementById("speakOverlay").classList.remove("open"));
+document.getElementById("closeSpeak").addEventListener("click", ()=>{
+  document.getElementById("speakOverlay").classList.remove("open");
+  if(foreignRecognition){ try{ foreignRecognition.abort(); }catch(e){} }
+});
 document.getElementById("menuHelp").addEventListener("click", ()=>{
   closeAllOverlays();
   document.getElementById("helpOverlay").classList.add("open");
@@ -1990,6 +1999,31 @@ async function translateViaGemini(text, googleCode){
   return result.translation;
 }
 
+// 相手の番：相手の言語→日本語（translateTextの逆方向）
+async function translateToJapanese(text, sourceGoogleCode){
+  try{
+    const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=" + encodeURIComponent(sourceGoogleCode) + "&tl=ja&dt=t&q=" + encodeURIComponent(text);
+    const res = await fetch(url);
+    if(!res.ok) throw new Error("translate failed: " + res.status);
+    const data = await res.json();
+    return data[0].map(seg=>seg[0]).join("").trim();
+  }catch(e){
+    if(!geminiApiKey) throw e;
+    console.warn("Google翻訳に失敗したためGeminiにフォールバックします:", e);
+    return await translateViaGeminiToJapanese(text, sourceGoogleCode);
+  }
+}
+
+async function translateViaGeminiToJapanese(text, sourceGoogleCode){
+  const langKey = Object.keys(GOOGLE_LANG_CODES).find(k => GOOGLE_LANG_CODES[k] === sourceGoogleCode);
+  const meta = LANGS.find(l => l.key === langKey);
+  const label = meta ? meta.label : sourceGoogleCode;
+  const prompt = `次の${label}の文を日本語に翻訳してください。訳文だけを出力し、説明や引用符・元の文は含めないでください。\n\n${label}：「${text}」`;
+  const schema = { type: "object", properties: { translation: { type: "string" } }, required: ["translation"] };
+  const result = await callGeminiJSON(prompt, schema);
+  return result.translation;
+}
+
 // --- 英語の綴りからカタカナ読みを近似生成する（発音の目安。完璧ではありません） ---
 const EN_KANA_EXCEPTIONS = {
   "i":"アイ","a":"ア","an":"アン","the":"ザ","to":"トゥ","you":"ユー","your":"ユア","yours":"ユアーズ",
@@ -2218,6 +2252,7 @@ function updateSpeakTargetLabel(){
   const key = document.getElementById("speakLangSel").value;
   const meta = LANGS.find(l=>l.key===key) || LANGS[0];
   document.getElementById("speakTargetLabel").textContent = meta.label;
+  document.getElementById("speakListenLabel").textContent = meta.label;
 }
 document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>{
   const ja = document.getElementById("speakText").value.trim();
@@ -2253,6 +2288,65 @@ document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>
     btn.disabled = false;
     btn.innerHTML = originalLabel;
   }
+});
+
+// --- 相手の番（相手の言語を聞き取って日本語に翻訳） ---
+let foreignRecognition = null;
+document.getElementById("speakListenBtn").addEventListener("click", ()=>{
+  if(!micSupported){
+    alert("この端末・ブラウザは音声入力（Web Speech API）に対応していません。iPhoneのSafariなど一部のブラウザでは相手の番機能は使えません。");
+    return;
+  }
+  if(foreignRecognition){ return; } // 聞き取り中は多重起動しない
+
+  const speakLangKey = document.getElementById("speakLangSel").value;
+  const targetMeta = LANGS.find(l=>l.key===speakLangKey) || LANGS[0];
+  const btn = document.getElementById("speakListenBtn");
+  const originalLabel = btn.innerHTML;
+
+  const recognition = new SpeechRecognitionAPI();
+  recognition.lang = targetMeta.speech;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  foreignRecognition = recognition;
+
+  recognition.onstart = ()=>{ btn.classList.add("listening"); btn.innerHTML = "🎤 聞き取り中…"; };
+  recognition.onerror = (e)=>{
+    console.error("foreign speech recognition error:", e.error);
+    if(e.error !== "aborted" && e.error !== "no-speech"){
+      alert("聞き取りに失敗しました：" + e.error);
+    }
+  };
+  recognition.onend = ()=>{
+    btn.classList.remove("listening");
+    btn.innerHTML = originalLabel;
+    foreignRecognition = null;
+  };
+  recognition.onresult = async (e)=>{
+    const heard = e.results[0][0].transcript;
+    try{
+      const translated = await translateToJapanese(heard, GOOGLE_LANG_CODES[targetMeta.key]);
+      document.getElementById("speakOverlay").classList.remove("open");
+      openPresent({
+        cat: "相手の番",
+        ja: heard,
+        phrase: translated,
+        kana: "",
+        speechLang: "ja-JP",
+        onSave: ()=>{
+          closePresent();
+          openAddPanel(null);
+          document.getElementById("addJa").value = translated;
+          document.getElementById(`add_${targetMeta.key}`).value = heard;
+        }
+      });
+    }catch(err){
+      console.error("foreign-translate error:", err);
+      alert("翻訳に失敗しました。ネット接続を確認してもう一度お試しください。\n聞き取った内容：" + heard);
+    }
+  };
+
+  try{ recognition.start(); }catch(err){ console.error(err); foreignRecognition = null; }
 });
 
 document.getElementById("autoTranslate").onclick = async ()=>{

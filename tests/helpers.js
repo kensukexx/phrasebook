@@ -50,6 +50,31 @@ async function mockCurrencyRates(page, rates) {
   });
 }
 
+async function mockSpeechRecognition(page, transcript, { error } = {}) {
+  // Replaces window.SpeechRecognition/webkitSpeechRecognition with a fake that "hears" `transcript`
+  // shortly after start(). Must run via addInitScript (before index.html's classic script evaluates
+  // and reads these globals into its own SpeechRecognitionAPI/micSupported consts).
+  await page.addInitScript(({ transcript, error }) => {
+    class FakeRecognition {
+      constructor(){ this.lang = ''; this.interimResults = false; this.maxAlternatives = 1; }
+      start(){
+        setTimeout(() => {
+          this.onstart && this.onstart();
+          setTimeout(() => {
+            if (error) { this.onerror && this.onerror({ error }); this.onend && this.onend(); return; }
+            this.onresult && this.onresult({ results: [[{ transcript }]] });
+            this.onend && this.onend();
+          }, 20);
+        }, 10);
+      }
+      abort(){ this.onend && this.onend(); }
+      stop(){ this.onend && this.onend(); }
+    }
+    window.SpeechRecognition = FakeRecognition;
+    window.webkitSpeechRecognition = FakeRecognition;
+  }, { transcript, error });
+}
+
 async function setGeminiKey(page, key) {
   await page.click('#toolsBtn');
   await page.click('#menuSettings');
@@ -59,4 +84,4 @@ async function setGeminiKey(page, key) {
   await page.click('#closeSettings');
 }
 
-module.exports = { mockTranslate, mockGoogleTTS, mockGemini, mockGeminiError, mockCurrencyRates, setGeminiKey };
+module.exports = { mockTranslate, mockGoogleTTS, mockGemini, mockGeminiError, mockCurrencyRates, mockSpeechRecognition, setGeminiKey };
