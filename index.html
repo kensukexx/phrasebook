@@ -247,7 +247,7 @@
   <div class="panel">
     <h2>端末間の同期 <button id="closeSync">✕</button></h2>
     <div id="syncSignedOut">
-      <p class="hint" style="margin:0 0 14px;">Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノートを他の端末と同期できます。</p>
+      <p class="hint" style="margin:0 0 14px;">Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノート・カテゴリと言語の並び順を他の端末と同期できます。</p>
       <button class="submitbtn" id="syncSignInBtn" style="background:var(--blue);">Googleでログイン</button>
     </div>
     <div id="syncSignedIn" style="display:none;">
@@ -387,7 +387,7 @@
 
     <div class="manual-section">
       <h3>☁️ 端末間の同期</h3>
-      <p>Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノートを他の端末と同期できます。</p>
+      <p>Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノート・カテゴリと言語の並び順を他の端末と同期できます。読み上げ速度などそれ以外の設定は端末ごとです。</p>
     </div>
   </div>
 </div>
@@ -772,10 +772,11 @@ async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
 
 // --- 端末間同期（Firebase）から使う橋渡し関数 ---
-// 同期対象は「端末に保存されるデータ」全体（カスタムフレーズ・練習ノート・覚えた/ピン留め）。
+// 同期対象：カスタムフレーズ・練習ノート・覚えた/ピン留め・カテゴリ/言語の並び順。
+// それ以外の設定（読み上げ速度など）は端末ごとのローカル保存のまま同期しない。
 // let宣言の変数はwindowに乗らないため、再代入が必要なapplyCloudStateはここ（クラシックスクリプト側）に置く。
 function getSyncableState(){
-  return { customData, customPracticePacks, learned, pinned };
+  return { customData, customPracticePacks, learned, pinned, catOrder, langOrder };
 }
 async function applyCloudState(state){
   if(!state) return;
@@ -783,8 +784,15 @@ async function applyCloudState(state){
   if(Array.isArray(state.customPracticePacks)) customPracticePacks = state.customPracticePacks;
   if(state.learned && typeof state.learned === "object") learned = state.learned;
   if(state.pinned && typeof state.pinned === "object") pinned = state.pinned;
-  await saveCustom(); await savePracticePacks(); await saveLearned(); await savePinned();
+  if(Array.isArray(state.catOrder) && state.catOrder.length) catOrder = state.catOrder;
+  if(Array.isArray(state.langOrder) && state.langOrder.length) langOrder = state.langOrder;
+  CATS.forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
+  LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
+  await saveCustom(); await savePracticePacks(); await saveLearned(); await savePinned(); await saveSettings();
+  renderCats();
   renderDeck();
+  renderLangButton();
+  if(document.getElementById("langPickerOverlay").classList.contains("open")) renderLangPickList();
   if(document.getElementById("practiceOverlay").classList.contains("open")) renderPracticeList();
 }
 
@@ -2588,7 +2596,10 @@ if("serviceWorker" in navigator){
     });
 
     // ローカルの保存関数をラップし、保存が起きるたびにクラウドへの反映をスケジュールする
-    ["saveCustom", "savePracticePacks", "saveLearned", "savePinned"].forEach(fnName=>{
+    // saveSettingsは他の端末固有設定（読み上げ速度等）も含む1つの塊で保存されるため、
+    // 頻繁な操作（スライダー等）でも呼ばれるが、schedulePushの1.2秒デバウンスで実害はない。
+    // 実際にクラウドへ送る内容はgetSyncableState()が選んだフィールド（catOrder/langOrder等）のみ。
+    ["saveCustom", "savePracticePacks", "saveLearned", "savePinned", "saveSettings"].forEach(fnName=>{
       const orig = window[fnName];
       window[fnName] = async function(...args){
         const result = await orig.apply(this, args);

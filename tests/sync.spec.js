@@ -54,3 +54,38 @@ test.describe('cross-device sync (configured)', () => {
     expect(errors).toEqual([]);
   });
 });
+
+// A real Google sign-in can't be driven in CI, but the state that would actually get pushed to /
+// pulled from Firestore is just plain data through getSyncableState()/applyCloudState() — both are
+// ordinary functions on window regardless of whether a cloud round-trip ever happens, so this
+// exercises the "cloud state applied on this device" path directly.
+test.describe('syncable state (catOrder / langOrder included)', () => {
+  test('getSyncableState includes catOrder and langOrder', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    const state = await page.evaluate(() => window.getSyncableState());
+    expect(Array.isArray(state.catOrder)).toBe(true);
+    expect(state.catOrder[0]).toBe('すべて');
+    expect(Array.isArray(state.langOrder)).toBe(true);
+    expect(state.langOrder.length).toBe(9);
+  });
+
+  test('applyCloudState reorders category tabs and the language list', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.evaluate(() => window.applyCloudState({
+      catOrder: ['すべて', 'リアクション', 'あいさつ'],
+      langOrder: ['ko', 'en'],
+    }));
+
+    const cats = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
+    expect(cats.slice(0, 3)).toEqual(['すべて', 'リアクション', 'あいさつ']);
+
+    await page.click('#langPickerBtn');
+    await page.waitForSelector('#langPickerOverlay.open');
+    const langLabels = await page.locator('.lang-row .lp-label').allTextContents();
+    expect(langLabels[0]).toBe('韓国語');
+    expect(langLabels[1]).toBe('英語');
+  });
+});
