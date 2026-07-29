@@ -2521,18 +2521,21 @@ if("serviceWorker" in navigator){
     const db = getFirestore(app);
     try{ await enableIndexedDbPersistence(db); }catch(e){ console.warn("Firestoreオフラインキャッシュを有効化できませんでした:", e); }
 
-    // モバイルブラウザ（特にAndroid Chrome）やホーム画面に追加したPWAでは、ポップアップが
-    // ブロックされたり、ポップアップ⇔本体タブ間でログイン結果をやり取りできず、ログインが
-    // 何も起きないまま失敗することがある。その場合はページ遷移型のリダイレクト方式を使う。
-    const isStandalonePWA = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-    const isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-    const useRedirectSignIn = isMobileUA || isStandalonePWA;
+    // 【重要】ログインは全環境でポップアップ方式（signInWithPopup）を使う。
+    // このアプリはGitHub Pages（kensukexx.github.io）でホストされていて、認証ドメイン
+    // （english-app-74dbd.firebaseapp.com）とオリジンが異なる。Safari系すべてと
+    // Chrome 115以降はサードパーティストレージを分離するため、この構成での
+    // signInWithRedirectは「Googleアカウントを選んで戻ってきても結果を受け取れず、
+    // エラーも出ずに未ログインのまま」という形で必ず失敗する（Firebase公式の
+    // redirect best practicesに明記）。ポップアップ方式はpostMessageで結果を返すため
+    // ストレージ分離の影響を受けず、モバイルブラウザでも動作する。
+    // リダイレクトはポップアップ自体が開けなかった場合の最終手段としてのみ残す。
 
-    // リダイレクト方式は結果がページ遷移後に返ってくるため、起動時に一度確認する
-    // （通常状態の更新はonAuthStateChangedが行うので、ここでは失敗時のエラー表示のみ担当）
+    // リダイレクト（最終手段）から戻ってきた場合のエラー表示のみここで担当
+    // （通常状態の更新はonAuthStateChangedが行う）
     getRedirectResult(auth).catch((e)=>{
       console.error("redirect sign-in error:", e);
-      alert("ログインに失敗しました：\n" + (e.message || e));
+      alert("ログインに失敗しました（" + (e.code || "不明") + "）：\n" + (e.message || e));
     });
 
     let currentUser = null;
@@ -2613,22 +2616,20 @@ if("serviceWorker" in navigator){
 
     document.getElementById("syncSignInBtn").addEventListener("click", async ()=>{
       const provider = new GoogleAuthProvider();
-      if(useRedirectSignIn){
-        try{ await signInWithRedirect(auth, provider); }
-        catch(e){ console.error("redirect sign-in error:", e); alert("ログインに失敗しました：\n" + (e.message || e)); }
-        return;
-      }
+      provider.setCustomParameters({ prompt: "select_account" });
       try{
         await signInWithPopup(auth, provider);
       }catch(e){
         console.error("sign-in error:", e);
-        // ポップアップがブロックされた/開けなかった場合はリダイレクト方式にフォールバック
-        // （auth/popup-closed-by-userはユーザーが自分で閉じた意図的キャンセルなので対象外）
+        // ユーザーが自分でポップアップを閉じた意図的キャンセルは黙って戻る
+        if(e.code === "auth/popup-closed-by-user"){ return; }
+        // ポップアップ自体が開けなかった場合のみリダイレクトを最終手段として試す
+        // （ストレージ分離ブラウザでは完了しない可能性があるが、開けないよりは良い）
         if(["auth/popup-blocked", "auth/cancelled-popup-request", "auth/operation-not-supported-in-this-environment"].includes(e.code)){
           try{ await signInWithRedirect(auth, provider); return; }
           catch(e2){ console.error("redirect fallback error:", e2); }
         }
-        alert("ログインに失敗しました：\n" + (e.message || e));
+        alert("ログインに失敗しました（" + (e.code || "不明なエラー") + "）：\n" + (e.message || e));
       }
     });
     document.getElementById("syncSignOutBtn").addEventListener("click", async ()=>{

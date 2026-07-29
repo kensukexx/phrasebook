@@ -54,38 +54,36 @@ test.describe('cross-device sync (configured)', () => {
     expect(errors).toEqual([]);
   });
 
-  test('on a mobile user agent, sign-in uses a redirect instead of a popup', async ({ browser, browserName }) => {
-    // Popups are unreliable on real mobile Chrome (blocked, or can't hand the result back to the
-    // opener tab) - index.html detects a mobile UA and uses signInWithRedirect there instead.
-    // Tested against a real Chromium engine with an Android UA override; WebKit's own Auth-popup
-    // detection limitation is already covered by the test above, independent of this UA check.
-    test.skip(browserName !== 'chromium', 'this checks the mobile-UA branch specifically against Chromium; not about WebKit popup-detection limitations');
+  test('on a mobile user agent, sign-in still uses a popup (redirect cannot complete cross-origin)', async ({ browser, browserName }) => {
+    // The app is hosted on kensukexx.github.io while authDomain is
+    // english-app-74dbd.firebaseapp.com (a different site). Safari and Chrome 115+
+    // partition third-party storage, so signInWithRedirect silently returns no result
+    // after the round-trip in that setup (see Firebase's redirect best practices).
+    // index.html therefore uses signInWithPopup on every platform, mobile included -
+    // this test pins that behavior so a mobile-UA redirect branch doesn't sneak back in.
+    test.skip(browserName !== 'chromium', 'checks the mobile-UA behavior against Chromium, where popup events are reliably observable');
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
     });
     const page = await context.newPage();
-    // Firebase authorizes "localhost" by default but not "127.0.0.1" (the config's baseURL) even
-    // though they're the same loopback address - go there directly so the redirect isn't rejected
-    // client-side with auth/unauthorized-domain before it can navigate anywhere.
+    // Firebase authorizes "localhost" by default but not "127.0.0.1" (the config's baseURL) -
+    // go there directly so sign-in isn't rejected client-side with auth/unauthorized-domain.
     await page.goto('http://localhost:8934/index.html');
     await page.waitForSelector('#deck .ticket');
+    await page.waitForTimeout(1000); // let the module script's dynamic Firebase imports resolve
     await page.click('#toolsBtn');
     await page.click('#menuSync');
     await page.waitForSelector('#syncOverlay.open');
 
-    let popupFired = false;
-    page.once('popup', () => { popupFired = true; });
     const originalUrl = page.url();
+    const popupPromise = page.waitForEvent('popup', { timeout: 15000 });
     await page.click('#syncSignInBtn');
-    // signInWithRedirect navigates the current tab (via the Firebase authDomain handler, then on to
-    // Google's real sign-in page) rather than opening a new window. Poll page.url() - a plain
-    // Playwright-tracked getter, safe to read mid-navigation - instead of evaluating in-page JS,
-    // which can throw when the navigation destroys the execution context mid-poll.
-    // Generous timeout: this is a real navigation to live Firebase/Google infra, which can be
-    // slower under parallel test load than in isolation.
-    await expect.poll(() => page.url(), { timeout: 15000 }).not.toBe(originalUrl);
+    const popup = await popupPromise;
+    expect(popup.url()).toContain('english-app-74dbd.firebaseapp.com/__/auth/handler');
+    await popup.close().catch(() => {});
 
-    expect(popupFired).toBe(false);
+    // The main tab must stay put: a navigation here would mean the redirect branch ran.
+    expect(page.url()).toBe(originalUrl);
     await context.close();
   });
 });
