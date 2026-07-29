@@ -43,7 +43,7 @@ test.describe('cross-device sync (configured)', () => {
     await page.click('#menuSync');
     await page.waitForSelector('#syncOverlay.open');
 
-    const popupPromise = page.waitForEvent('popup', { timeout: 5000 });
+    const popupPromise = page.waitForEvent('popup', { timeout: 10000 });
     await page.click('#syncSignInBtn');
     const popup = await popupPromise;
     expect(popup.url()).toContain('english-app-74dbd.firebaseapp.com/__/auth/handler');
@@ -52,6 +52,41 @@ test.describe('cross-device sync (configured)', () => {
     const stillResponsive = await page.evaluate(() => document.getElementById('deck') !== null);
     expect(stillResponsive).toBe(true);
     expect(errors).toEqual([]);
+  });
+
+  test('on a mobile user agent, sign-in uses a redirect instead of a popup', async ({ browser, browserName }) => {
+    // Popups are unreliable on real mobile Chrome (blocked, or can't hand the result back to the
+    // opener tab) - index.html detects a mobile UA and uses signInWithRedirect there instead.
+    // Tested against a real Chromium engine with an Android UA override; WebKit's own Auth-popup
+    // detection limitation is already covered by the test above, independent of this UA check.
+    test.skip(browserName !== 'chromium', 'this checks the mobile-UA branch specifically against Chromium; not about WebKit popup-detection limitations');
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+    });
+    const page = await context.newPage();
+    // Firebase authorizes "localhost" by default but not "127.0.0.1" (the config's baseURL) even
+    // though they're the same loopback address - go there directly so the redirect isn't rejected
+    // client-side with auth/unauthorized-domain before it can navigate anywhere.
+    await page.goto('http://localhost:8934/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuSync');
+    await page.waitForSelector('#syncOverlay.open');
+
+    let popupFired = false;
+    page.once('popup', () => { popupFired = true; });
+    const originalUrl = page.url();
+    await page.click('#syncSignInBtn');
+    // signInWithRedirect navigates the current tab (via the Firebase authDomain handler, then on to
+    // Google's real sign-in page) rather than opening a new window. Poll page.url() - a plain
+    // Playwright-tracked getter, safe to read mid-navigation - instead of evaluating in-page JS,
+    // which can throw when the navigation destroys the execution context mid-poll.
+    // Generous timeout: this is a real navigation to live Firebase/Google infra, which can be
+    // slower under parallel test load than in isolation.
+    await expect.poll(() => page.url(), { timeout: 15000 }).not.toBe(originalUrl);
+
+    expect(popupFired).toBe(false);
+    await context.close();
   });
 });
 

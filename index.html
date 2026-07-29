@@ -2508,7 +2508,7 @@ if("serviceWorker" in navigator){
   } else {
     const [
       { initializeApp },
-      { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged },
+      { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged },
       { getFirestore, doc, getDoc, setDoc, onSnapshot, enableIndexedDbPersistence },
     ] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js"),
@@ -2520,6 +2520,20 @@ if("serviceWorker" in navigator){
     const auth = getAuth(app);
     const db = getFirestore(app);
     try{ await enableIndexedDbPersistence(db); }catch(e){ console.warn("Firestoreオフラインキャッシュを有効化できませんでした:", e); }
+
+    // モバイルブラウザ（特にAndroid Chrome）やホーム画面に追加したPWAでは、ポップアップが
+    // ブロックされたり、ポップアップ⇔本体タブ間でログイン結果をやり取りできず、ログインが
+    // 何も起きないまま失敗することがある。その場合はページ遷移型のリダイレクト方式を使う。
+    const isStandalonePWA = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+    const isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    const useRedirectSignIn = isMobileUA || isStandalonePWA;
+
+    // リダイレクト方式は結果がページ遷移後に返ってくるため、起動時に一度確認する
+    // （通常状態の更新はonAuthStateChangedが行うので、ここでは失敗時のエラー表示のみ担当）
+    getRedirectResult(auth).catch((e)=>{
+      console.error("redirect sign-in error:", e);
+      alert("ログインに失敗しました：\n" + (e.message || e));
+    });
 
     let currentUser = null;
     let unsubscribeSnapshot = null;
@@ -2598,10 +2612,22 @@ if("serviceWorker" in navigator){
     });
 
     document.getElementById("syncSignInBtn").addEventListener("click", async ()=>{
+      const provider = new GoogleAuthProvider();
+      if(useRedirectSignIn){
+        try{ await signInWithRedirect(auth, provider); }
+        catch(e){ console.error("redirect sign-in error:", e); alert("ログインに失敗しました：\n" + (e.message || e)); }
+        return;
+      }
       try{
-        await signInWithPopup(auth, new GoogleAuthProvider());
+        await signInWithPopup(auth, provider);
       }catch(e){
         console.error("sign-in error:", e);
+        // ポップアップがブロックされた/開けなかった場合はリダイレクト方式にフォールバック
+        // （auth/popup-closed-by-userはユーザーが自分で閉じた意図的キャンセルなので対象外）
+        if(["auth/popup-blocked", "auth/cancelled-popup-request", "auth/operation-not-supported-in-this-environment"].includes(e.code)){
+          try{ await signInWithRedirect(auth, provider); return; }
+          catch(e2){ console.error("redirect fallback error:", e2); }
+        }
         alert("ログインに失敗しました：\n" + (e.message || e));
       }
     });
