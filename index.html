@@ -1188,7 +1188,10 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   }
 }
 
-function openPresent({cat, ja, phrase, kana, speechLang, onSave}){
+// returnTo: 閉じた時に戻る先のオーバーレイID（話す・書いて見せるなど、連続して使う画面用）。
+// 省略時は今まで通りフレーズ一覧に戻る。
+let presentReturnOverlayId = null;
+function openPresent({cat, ja, phrase, kana, speechLang, onSave, returnTo}){
   document.getElementById("presentCat").textContent = cat || "";
   document.getElementById("presentCat").style.display = cat ? "" : "none";
   document.getElementById("presentJa").textContent = ja || "";
@@ -1198,6 +1201,7 @@ function openPresent({cat, ja, phrase, kana, speechLang, onSave}){
   document.getElementById("presentKana").style.display = kana ? "" : "none";
   const overlay = document.getElementById("presentOverlay");
   overlay.classList.add("open");
+  presentReturnOverlayId = returnTo || null;
   const speakBtn = document.getElementById("presentSpeak");
   speakBtn.onclick = ()=> speakRaw(phrase, speechLang, speakBtn);
   document.getElementById("presentPlayback").style.display = "none";
@@ -1205,9 +1209,16 @@ function openPresent({cat, ja, phrase, kana, speechLang, onSave}){
   saveBtn.style.display = onSave ? "inline-block" : "none";
   saveBtn.onclick = onSave || null;
 }
-function closePresent(){
+// suppressReturn: trueの場合、returnTo指定があっても戻らずそのまま閉じる
+// （保存後に別の画面（フレーズ追加）へ直接遷移する場合に使う）
+function closePresent(suppressReturn){
   stopAllAudio();
   document.getElementById("presentOverlay").classList.remove("open");
+  const returnTo = presentReturnOverlayId;
+  presentReturnOverlayId = null;
+  if(!suppressReturn && returnTo){
+    document.getElementById(returnTo).classList.add("open");
+  }
 }
 
 function computeFiltered(){
@@ -1751,9 +1762,9 @@ document.getElementById("showWriteFullscreen").addEventListener("click", ()=>{
   const isJapanese = /[\u3040-\u30FF\u4E00-\u9FFF]/.test(text);
   const speechLang = isJapanese ? "ja-JP" : (LANGS.find(l=>l.key===currentLang)||{speech:"en-US"}).speech;
   document.getElementById("writeOverlay").classList.remove("open");
-  openPresent({ cat:"メモ", ja:"", phrase:text, kana:"", speechLang });
+  openPresent({ cat:"メモ", ja:"", phrase:text, kana:"", speechLang, returnTo:"writeOverlay" });
 });
-document.getElementById("presentClose").addEventListener("click", closePresent);
+document.getElementById("presentClose").addEventListener("click", ()=> closePresent());
 
 // Escキー・背景タップでオーバーレイを閉じる
 document.querySelectorAll(".overlay").forEach(ov=>{
@@ -2275,14 +2286,16 @@ document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>
     const translated = await translateText(ja, GOOGLE_LANG_CODES[targetMeta.key]);
     const kana = targetMeta.key === "en" ? englishToKatakana(translated) : "";
     document.getElementById("speakOverlay").classList.remove("open");
+    document.getElementById("speakText").value = ""; // 次の発話にすぐ入力できるようクリア
     openPresent({
       cat: "話す",
       ja,
       phrase: translated,
       kana,
       speechLang: targetMeta.speech,
+      returnTo: "speakOverlay",
       onSave: ()=>{
-        closePresent();
+        closePresent(true);
         openAddPanel(null);
         document.getElementById("addJa").value = ja;
         document.getElementById(`add_${targetMeta.key}`).value = translated;
@@ -2341,8 +2354,9 @@ document.getElementById("speakListenBtn").addEventListener("click", ()=>{
         phrase: translated,
         kana: "",
         speechLang: "ja-JP",
+        returnTo: "speakOverlay",
         onSave: ()=>{
-          closePresent();
+          closePresent(true);
           openAddPanel(null);
           document.getElementById("addJa").value = translated;
           document.getElementById(`add_${targetMeta.key}`).value = heard;

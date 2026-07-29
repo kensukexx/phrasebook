@@ -95,4 +95,58 @@ test.describe('相手の番 (conversation mode)', () => {
 
     await expect.poll(() => alerts.join()).toContain('対応していません');
   });
+
+  test('closing the result returns to 話す instead of the deck, ready for another turn', async ({ page }) => {
+    await mockSpeechRecognition(page, 'Hello');
+    await mockTranslate(page, { ja: 'こんにちは' });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSpeak');
+    await page.waitForSelector('#speakOverlay.open');
+    await page.selectOption('#speakLangSel', 'en');
+    await page.click('#speakListenBtn');
+    await page.waitForSelector('#presentOverlay.open');
+
+    await page.click('#presentClose');
+    await expect(page.locator('#speakOverlay')).toHaveClass(/open/);
+  });
+});
+
+test.describe('話す (forward translation) — return-to and input reset', () => {
+  test('closing the result returns to 話す with the Japanese input cleared for the next turn', async ({ page }) => {
+    await mockTranslate(page, { en: 'Hello there' });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSpeak');
+    await page.waitForSelector('#speakOverlay.open');
+    await page.fill('#speakText', 'こんにちは');
+    await page.click('#doSpeakTranslate');
+    await page.waitForSelector('#presentOverlay.open');
+
+    await page.click('#presentClose');
+    await expect(page.locator('#speakOverlay')).toHaveClass(/open/);
+    await expect(page.locator('#speakText')).toHaveValue('');
+  });
+
+  test('saving the result opens the add-phrase form directly, without 話す reappearing underneath', async ({ page }) => {
+    await mockTranslate(page, { en: 'Hello there' });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSpeak');
+    await page.waitForSelector('#speakOverlay.open');
+    await page.fill('#speakText', 'こんにちは');
+    await page.click('#doSpeakTranslate');
+    await page.waitForSelector('#presentOverlay.open');
+
+    await page.click('#presentSave');
+    await page.waitForSelector('#addOverlay.open');
+    expect(await page.locator('#speakOverlay.open').count()).toBe(0);
+    expect(await page.locator('#presentOverlay.open').count()).toBe(0);
+  });
 });
