@@ -35,6 +35,21 @@ async function mockGeminiError(page, status, message) {
   });
 }
 
+async function mockCurrencyRates(page, rates) {
+  // rates: { USD: 0.0067, EUR: 0.0061, ... } keyed by ISO currency code (JPY-based)
+  await page.route('**/open.er-api.com/**', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        result: 'success',
+        time_last_update_utc: 'Wed, 29 Jul 2026 00:00:00 +0000',
+        rates: Object.assign({ JPY: 1 }, rates),
+      }),
+    });
+  });
+}
+
 async function setGeminiKey(page, key) {
   await page.click('#toolsBtn');
   await page.click('#menuSettings');
@@ -44,4 +59,4 @@ async function setGeminiKey(page, key) {
   await page.click('#closeSettings');
 }
 
-module.exports = { mockTranslate, mockGoogleTTS, mockGemini, mockGeminiError, setGeminiKey };
+module.exports = { mockTranslate, mockGoogleTTS, mockGemini, mockGeminiError, mockCurrencyRates, setGeminiKey };

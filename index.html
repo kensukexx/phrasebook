@@ -57,6 +57,7 @@
   .cat:active{ transform:scale(0.95); }
   .cat .cat-ico{ font-size:15px; }
   .cat.active{ color:#fff; box-shadow:0 4px 14px rgba(47,53,66,0.22); }
+  .cat.dragging{ opacity:0.6; box-shadow:0 6px 16px rgba(47,53,66,0.3); z-index:5; }
 
   .listenbar{ padding:12px 16px 0; }
   .listenbtn{ width:100%; padding:12px; border:2px solid var(--ink); border-radius:12px; background:var(--ink); color:var(--paper);
@@ -122,6 +123,10 @@
   .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .submitbtn{ width:100%; padding:12px; border:none; border-radius:10px; background:var(--red); color:var(--paper); font-weight:600; font-size:15px; cursor:pointer; margin-top:6px; }
   .hint{ font-size:12px; color:var(--ink-soft); margin-top:4px; line-height:1.5; }
+  .manual-section{ margin-bottom:18px; }
+  .manual-section:last-child{ margin-bottom:0; }
+  .manual-section h3{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:14.5px; margin:0 0 6px; display:flex; align-items:center; gap:6px; color:var(--ink); }
+  .manual-section p{ font-size:13.5px; color:var(--ink-soft); line-height:1.65; margin:0; }
   .voice-lang-row{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
   .voice-lang-row:last-child{ border-bottom:none; }
   .voice-lang-row .name{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12px; color:var(--ink-soft); width:66px; flex:0 0 auto; }
@@ -234,6 +239,7 @@
     <button class="tool-item" id="menuWrite"><span>✎</span>書いて見せる</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
+    <button class="tool-item" id="menuHelp"><span>❓</span>使い方</button>
   </div>
 </div>
 
@@ -272,12 +278,16 @@
   <div class="panel">
     <h2>話す <button id="closeSpeak">✕</button></h2>
     <div class="field">
+      <label>翻訳先の言語</label>
+      <select id="speakLangSel" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink);"></select>
+    </div>
+    <div class="field">
       <label>日本語で入力</label>
       <textarea id="speakText" rows="3" placeholder="伝えたいことを日本語で入力、または🎤で話す" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); resize:vertical;"></textarea>
       <button class="mic-btn" id="micSpeak" type="button" style="margin-top:8px; padding:8px 14px; border:1.5px solid var(--ink); border-radius:8px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer;">🎤 音声で入力</button>
     </div>
     <button class="submitbtn" id="doSpeakTranslate" style="background:var(--blue);">🌐 <span id="speakTargetLabel">英語</span>に翻訳して話す</button>
-    <p class="hint">今選んでいる言語（ヘッダー下の言語選択で切替）に翻訳して発音します。英語のみ、発音の目安としてカタカナも自動表示します（機械的な近似なので参考程度に）。</p>
+    <p class="hint">選んだ言語に翻訳して発音します（この選択はこの画面だけで使われ、フレーズ一覧の表示言語には影響しません）。英語のみ、発音の目安としてカタカナも自動表示します（機械的な近似なので参考程度に）。</p>
   </div>
 </div>
 
@@ -322,6 +332,57 @@
       <select id="currTo"></select>
     </div>
     <p class="hint" id="currStatus">最新のレートを取得しています…</p>
+  </div>
+</div>
+
+<div class="overlay" id="helpOverlay">
+  <div class="panel">
+    <h2>使い方 <button id="closeHelp">✕</button></h2>
+
+    <div class="manual-section">
+      <h3>📇 フレーズ一覧</h3>
+      <p>カードをタップすると発音します。左右にスワイプするとカテゴリを切替、カード右下の⤢で相手に画面を見せる全画面表示になります。カテゴリタブは長押ししてドラッグすると好きな順番に並び替えられます（「すべて」は常に先頭固定）。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>📌 ✓ ピン留め・覚えた</h3>
+      <p>カード下の📌でよく使うフレーズを固定表示、✓で「覚えた」印を付けられます。一覧上部のピンとチェックのアイコンで絞り込み表示に切替できます。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>＋ フレーズを追加</h3>
+      <p>右下の＋ボタンから自分の言葉を手動追加できます。日本語を入力して「自動翻訳」を押すと空欄の言語がまとめて翻訳されます（設定でGeminiキーを登録していれば、カタカナ読みも自動生成されます）。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>🗣️ 話す（翻訳して発音）</h3>
+      <p>その場で伝えたい日本語を入力・音声入力すると、選んだ言語に翻訳して発音してくれます。オーバーレイ上部の言語選択でその都度言語を切替可能（一覧の表示言語とは独立しています）。翻訳後の画面で★を押すとフレーズ帳に保存できます。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>🎓 練習ノート</h3>
+      <p>覚えたい単語を入力すると、AIがその単語を使った例文セットを作ってくれます（設定でGeminiキーの登録が必要）。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>✎ 書いて見せる</h3>
+      <p>辞書にない言葉でも、大きな文字で書いて相手に見せられます。日本語で書けば日本語として、それ以外の言語で書けばその言語として読み上げます。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>💱 通貨換算</h3>
+      <p>日本円と現地通貨を相互に換算します。オンライン時に最新レートを取得し、オフライン時は前回取得分を使います。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>⚙ 設定</h3>
+      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、声の選択、言語の並び順、Gemini APIキーの登録などができます。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>☁️ 端末間の同期</h3>
+      <p>Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノートを他の端末と同期できます。</p>
+    </div>
   </div>
 </div>
 
@@ -649,6 +710,7 @@ let listenGap = 450;
 let voiceMap = {};
 let geminiApiKey = "";
 let langOrder = LANGS.map(l=>l.key);
+let catOrder = CATS.slice();
 let synth = window.speechSynthesis;
 let availableVoices = [];
 let listenState = { active:false, list:[], index:0 };
@@ -668,13 +730,14 @@ function keyOf(d){ return d.id || d.ja; }
 
 async function loadState(){
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
   try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
   try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
+  CATS.forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
   // 既存のカスタムフレーズに一意IDを付与（同じ日本語のフレーズ同士の衝突防止）
   let migrated = false;
   customData.forEach((d, i)=>{
@@ -696,7 +759,7 @@ async function safeSet(key, value){
     }
   }
 }
-async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, catOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
 async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
@@ -723,6 +786,8 @@ function allData(){ return BUILTIN.concat(customData); }
 // どの言語も未入力（日本語のみ）のフレーズかどうか
 function isJaOnly(d){ return !LANGS.some(l=>d[l.key]); }
 function orderedLangs(){ return langOrder.map(k=>LANGS.find(l=>l.key===k)).filter(Boolean); }
+// 「すべて」は常に先頭固定、それ以外はcatOrderの並び替え結果に従う
+function orderedCats(){ return ["すべて", ...catOrder.filter(c=>CATS.includes(c) && c!=="すべて")]; }
 
 function renderLangButton(){
   const btn = document.getElementById("langPickerBtn");
@@ -818,13 +883,18 @@ function renderCats(){
   const wrap = document.getElementById("cats");
   wrap.innerHTML = "";
   let activeBtn = null;
-  CATS.forEach(c=>{
+  orderedCats().forEach(c=>{
     const m = catMeta(c);
     const btn = document.createElement("button");
     btn.className = "cat" + (c===currentCat ? " active" : "");
+    btn.dataset.cat = c;
     btn.innerHTML = `<span class="cat-ico">${m.icon}</span>${esc(c)}`;
     if(c===currentCat){ btn.style.background = m.color; activeBtn = btn; }
-    btn.onclick = ()=>{ stopListening(); currentCat = c; saveSettings(); renderCats(); renderDeck(); };
+    if(c === "すべて"){
+      btn.onclick = ()=>{ stopListening(); currentCat = c; saveSettings(); renderCats(); renderDeck(); };
+    } else {
+      attachCatDrag(btn, c);
+    }
     wrap.appendChild(btn);
   });
   // 選択中のカテゴリがバーの中央に来るよう横スクロール
@@ -835,10 +905,74 @@ function renderCats(){
   }
 }
 
+// カテゴリタブの長押しドラッグ並び替え（タップで選択、長押し後ドラッグで並び替え）
+function attachCatDrag(btn, key){
+  btn.addEventListener("pointerdown", (e)=>{
+    const startX = e.clientX, startY = e.clientY;
+    let dragging = false;
+    const wrap = document.getElementById("cats");
+
+    const longPressTimer = setTimeout(()=>{
+      dragging = true;
+      btn.classList.add("dragging");
+      try{ btn.setPointerCapture(e.pointerId); }catch(err){}
+    }, 380);
+
+    function onMove(ev){
+      if(!dragging){
+        if(Math.abs(ev.clientX-startX) > 10 || Math.abs(ev.clientY-startY) > 10){
+          clearTimeout(longPressTimer);
+          cleanup();
+        }
+        return;
+      }
+      ev.preventDefault();
+      // 「すべて」タブは並び替え対象から除外（常に先頭固定）
+      const targets = Array.from(wrap.querySelectorAll(".cat")).filter(b=>b!==btn && b.dataset.cat!=="すべて");
+      let target = null;
+      for(const b of targets){
+        const rect = b.getBoundingClientRect();
+        if(ev.clientX < rect.left + rect.width/2){ target = b; break; }
+      }
+      if(target){ wrap.insertBefore(btn, target); } else { wrap.appendChild(btn); }
+    }
+
+    function onUp(ev){
+      clearTimeout(longPressTimer);
+      if(dragging){
+        btn.classList.remove("dragging");
+        catOrder = Array.from(wrap.querySelectorAll(".cat")).map(b=>b.dataset.cat);
+        saveSettings();
+      } else {
+        const dx = Math.abs(ev.clientX-startX), dy = Math.abs(ev.clientY-startY);
+        if(dx < 10 && dy < 10){ stopListening(); currentCat = key; saveSettings(); renderCats(); renderDeck(); }
+      }
+      cleanup();
+    }
+
+    function onCancel(){
+      clearTimeout(longPressTimer);
+      if(dragging){ btn.classList.remove("dragging"); dragging = false; }
+      cleanup();
+    }
+
+    function cleanup(){
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onCancel);
+    }
+
+    document.addEventListener("pointermove", onMove, {passive:false});
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onCancel);
+  });
+}
+
 function switchCategory(dir){
   stopListening();
-  const i = CATS.indexOf(currentCat);
-  currentCat = CATS[(i + dir + CATS.length) % CATS.length];
+  const order = orderedCats();
+  const i = order.indexOf(currentCat);
+  currentCat = order[(i + dir + order.length) % order.length];
   saveSettings();
   renderCats();
   renderDeck();
@@ -1315,7 +1449,7 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["writeOverlay","speakOverlay","practiceOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
+  ["writeOverlay","speakOverlay","practiceOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
@@ -1328,11 +1462,17 @@ document.getElementById("menuSync").addEventListener("click", ()=>{
 document.getElementById("closeSync").addEventListener("click", ()=> document.getElementById("syncOverlay").classList.remove("open"));
 document.getElementById("menuSpeak").addEventListener("click", ()=>{
   closeAllOverlays();
-  updateSpeakTargetLabel();
+  populateSpeakLangSelect();
   document.getElementById("speakOverlay").classList.add("open");
   document.getElementById("speakText").focus();
 });
+document.getElementById("speakLangSel").addEventListener("change", updateSpeakTargetLabel);
 document.getElementById("closeSpeak").addEventListener("click", ()=> document.getElementById("speakOverlay").classList.remove("open"));
+document.getElementById("menuHelp").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("helpOverlay").classList.add("open");
+});
+document.getElementById("closeHelp").addEventListener("click", ()=> document.getElementById("helpOverlay").classList.remove("open"));
 
 // --- 練習ノート ---
 function allPracticePacks(){ return PRACTICE_PACKS.concat(customPracticePacks); }
@@ -1633,12 +1773,13 @@ async function initCurrencyConverter(){
   if(!currencyRates){
     document.getElementById("currStatus").textContent = "最新のレートを取得しています…";
     try{
-      const res = await fetch("https://api.frankfurter.app/latest?from=JPY");
+      const res = await fetch("https://open.er-api.com/v6/latest/JPY");
       const data = await res.json();
+      if(data.result !== "success" || !data.rates) throw new Error("rate fetch failed: " + data.result);
       currencyRates = data.rates;
-      currencyRates.JPY = 1;
-      document.getElementById("currStatus").textContent = `為替レート取得日: ${data.date}（JPY基準）`;
-      safeSet('phrasebook-rates', JSON.stringify({ date: data.date, rates: currencyRates }));
+      const dateLabel = data.time_last_update_utc ? data.time_last_update_utc.replace(/\s\d\d:\d\d:\d\d.*$/, "") : "最新";
+      document.getElementById("currStatus").textContent = `為替レート取得日: ${dateLabel}（JPY基準）`;
+      safeSet('phrasebook-rates', JSON.stringify({ date: dateLabel, rates: currencyRates }));
     }catch(e){
       console.error(e);
       try{
@@ -2067,14 +2208,22 @@ function englishToKatakana(text){
 }
 
 // --- 話す（今すぐ翻訳して発音） ---
+function populateSpeakLangSelect(){
+  const sel = document.getElementById("speakLangSel");
+  sel.innerHTML = LANGS.map(l=>`<option value="${l.key}">${l.label}</option>`).join('');
+  sel.value = currentLang;
+  updateSpeakTargetLabel();
+}
 function updateSpeakTargetLabel(){
-  const meta = LANGS.find(l=>l.key===currentLang) || LANGS[0];
+  const key = document.getElementById("speakLangSel").value;
+  const meta = LANGS.find(l=>l.key===key) || LANGS[0];
   document.getElementById("speakTargetLabel").textContent = meta.label;
 }
 document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>{
   const ja = document.getElementById("speakText").value.trim();
   if(!ja){ alert("日本語を入力してください"); return; }
-  const targetMeta = LANGS.find(l=>l.key===currentLang) || LANGS[0];
+  const speakLangKey = document.getElementById("speakLangSel").value;
+  const targetMeta = LANGS.find(l=>l.key===speakLangKey) || LANGS[0];
   const btn = document.getElementById("doSpeakTranslate");
   const originalLabel = btn.innerHTML;
   btn.disabled = true;
