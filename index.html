@@ -407,7 +407,7 @@
     <div class="field"><label>カテゴリ</label><select id="addCat"></select></div>
     <button class="submitbtn" id="autoTranslate" type="button" style="background:var(--blue); margin:0 0 12px;">🌐 空欄の言語を自動翻訳</button>
     <div class="grid2" id="addFieldsGrid"></div>
-    <p class="hint">「自動翻訳」で9言語がまとめて埋まります（Google翻訳・ネット接続が必要）。訳が気に入らなければ手で直してOK。カナ読みは自動では付きません。日本語だけで追加した場合は全言語で表示され、日本語で読み上げます。</p>
+    <p class="hint">「自動翻訳」で9言語がまとめて埋まります（Google翻訳・ネット接続が必要）。訳が気に入らなければ手で直してOK。設定画面でGemini APIキーを登録していれば、カナ読みもあわせて自動生成されます（未登録の場合はカナ欄は空のまま手入力）。日本語だけで追加した場合は全言語で表示され、日本語で読み上げます。</p>
     <button class="submitbtn" id="submitAdd">保存する</button>
   </div>
 </div>
@@ -1338,27 +1338,16 @@ const PRACTICE_PACK_SCHEMA = {
   required: ["word","wordKana","meaning","groups"],
 };
 
-async function generatePracticePack(langKey, word){
-  const meta = LANGS.find(l=>l.key===langKey);
-  const prompt = `あなたは日本語話者向けの語学講師です。次の単語・表現について、旅行フレーズブックアプリに載せる練習ノートを作成してください。
-
-対象言語：${meta ? meta.label : langKey}
-単語・表現："${word}"
-
-方針：
-- meaning は日本語で簡潔に（「〜なしで」のようなカギ括弧つきの短い訳）
-- groups は「基本の例文」から始め、用法パターンごとに2〜4グループに分ける（例：品詞や文型で使い方が変わる場合はパターン別に）
-- 各グループの examples は自然でよく使われる例文を2〜3個
-- 例文には対象言語の文（text）、カタカナでの発音表記（kana）、日本語訳（ja）を必ずつける
-- 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
-- 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(geminiApiKey);
+// Gemini APIを呼び、JSON Schemaに沿ったオブジェクトを返す共通ヘルパー。
+// "-latest"エイリアスを使うことで、Google側がモデル世代を更新してもコード変更不要にする。
+async function callGeminiJSON(prompt, schema){
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" + encodeURIComponent(geminiApiKey);
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json", responseSchema: PRACTICE_PACK_SCHEMA },
+      generationConfig: { responseMimeType: "application/json", responseSchema: schema },
     }),
   });
   if(!res.ok){
@@ -1385,6 +1374,55 @@ async function generatePracticePack(langKey, word){
   }
 }
 
+function geminiErrorMessage(e){
+  const m = String(e.message || e);
+  if(m.includes("API_ERROR:429")) return "無料枠の利用上限に達したようです。しばらく待ってから試してください。";
+  if(m.includes("API_ERROR:400") || m.includes("API_ERROR:403")) return "APIキーの問題の可能性があります：\n" + m;
+  if(m.startsWith("BLOCKED:")) return "安全フィルターにより生成がブロックされました（" + m.slice(8) + "）。";
+  if(m.startsWith("FINISH_REASON:")) return "生成が途中で止まりました（理由：" + m.slice(14) + "）。もう一度お試しください。";
+  if(navigator.onLine === false) return "オフラインのようです。ネット接続を確認してください。";
+  return "生成に失敗しました。詳細：\n" + m;
+}
+
+async function generatePracticePack(langKey, word){
+  const meta = LANGS.find(l=>l.key===langKey);
+  const prompt = `あなたは日本語話者向けの語学講師です。次の単語・表現について、旅行フレーズブックアプリに載せる練習ノートを作成してください。
+
+対象言語：${meta ? meta.label : langKey}
+単語・表現："${word}"
+
+方針：
+- meaning は日本語で簡潔に（「〜なしで」のようなカギ括弧つきの短い訳）
+- groups は「基本の例文」から始め、用法パターンごとに2〜4グループに分ける（例：品詞や文型で使い方が変わる場合はパターン別に）
+- 各グループの examples は自然でよく使われる例文を2〜3個
+- 例文には対象言語の文（text）、カタカナでの発音表記（kana）、日本語訳（ja）を必ずつける
+- 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
+- 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
+  return callGeminiJSON(prompt, PRACTICE_PACK_SCHEMA);
+}
+
+// addOverlayで空欄の言語を自動翻訳した後、Geminiキーがあれば9言語まとめてカタカナ読みを生成する
+async function generateKanaBatch(ja, translations){
+  const entries = Object.entries(translations); // [[langKey, phrase], ...]
+  if(entries.length === 0) return {};
+  const langLines = entries.map(([k,t])=>{
+    const meta = LANGS.find(l=>l.key===k);
+    return `${meta ? meta.label : k}（${k}）: ${t}`;
+  }).join('\n');
+  const prompt = `次の日本語フレーズと、各言語への翻訳について、日本語話者向けにカタカナでの発音表記を作ってください。
+
+日本語：「${ja}」
+${langLines}
+
+出力は、上と同じ言語コード（${entries.map(([k])=>k).join(', ')}）をキーとするJSONオブジェクトで、各値はその言語の文のカタカナ発音表記だけにしてください（説明や元の文は含めない）。`;
+  const schema = {
+    type: "object",
+    properties: Object.fromEntries(entries.map(([k])=>[k, { type: "string" }])),
+    required: entries.map(([k])=>k),
+  };
+  return callGeminiJSON(prompt, schema);
+}
+
 document.getElementById("practiceGenBtn").addEventListener("click", async ()=>{
   const word = document.getElementById("practiceGenWord").value.trim();
   const langKey = document.getElementById("practiceGenLang").value;
@@ -1408,15 +1446,7 @@ document.getElementById("practiceGenBtn").addEventListener("click", async ()=>{
     openPracticeDetail(allPracticePacks().length - 1);
   }catch(e){
     console.error("practice pack generation error:", e);
-    const m = String(e.message || e);
-    let msg;
-    if(m.includes("API_ERROR:429")) msg = "無料枠の利用上限に達したようです。しばらく待ってから試してください。";
-    else if(m.includes("API_ERROR:400") || m.includes("API_ERROR:403")) msg = "APIキーの問題の可能性があります：\n" + m;
-    else if(m.startsWith("BLOCKED:")) msg = "安全フィルターにより生成がブロックされました（" + m.slice(8) + "）。単語を変えて試してください。";
-    else if(m.startsWith("FINISH_REASON:")) msg = "生成が途中で止まりました（理由：" + m.slice(14) + "）。もう一度お試しください。";
-    else if(navigator.onLine === false) msg = "オフラインのようです。ネット接続を確認してください。";
-    else msg = "生成に失敗しました。詳細：\n" + m;
-    alert(msg);
+    alert(geminiErrorMessage(e));
   }finally{
     btn.disabled = false;
     btn.textContent = original;
@@ -1971,9 +2001,33 @@ document.getElementById("autoTranslate").onclick = async ()=>{
       done++;
     }catch(e){ console.error("translate error:", l.key, e); fail++; }
   }
+  if(fail > 0){ alert(`${fail}言語の翻訳に失敗しました。ネット接続を確認して、もう一度お試しください。`); }
+
+  // Geminiキーがあれば、カナ欄が空の言語をまとめてカタカナ読み生成
+  if(geminiApiKey){
+    const needKana = {};
+    LANGS.forEach(l=>{
+      const phrase = document.getElementById(`add_${l.key}`).value.trim();
+      const kanaInput = document.getElementById(`add_${l.key}_kana`);
+      if(phrase && !kanaInput.value.trim()) needKana[l.key] = phrase;
+    });
+    if(Object.keys(needKana).length > 0){
+      btn.textContent = "カナを生成中…";
+      try{
+        const kana = await generateKanaBatch(ja, needKana);
+        Object.keys(needKana).forEach(k=>{
+          const kanaInput = document.getElementById(`add_${k}_kana`);
+          if(kana[k] && !kanaInput.value.trim()) kanaInput.value = kana[k];
+        });
+      }catch(e){
+        console.error("kana generation error:", e);
+        alert("カナの自動生成に失敗しました：\n" + geminiErrorMessage(e) + "\n（訳文はそのまま使えます。カナは手入力できます）");
+      }
+    }
+  }
+
   btn.disabled = false;
   btn.textContent = "🌐 空欄の言語を自動翻訳";
-  if(fail > 0){ alert(`${fail}言語の翻訳に失敗しました。ネット接続を確認して、もう一度お試しください。`); }
 };
 document.getElementById("unlearnedToggle").addEventListener("click", (e)=>{ stopListening(); showUnlearnedOnly = !showUnlearnedOnly; e.currentTarget.classList.toggle("on", showUnlearnedOnly); saveSettings(); renderDeck(); });
 document.getElementById("pinnedToggle").addEventListener("click", (e)=>{ stopListening(); showPinnedOnly = !showPinnedOnly; e.currentTarget.classList.toggle("on", showPinnedOnly); saveSettings(); renderDeck(); });
