@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 各ユーザーは自分自身の同期データ（/users/{自分のuid}）だけ読み書きできる。
+    // Firebase Console → Firestore Database → ルール タブに、この内容をそのまま貼り付けてください。
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

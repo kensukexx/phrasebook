@@ -228,11 +228,30 @@
 <div class="overlay" id="toolsOverlay">
   <div class="panel">
     <h2>ツール <button id="closeTools">✕</button></h2>
+    <button class="tool-item" id="menuSync"><span>☁️</span><span id="syncMenuLabel">同期（未ログイン）</span></button>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuPractice"><span>🎓</span>練習ノート</button>
     <button class="tool-item" id="menuWrite"><span>✎</span>書いて見せる</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
+  </div>
+</div>
+
+<div class="overlay" id="syncOverlay">
+  <div class="panel">
+    <h2>端末間の同期 <button id="closeSync">✕</button></h2>
+    <div id="syncSignedOut">
+      <p class="hint" style="margin:0 0 14px;">Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノートを他の端末と同期できます。</p>
+      <button class="submitbtn" id="syncSignInBtn" style="background:var(--blue);">Googleでログイン</button>
+    </div>
+    <div id="syncSignedIn" style="display:none;">
+      <div class="field">
+        <label>ログイン中のアカウント</label>
+        <div id="syncAccountEmail" style="font-size:15px;"></div>
+      </div>
+      <p class="hint" id="syncStatusText" style="margin:0 0 14px;"></p>
+      <button class="submitbtn" id="syncSignOutBtn" style="background:var(--ink-soft);">ログアウト</button>
+    </div>
   </div>
 </div>
 
@@ -682,6 +701,23 @@ async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(c
 async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
+
+// --- 端末間同期（Firebase）から使う橋渡し関数 ---
+// 同期対象は「端末に保存されるデータ」全体（カスタムフレーズ・練習ノート・覚えた/ピン留め）。
+// let宣言の変数はwindowに乗らないため、再代入が必要なapplyCloudStateはここ（クラシックスクリプト側）に置く。
+function getSyncableState(){
+  return { customData, customPracticePacks, learned, pinned };
+}
+async function applyCloudState(state){
+  if(!state) return;
+  if(Array.isArray(state.customData)) customData = state.customData;
+  if(Array.isArray(state.customPracticePacks)) customPracticePacks = state.customPracticePacks;
+  if(state.learned && typeof state.learned === "object") learned = state.learned;
+  if(state.pinned && typeof state.pinned === "object") pinned = state.pinned;
+  await saveCustom(); await savePracticePacks(); await saveLearned(); await savePinned();
+  renderDeck();
+  if(document.getElementById("practiceOverlay").classList.contains("open")) renderPracticeList();
+}
 
 function allData(){ return BUILTIN.concat(customData); }
 // どの言語も未入力（日本語のみ）のフレーズかどうか
@@ -1279,12 +1315,17 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["writeOverlay","speakOverlay","practiceOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
+  ["writeOverlay","speakOverlay","practiceOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
 document.getElementById("toolsBtn").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.add("open"));
 document.getElementById("closeTools").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.remove("open"));
+document.getElementById("menuSync").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("syncOverlay").classList.add("open");
+});
+document.getElementById("closeSync").addEventListener("click", ()=> document.getElementById("syncOverlay").classList.remove("open"));
 document.getElementById("menuSpeak").addEventListener("click", ()=>{
   closeAllOverlays();
   updateSpeakTargetLabel();
@@ -2167,6 +2208,152 @@ if("serviceWorker" in navigator){
     navigator.serviceWorker.register("./sw.js").catch(e=>console.error("SW registration failed:", e));
   });
 }
+</script>
+
+<script type="module">
+  // --- 端末間同期（Firebase Authentication + Firestore） ---
+  // Firebaseプロジェクトの「プロジェクトの設定 → マイアプリ → SDK の設定と構成」からコピーした
+  // firebaseConfig をここに貼り付けてください（秘密情報ではありません。アクセス制御はFirestoreの
+  // セキュリティルール側で行います）。apiKeyが未設定のままなら同期機能は無効のまま安全に動作します。
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
+  const SYNC_CONFIGURED = firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+  const syncMenuLabel = document.getElementById("syncMenuLabel");
+  const syncSignedOut = document.getElementById("syncSignedOut");
+  const syncSignedIn = document.getElementById("syncSignedIn");
+  const syncAccountEmail = document.getElementById("syncAccountEmail");
+  const syncStatusText = document.getElementById("syncStatusText");
+
+  if(!SYNC_CONFIGURED){
+    // Firebase未設定でもアプリ自体は今まで通り問題なく動く。同期メニューを開いた時だけ案内する。
+    document.getElementById("menuSync").addEventListener("click", ()=>{
+      syncSignedOut.style.display = "block";
+      syncSignedIn.style.display = "none";
+      document.getElementById("syncSignInBtn").style.display = "none";
+      document.querySelector("#syncSignedOut .hint").textContent =
+        "端末間同期はまだ設定されていません（開発者向け: index.html内のfirebaseConfigにFirebaseプロジェクトの設定値を入力してください）。";
+    });
+  } else {
+    const [
+      { initializeApp },
+      { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged },
+      { getFirestore, doc, getDoc, setDoc, onSnapshot, enableIndexedDbPersistence },
+    ] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js"),
+    ]);
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    try{ await enableIndexedDbPersistence(db); }catch(e){ console.warn("Firestoreオフラインキャッシュを有効化できませんでした:", e); }
+
+    let currentUser = null;
+    let unsubscribeSnapshot = null;
+    let applyingRemote = false; // 自分がpullで書き込んでいる最中、pushをトリガーしないためのフラグ
+    let pushTimer = null;
+
+    function userDocRef(uid){ return doc(db, "users", uid); }
+
+    function schedulePush(){
+      if(!currentUser || applyingRemote) return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(pushNow, 1200); // 連続保存をまとめる
+    }
+
+    async function pushNow(){
+      if(!currentUser) return;
+      try{
+        const state = window.getSyncableState();
+        await setDoc(userDocRef(currentUser.uid), { ...state, updatedAt: Date.now() });
+        syncStatusText.textContent = "同期済み（最終更新: " + new Date().toLocaleTimeString("ja-JP") + "）";
+      }catch(e){
+        console.error("cloud push error:", e);
+        syncStatusText.textContent = "同期に失敗しました（オフラインの場合、オンラインに戻ると自動で再送されます）。";
+      }
+    }
+
+    // 自分自身のpushもonSnapshotに返ってくるが、内容は既にローカルと同じなので
+    // applyCloudStateは実質的に無害な no-op になる（renderDeck等が余分に走る程度）。
+    function watchRemote(uid){
+      if(unsubscribeSnapshot) unsubscribeSnapshot();
+      unsubscribeSnapshot = onSnapshot(userDocRef(uid), async (snap)=>{
+        if(!snap.exists() || applyingRemote) return;
+        applyingRemote = true;
+        try{ await window.applyCloudState(snap.data()); }
+        finally{ applyingRemote = false; }
+        syncStatusText.textContent = "同期しました（" + new Date().toLocaleTimeString("ja-JP") + "）";
+      }, (e)=>{ console.error("cloud watch error:", e); });
+    }
+
+    // 初回サインイン時、クラウドに既存データがあれば「クラウドを使う/この端末のデータを使う」を選ばせる
+    async function resolveInitialConflict(uid){
+      const snap = await getDoc(userDocRef(uid));
+      if(!snap.exists()){
+        await pushNow();
+        return;
+      }
+      const useCloud = confirm(
+        "クラウドに保存済みのデータが見つかりました。\n" +
+        "OK: クラウドのデータをこの端末に反映する\n" +
+        "キャンセル: この端末のデータでクラウドを上書きする"
+      );
+      if(useCloud){
+        applyingRemote = true;
+        try{ await window.applyCloudState(snap.data()); }
+        finally{ applyingRemote = false; }
+      } else {
+        await pushNow();
+      }
+    }
+
+    onAuthStateChanged(auth, async (user)=>{
+      currentUser = user;
+      if(user){
+        syncMenuLabel.textContent = "同期（ログイン中）";
+        syncSignedOut.style.display = "none";
+        syncSignedIn.style.display = "block";
+        syncAccountEmail.textContent = user.email || user.displayName || user.uid;
+        await resolveInitialConflict(user.uid);
+        watchRemote(user.uid);
+      } else {
+        syncMenuLabel.textContent = "同期（未ログイン）";
+        syncSignedOut.style.display = "block";
+        syncSignedIn.style.display = "none";
+        if(unsubscribeSnapshot){ unsubscribeSnapshot(); unsubscribeSnapshot = null; }
+      }
+    });
+
+    document.getElementById("syncSignInBtn").addEventListener("click", async ()=>{
+      try{
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      }catch(e){
+        console.error("sign-in error:", e);
+        alert("ログインに失敗しました：\n" + (e.message || e));
+      }
+    });
+    document.getElementById("syncSignOutBtn").addEventListener("click", async ()=>{
+      await signOut(auth);
+    });
+
+    // ローカルの保存関数をラップし、保存が起きるたびにクラウドへの反映をスケジュールする
+    ["saveCustom", "savePracticePacks", "saveLearned", "savePinned"].forEach(fnName=>{
+      const orig = window[fnName];
+      window[fnName] = async function(...args){
+        const result = await orig.apply(this, args);
+        schedulePush();
+        return result;
+      };
+    });
+  }
 </script>
 
 </body>

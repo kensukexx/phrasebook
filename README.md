@@ -22,6 +22,24 @@
 スマホでは「ホーム画面に追加」しておくとアプリのように起動できます。
 翻訳・Google音声・為替レート取得など外部通信が必要な機能のみ、オンライン時に限られます。
 
+## 端末間の同期（任意）
+
+Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノートを複数端末間で同期できます
+（Firebase Authentication + Firestore使用。未設定でもアプリ自体は今まで通り問題なく動きます）。
+
+セットアップ手順:
+
+1. [Firebase Console](https://console.firebase.google.com/) でプロジェクトを作成
+2. Authentication → Googleログインを有効化
+3. Firestore Database を作成（本番環境モード、リージョンは任意）
+4. Firestore の「ルール」タブに、リポジトリ内の `firestore.rules` の内容を貼り付けて公開
+5. プロジェクトの設定 → マイアプリ → ウェブアプリを追加し、表示された `firebaseConfig` を
+   `index.html` 末尾の `<script type="module">` 内にある `firebaseConfig` に貼り付ける
+
+`firebaseConfig` の値は秘密情報ではありません（アクセス制御はFirestoreのルール側で行うため、
+クライアントコードに埋め込んでも安全です）。未設定のままでも同期メニューはその旨を案内するだけで、
+他の機能には影響しません。
+
 ## テスト
 
 `tests/` にPlaywrightベースの自動テストがあります(アプリ本体はテスト不要でそのまま動きます。テストは別ツールとして分離)。
