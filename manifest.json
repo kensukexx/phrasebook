@@ -1,6 +1,6 @@
 {
-  "name": "ことばの旅券 — 言語別あいさつ帳",
-  "short_name": "ことばの旅券",
+  "name": "ツウジル — 言語別あいさつ帳",
+  "short_name": "ツウジル",
   "description": "日本語→9言語対応の旅行フレーズブック",
   "start_url": "./index.html",
   "scope": "./",

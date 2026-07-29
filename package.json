@@ -2,7 +2,7 @@
   "name": "phrasebook-tests",
   "private": true,
   "version": "1.0.0",
-  "description": "Automated tests for ことばの旅券 (index.html is the actual app - this is test tooling only, not a build step)",
+  "description": "Automated tests for ツウジル (index.html is the actual app - this is test tooling only, not a build step)",
   "scripts": {
     "test": "playwright test",
     "test:ui": "playwright test --ui",
