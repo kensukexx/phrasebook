@@ -268,10 +268,8 @@
       <h2>練習ノート <button id="closePractice">✕</button></h2>
       <div class="field">
         <label>新しく練習ノートを作る</label>
-        <div style="display:flex; gap:8px;">
-          <select id="practiceGenLang" style="flex:0 0 auto; padding:10px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);"></select>
-          <input type="text" id="practiceGenWord" placeholder="例：without" style="flex:1;">
-        </div>
+        <select id="practiceGenLang" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:8px;"></select>
+        <input type="text" id="practiceGenWord" placeholder="例：without" style="width:100%;">
         <button class="submitbtn" id="practiceGenBtn" style="background:var(--blue); margin-top:8px;">✨ AIで例文セットを作る</button>
         <p class="hint" id="practiceGenHint">設定画面でGemini APIキーを登録すると、その場でAIが例文セットを生成します（オンライン時のみ）。</p>
       </div>
