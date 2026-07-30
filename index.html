@@ -2388,18 +2388,32 @@ document.getElementById("speakListenBtn").addEventListener("click", ()=>{
   recognition.maxAlternatives = 1;
   foreignRecognition = recognition;
 
-  recognition.onstart = ()=>{ btn.classList.add("listening"); btn.innerHTML = "🎤 聞き取り中…"; };
-  recognition.onerror = (e)=>{
-    console.error("foreign speech recognition error:", e.error);
-    if(e.error !== "aborted" && e.error !== "no-speech"){
-      alert("聞き取りに失敗しました：" + e.error);
-    }
-  };
-  recognition.onend = ()=>{
+  // 端末・ブラウザによっては、この言語の音声認識が未対応でもエラーすら返さず
+  // 「聞き取り中…」のまま無反応になることがある。その場合にボタンが永久に
+  // 固まらないよう、一定時間で強制的にリセットする安全策。
+  let settled = false;
+  const resetBtn = (message)=>{
+    if(settled) return;
+    settled = true;
+    clearTimeout(timeoutTimer);
     btn.classList.remove("listening");
     btn.innerHTML = originalLabel;
     foreignRecognition = null;
+    if(message) alert(message);
   };
+  const timeoutTimer = setTimeout(()=>{
+    try{ recognition.abort(); }catch(err){}
+    // abort()自体が反応しない実装も想定し、少し待って強制リセット
+    setTimeout(()=>resetBtn("聞き取りがタイムアウトしました。この言語の音声認識が端末でサポートされていない可能性があります。他の言語で試すか、端末の音声入力設定をご確認ください。"), 1000);
+  }, 12000);
+
+  recognition.onstart = ()=>{ btn.classList.add("listening"); btn.innerHTML = "🎤 聞き取り中…"; };
+  recognition.onerror = (e)=>{
+    console.error("foreign speech recognition error:", e.error);
+    const showAlert = e.error !== "aborted" && e.error !== "no-speech";
+    resetBtn(showAlert ? ("聞き取りに失敗しました：" + e.error) : null);
+  };
+  recognition.onend = ()=>{ resetBtn(null); };
   recognition.onresult = async (e)=>{
     const heard = e.results[0][0].transcript;
     try{

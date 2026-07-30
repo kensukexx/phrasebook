@@ -125,6 +125,40 @@ test.describe('相手の番 (conversation mode)', () => {
 
     await expect.poll(() => alerts.join()).toContain('対応していません');
   });
+
+  test('a recognizer that hangs forever (no result/error/end) times out instead of getting stuck', async ({ page }) => {
+    // Some devices silently fail to support a given recognition language: no error, no result,
+    // no "end" event ever fires - just permanent silence (reported for Chinese on a real phone).
+    // Also simulate abort() itself being a no-op, since that's the worst case for the escape hatch.
+    await page.addInitScript(() => {
+      class HangingRecognition {
+        constructor(){ this.lang = ''; }
+        start(){ setTimeout(() => { this.onstart && this.onstart(); }, 10); }
+        abort(){}
+        stop(){}
+      }
+      window.SpeechRecognition = HangingRecognition;
+      window.webkitSpeechRecognition = HangingRecognition;
+    });
+    const alerts = [];
+    page.on('dialog', async d => { alerts.push(d.message()); await d.accept(); });
+
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuSpeak');
+    await page.waitForSelector('#speakOverlay.open');
+    await page.selectOption('#speakLangSel', 'zh');
+    await page.click('#speakListenBtn');
+    await expect(page.locator('#speakListenBtn')).toHaveClass(/listening/);
+
+    await expect(page.locator('#speakListenBtn')).not.toHaveClass(/listening/, { timeout: 15000 });
+    await expect.poll(() => alerts.join()).toContain('タイムアウト');
+
+    // and the button must be usable again afterward, not permanently jammed
+    await page.click('#speakListenBtn');
+    await expect(page.locator('#speakListenBtn')).toHaveClass(/listening/);
+  });
 });
 
 test.describe('話す (forward translation) — inline result', () => {
