@@ -127,6 +127,17 @@
   .manual-section:last-child{ margin-bottom:0; }
   .manual-section h3{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:14.5px; margin:0 0 6px; display:flex; align-items:center; gap:6px; color:var(--ink); }
   .manual-section p{ font-size:13.5px; color:var(--ink-soft); line-height:1.65; margin:0; }
+  .speak-result{ margin-top:18px; padding:16px; border:1.5px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.6); }
+  .speak-result .sr-tag{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 6px; }
+  .speak-result .sr-source{ font-size:14px; color:var(--ink-soft); margin:0 0 8px; }
+  .sr-main-row{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+  .speak-result .sr-phrase{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:22px; font-weight:900; color:var(--ink); margin:0; line-height:1.3; }
+  .speak-result .sr-kana{ font-size:13.5px; color:var(--red); font-weight:700; margin:4px 0 0; }
+  #srSpeak{ width:36px; height:36px; font-size:15px; flex:0 0 auto; }
+  #srSpeak.playing{ background:var(--gold); border-color:var(--gold); color:#fff; }
+  .speak-result-actions{ display:flex; gap:8px; margin-top:14px; }
+  .speak-result-actions button{ flex:1; padding:10px 8px; border-radius:8px; border:1.5px solid var(--ink); background:transparent; color:var(--ink);
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; cursor:pointer; }
   .voice-lang-row{ display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--line); }
   .voice-lang-row:last-child{ border-bottom:none; }
   .voice-lang-row .name{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12px; color:var(--ink-soft); width:66px; flex:0 0 auto; }
@@ -294,6 +305,22 @@
       <button class="mic-btn" id="speakListenBtn" type="button" style="width:100%; padding:12px; border:1.5px solid var(--green); border-radius:8px; background:transparent; color:var(--green); font-size:14px; font-weight:700; cursor:pointer;">🎤 <span id="speakListenLabel">英語</span>で話してもらって日本語に翻訳</button>
       <p class="hint">上で選んだ言語で相手に話してもらうと、聞き取って日本語に翻訳して表示します（会話を交互に一往復ずつ翻訳する形で、常時の同時通訳ではありません）。</p>
     </div>
+
+    <div id="speakResult" class="speak-result" style="display:none;">
+      <p class="sr-tag" id="srTag"></p>
+      <p class="sr-source" id="srSource"></p>
+      <div class="sr-main-row">
+        <div>
+          <p class="sr-phrase" id="srPhrase"></p>
+          <p class="sr-kana" id="srKana"></p>
+        </div>
+        <button class="mini-btn" id="srSpeak" aria-label="発音を聞く">🔊</button>
+      </div>
+      <div class="speak-result-actions">
+        <button id="srExpand" type="button">⤢ 大きく見せる</button>
+        <button id="srSave" type="button">★ フレーズ帳に追加</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -362,7 +389,7 @@
 
     <div class="manual-section">
       <h3>🗣️ 話す（翻訳して発音）</h3>
-      <p>その場で伝えたい日本語を入力・音声入力すると、選んだ言語に翻訳して発音してくれます。オーバーレイ上部の言語選択でその都度言語を切替可能（一覧の表示言語とは独立しています）。翻訳後の画面で★を押すとフレーズ帳に保存できます。「相手の番」ボタンを使うと、選んだ言語で相手に話してもらった内容を聞き取り、日本語に翻訳して表示できます（交互に一往復ずつ翻訳する会話モード）。</p>
+      <p>その場で伝えたい日本語を入力・音声入力すると、画面を切り替えずにこの中で翻訳結果を表示します（Google翻訳アプリのような感覚で使えます）。入力した日本語はそのまま残るので、続けて次の一言も入力できます。🔊で発音、★でフレーズ帳に保存、⤢で大きな文字の全画面表示に切り替えて相手に見せられます。上部の言語選択でその都度言語を切替可能（一覧の表示言語とは独立）。「相手の番」ボタンを使うと、選んだ言語で相手に話してもらった内容を聞き取り、同じようにその場で日本語に翻訳して表示します（交互に一往復ずつ翻訳する会話モード）。</p>
     </div>
 
     <div class="manual-section">
@@ -1488,6 +1515,7 @@ document.getElementById("closeSync").addEventListener("click", ()=> document.get
 document.getElementById("menuSpeak").addEventListener("click", ()=>{
   closeAllOverlays();
   populateSpeakLangSelect();
+  document.getElementById("speakResult").style.display = "none";
   document.getElementById("speakOverlay").classList.add("open");
   document.getElementById("speakText").focus();
 });
@@ -2273,6 +2301,37 @@ function updateSpeakTargetLabel(){
   document.getElementById("speakTargetLabel").textContent = meta.label;
   document.getElementById("speakListenLabel").textContent = meta.label;
 }
+
+// 話す・相手の番どちらの結果も、Google翻訳アプリのように画面遷移せずこのカードに表示する。
+let currentSpeakResult = null; // { tag, source, phrase, kana, speechLang, onSave }
+function showSpeakResult({tag, source, phrase, kana, speechLang, onSave}){
+  currentSpeakResult = {tag, source, phrase, kana, speechLang, onSave};
+  document.getElementById("srTag").textContent = tag;
+  document.getElementById("srSource").textContent = source || "";
+  document.getElementById("srSource").style.display = source ? "" : "none";
+  document.getElementById("srPhrase").textContent = phrase;
+  document.getElementById("srKana").textContent = kana || "";
+  document.getElementById("srKana").style.display = kana ? "" : "none";
+  const result = document.getElementById("speakResult");
+  result.style.display = "block";
+  result.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+document.getElementById("srSpeak").addEventListener("click", ()=>{
+  if(!currentSpeakResult) return;
+  speakRaw(currentSpeakResult.phrase, currentSpeakResult.speechLang, document.getElementById("srSpeak"));
+});
+document.getElementById("srExpand").addEventListener("click", ()=>{
+  if(!currentSpeakResult) return;
+  const r = currentSpeakResult;
+  openPresent({
+    cat: r.tag, ja: r.source, phrase: r.phrase, kana: r.kana, speechLang: r.speechLang,
+    returnTo: "speakOverlay", onSave: r.onSave
+  });
+});
+document.getElementById("srSave").addEventListener("click", ()=>{
+  if(currentSpeakResult && currentSpeakResult.onSave) currentSpeakResult.onSave();
+});
+
 document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>{
   const ja = document.getElementById("speakText").value.trim();
   if(!ja){ alert("日本語を入力してください"); return; }
@@ -2285,17 +2344,15 @@ document.getElementById("doSpeakTranslate").addEventListener("click", async ()=>
   try{
     const translated = await translateText(ja, GOOGLE_LANG_CODES[targetMeta.key]);
     const kana = targetMeta.key === "en" ? englishToKatakana(translated) : "";
-    document.getElementById("speakOverlay").classList.remove("open");
-    document.getElementById("speakText").value = ""; // 次の発話にすぐ入力できるようクリア
-    openPresent({
-      cat: "話す",
-      ja,
+    showSpeakResult({
+      tag: "話す",
+      source: ja,
       phrase: translated,
       kana,
       speechLang: targetMeta.speech,
-      returnTo: "speakOverlay",
       onSave: ()=>{
-        closePresent(true);
+        closePresent(true); // 「⤢大きく見せる」経由で全画面表示中に保存された場合はそちらを閉じる（未表示なら無害）
+        document.getElementById("speakOverlay").classList.remove("open");
         openAddPanel(null);
         document.getElementById("addJa").value = ja;
         document.getElementById(`add_${targetMeta.key}`).value = translated;
@@ -2347,16 +2404,15 @@ document.getElementById("speakListenBtn").addEventListener("click", ()=>{
     const heard = e.results[0][0].transcript;
     try{
       const translated = await translateToJapanese(heard, GOOGLE_LANG_CODES[targetMeta.key]);
-      document.getElementById("speakOverlay").classList.remove("open");
-      openPresent({
-        cat: "相手の番",
-        ja: heard,
+      showSpeakResult({
+        tag: "相手の番",
+        source: heard,
         phrase: translated,
         kana: "",
         speechLang: "ja-JP",
-        returnTo: "speakOverlay",
         onSave: ()=>{
-          closePresent(true);
+          closePresent(true); // 「⤢大きく見せる」経由で全画面表示中に保存された場合はそちらを閉じる（未表示なら無害）
+          document.getElementById("speakOverlay").classList.remove("open");
           openAddPanel(null);
           document.getElementById("addJa").value = translated;
           document.getElementById(`add_${targetMeta.key}`).value = heard;
