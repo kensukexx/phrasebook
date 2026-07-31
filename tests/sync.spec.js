@@ -92,8 +92,8 @@ test.describe('cross-device sync (configured)', () => {
 // pulled from Firestore is just plain data through getSyncableState()/applyCloudState() — both are
 // ordinary functions on window regardless of whether a cloud round-trip ever happens, so this
 // exercises the "cloud state applied on this device" path directly.
-test.describe('syncable state (catOrder / langOrder included)', () => {
-  test('getSyncableState includes catOrder and langOrder', async ({ page }) => {
+test.describe('syncable state (catOrder / langOrder / phraseOrder included)', () => {
+  test('getSyncableState includes catOrder, langOrder and phraseOrder', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     const state = await page.evaluate(() => window.getSyncableState());
@@ -101,6 +101,8 @@ test.describe('syncable state (catOrder / langOrder included)', () => {
     expect(state.catOrder[0]).toBe('すべて');
     expect(Array.isArray(state.langOrder)).toBe(true);
     expect(state.langOrder.length).toBe(9);
+    expect(Array.isArray(state.phraseOrder)).toBe(true);
+    expect(state.phraseOrder.length).toBe(158); // built-in phrase count
   });
 
   test('applyCloudState reorders category tabs and the language list', async ({ page }) => {
@@ -120,5 +122,21 @@ test.describe('syncable state (catOrder / langOrder included)', () => {
     const langLabels = await page.locator('.lang-row .lp-label').allTextContents();
     expect(langLabels[0]).toBe('韓国語');
     expect(langLabels[1]).toBe('英語');
+  });
+
+  test('applyCloudState reorders phrase cards', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('.cat[data-cat="あいさつ"]');
+    await page.waitForTimeout(200);
+
+    const keys = await page.locator('.ticket').evaluateAll(els => els.map(e => e.dataset.key));
+    const reversedGreetings = keys.slice().reverse();
+
+    await page.evaluate((newOrder) => window.applyCloudState({ phraseOrder: newOrder }), reversedGreetings);
+    await page.waitForTimeout(200);
+
+    const after = await page.locator('.ticket').evaluateAll(els => els.map(e => e.dataset.key));
+    expect(after).toEqual(reversedGreetings);
   });
 });
