@@ -56,7 +56,7 @@ npm run test:data     # データ整合性チェックのみ（ブラウザ不�
 npm run test:ui       # Playwrightのインタラクティブ UI で実行
 ```
 
-`node tests/data-integrity.test.js` は `index.html` 内の158フレーズ全件が9言語分そろっているか等を検証します
+`node tests/data-integrity.test.js` は `index.html` 内の全フレーズが9言語分そろっているか等を検証します
 （数字・曜日カードが英語だけ入っていて他言語で消えていた不具合の再発防止）。
 GitHub Actions (`.github/workflows/test.yml`) で push・PR時に自動実行されます。
 
