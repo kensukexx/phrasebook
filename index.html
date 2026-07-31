@@ -1793,7 +1793,12 @@ document.getElementById("closeWrite").addEventListener("click", ()=> document.ge
 document.getElementById("showWriteFullscreen").addEventListener("click", ()=>{
   const text = document.getElementById("writeText").value.trim();
   if(!text){ alert("表示したい文章を入力してください"); return; }
-  const isJapanese = /[\u3040-\u30FF\u4E00-\u9FFF]/.test(text);
+  // \u3072\u3089\u304C\u306A\u30FB\u30AB\u30BF\u30AB\u30CA\u306F\u65E5\u672C\u8A9E\u306B\u3057\u304B\u7121\u3044\u306E\u3067\u78BA\u5B9F\u306A\u5224\u5B9A\u6750\u6599\u3002\u4E00\u65B9\u3001\u6F22\u5B57\uFF08CJK\u7D71\u5408\u6F22\u5B57\uFF09\u306F
+  // \u4E2D\u56FD\u8A9E\u3068\u3082\u5171\u6709\u3055\u308C\u308B\u7BC4\u56F2\u306A\u306E\u3067\u3001\u6F22\u5B57\u306E\u307F\u306E\u6587\u7AE0\u306F\u300C\u4ECA\u9078\u3093\u3067\u3044\u308B\u8A00\u8A9E\u304C\u4E2D\u56FD\u8A9E\u304B\u3069\u3046\u304B\u300D\u3067\u88DC\u3046
+  // \uFF08\u305D\u3046\u3057\u306A\u3044\u3068\u4E2D\u56FD\u8A9E\u306E\u6587\u7AE0\u304C\u65E5\u672C\u8A9E\u3068\u3057\u3066\u8AAD\u307F\u4E0A\u3052\u3089\u308C\u3066\u3057\u307E\u3046\uFF09\u3002
+  const hasKana = /[\u3040-\u30FF]/.test(text);
+  const hasHanCharacters = /[\u4E00-\u9FFF]/.test(text);
+  const isJapanese = hasKana || (hasHanCharacters && currentLang !== "zh");
   const speechLang = isJapanese ? "ja-JP" : (LANGS.find(l=>l.key===currentLang)||{speech:"en-US"}).speech;
   document.getElementById("writeOverlay").classList.remove("open");
   openPresent({ cat:"メモ", ja:"", phrase:text, kana:"", speechLang, returnTo:"writeOverlay" });
