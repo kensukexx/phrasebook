@@ -66,6 +66,17 @@ const noNote = BUILTIN.filter(d => !d.note || !d.note.trim());
 check(noNote.length === 0, `${noNote.length} entries have no note (解説): ${noNote.map(d => d.ja).join(', ')}`);
 if (noNote.length === 0) ok('every entry has a note (解説)');
 
+// 会話パターン entries carry a word-by-word gloss (which foreign word means what) - every
+// language must be covered, since a partial gloss would silently show nothing for that language.
+const patternEntries = BUILTIN.filter(d => d.cat === '会話パターン');
+const badGloss = patternEntries.filter(d => !d.gloss || LANGS.some(l => !d.gloss[l] || !d.gloss[l].trim()));
+check(
+  badGloss.length === 0,
+  `${badGloss.length} 会話パターン entries missing a gloss for at least one language:\n` +
+    badGloss.map(d => `  - ${d.ja}: missing ${d.gloss ? LANGS.filter(l => !d.gloss[l] || !d.gloss[l].trim()).join(', ') : 'gloss entirely'}`).join('\n')
+);
+if (badGloss.length === 0) ok(`every 会話パターン entry (${patternEntries.length}) has a gloss for all 9 languages`);
+
 console.log('');
 if (failures > 0) {
   console.error(`${failures} check(s) failed.`);

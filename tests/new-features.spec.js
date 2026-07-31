@@ -173,3 +173,50 @@ test.describe('currency converter', () => {
     await expect(page.locator('#currStatus')).toContainText('レートを取得できませんでした');
   });
 });
+
+test.describe('会話パターン word-by-word gloss', () => {
+  test('expanding 解説 shows a gloss matching each foreign word to its Japanese meaning', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#langPickerBtn');
+    await page.waitForSelector('#langPickerOverlay.open');
+    await page.click('.lang-row:has-text("ドイツ語")');
+    await page.waitForTimeout(200);
+
+    await page.click('.cat[data-cat="会話パターン"]');
+    await page.waitForTimeout(200);
+
+    const card = page.locator('.ticket').nth(2); // そこに行きたいです / Ich möchte dorthin
+    await card.locator('[data-role="note"]').click();
+    await expect(card.locator('.gloss-line')).toContainText('dorthin');
+    await expect(card.locator('.gloss-line')).toContainText('そこ');
+  });
+
+  test('the gloss updates when the displayed language changes', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('.cat[data-cat="会話パターン"]');
+    await page.waitForTimeout(200);
+
+    const card = page.locator('.ticket').first();
+    await card.locator('[data-role="note"]').click();
+    await expect(card.locator('.gloss-line')).toContainText('want'); // English default
+
+    await page.click('#langPickerBtn');
+    await page.waitForSelector('#langPickerOverlay.open');
+    await page.click('.lang-row:has-text("フランス語")');
+    await page.waitForTimeout(200);
+
+    const cardAfter = page.locator('.ticket').first();
+    await expect(cardAfter.locator('.gloss-line')).toContainText('veux');
+  });
+
+  test('non-pattern categories have no gloss line (only 会話パターン does)', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('.cat[data-cat="あいさつ"]');
+    await page.waitForTimeout(200);
+    expect(await page.locator('.gloss-line').count()).toBe(0);
+  });
+});
