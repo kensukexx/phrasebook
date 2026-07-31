@@ -39,6 +39,23 @@ test.describe('core browsing', () => {
     await expect(ttsRequest).resolves.toBeTruthy();
   });
 
+  test('the ~ placeholder in 会話パターン cards is stripped before being sent to TTS', async ({ page }) => {
+    // Regression test: 会話パターン entries use "~" as a fill-in-the-blank marker (e.g. "I want to
+    // ~"), but some TTS engines audibly read the symbol aloud (reported as a stray "テーダ"-like
+    // sound at the end of playback). speakRaw() now strips it before synthesis.
+    await mockGoogleTTS(page);
+    const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 5000 });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('.cat[data-cat="会話パターン"]');
+    await page.waitForTimeout(200);
+    await page.locator('.ticket .speak').first().click();
+    const req = await ttsRequest;
+    const q = new URL(req.url()).searchParams.get('q');
+    expect(q).not.toContain('~');
+    expect(q.trim()).toBe(q); // no leftover leading/trailing whitespace from stripping
+  });
+
   test('no console errors on initial load', async ({ page }) => {
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
