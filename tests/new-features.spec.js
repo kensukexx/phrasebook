@@ -174,7 +174,7 @@ test.describe('currency converter', () => {
   });
 });
 
-test.describe('会話パターン word-by-word gloss', () => {
+test.describe('word-by-word gloss', () => {
   test('expanding 解説 shows a gloss matching each foreign word to its Japanese meaning', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
@@ -212,11 +212,13 @@ test.describe('会話パターン word-by-word gloss', () => {
     await expect(cardAfter.locator('.gloss-line')).toContainText('veux');
   });
 
-  test('non-pattern categories have no gloss line (only 会話パターン does)', async ({ page }) => {
+  test('other categories also show a gloss line once 解説 is expanded', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('.cat[data-cat="あいさつ"]');
     await page.waitForTimeout(200);
-    expect(await page.locator('.gloss-line').count()).toBe(0);
+    const card = page.locator('.ticket').first();
+    await card.locator('[data-role="note"]').click();
+    await expect(card.locator('.gloss-line')).toBeVisible();
   });
 });
