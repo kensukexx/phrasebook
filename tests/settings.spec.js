@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { setGeminiKey } = require('./helpers');
+const { setGeminiKey, mockGoogleTTS } = require('./helpers');
 
 test.describe('settings', () => {
   test('language speed and Japanese speed are independent', async ({ page }) => {
@@ -74,5 +74,37 @@ test.describe('settings', () => {
     await page.click('#menuSettings');
     await page.waitForSelector('#settingsOverlay.open');
     expect(parseFloat(await page.locator('#rateSlider').inputValue())).toBeCloseTo(value, 1);
+  });
+
+  test('the rate setting actually changes audio.playbackRate at playback time', async ({ page }) => {
+    // Regression test: audio.playbackRate was set once on the <audio> element right after creation,
+    // but assigning .src afterward resets playbackRate back to 1 in Chromium - so the slider updated
+    // the label but never actually sped up (or slowed down) playback. Fixed by re-applying
+    // playbackRate after every .src assignment, right before play(). Verified here by intercepting
+    // HTMLMediaElement.play() and reading the real native playbackRate at that exact moment.
+    await page.addInitScript(() => {
+      window.__playbackRates = [];
+      const origPlay = HTMLMediaElement.prototype.play;
+      HTMLMediaElement.prototype.play = function (...args) {
+        window.__playbackRates.push(this.playbackRate);
+        return origPlay.apply(this, args);
+      };
+    });
+    await mockGoogleTTS(page);
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await page.waitForSelector('#settingsOverlay.open');
+    await page.fill('#rateSlider', '1.8');
+    await page.dispatchEvent('#rateSlider', 'input');
+    await page.dispatchEvent('#rateSlider', 'change');
+    await page.click('#closeSettings');
+
+    await page.locator('.ticket .speak').first().click();
+    await expect.poll(() => page.evaluate(() => window.__playbackRates.length)).toBeGreaterThan(0);
+    const rates = await page.evaluate(() => window.__playbackRates);
+    expect(rates.every(r => r === 1.8)).toBe(true);
   });
 });
