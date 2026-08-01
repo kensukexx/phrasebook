@@ -134,6 +134,10 @@
   .manual-section:last-child{ margin-bottom:0; }
   .manual-section h3{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:14.5px; margin:0 0 6px; display:flex; align-items:center; gap:6px; color:var(--ink); }
   .manual-section p{ font-size:13.5px; color:var(--ink-soft); line-height:1.65; margin:0; }
+  .manual-section p + p{ margin-top:8px; }
+  .manual-section ol{ margin:0; padding-left:1.3em; font-size:13.5px; color:var(--ink-soft); line-height:1.65; }
+  .manual-section ol li + li{ margin-top:4px; }
+  .manual-section a{ color:var(--blue); }
   .speak-result{ margin-top:18px; padding:16px; border:1.5px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.6); }
   .speak-result .sr-tag{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:0 0 6px; }
   .speak-result .sr-source{ font-size:14px; color:var(--ink-soft); margin:0 0 8px; }
@@ -402,8 +406,24 @@
     </div>
 
     <div class="manual-section">
-      <h3>☁️ 端末間の同期</h3>
-      <p>Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノート・カテゴリ/言語/カードの並び順を他の端末と同期できます。読み上げ速度などそれ以外の設定は端末ごとです。</p>
+      <h3>☁️ 端末間の同期（ログイン方法）</h3>
+      <ol>
+        <li>ツール（☰）→「☁️ 同期」をタップ</li>
+        <li>「Googleでログイン」を押す</li>
+        <li>ポップアップで自分のGoogleアカウントを選ぶだけでログイン完了（新規登録やパスワード入力は不要）</li>
+      </ol>
+      <p>ログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノート・カテゴリ/言語/カードの並び順が他の端末と自動で同期されます。読み上げ速度など、それ以外の設定は端末ごとのままです。ログアウトは同じ画面から行えます。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>🔑 Gemini APIキーの設定</h3>
+      <p>キーを登録すると、フレーズ追加時のカタカナ自動生成・練習ノートのAI例文生成・翻訳や読み上げが失敗した時の予備手段として使われます。未登録でも他の機能は問題なく使えます。</p>
+      <ol>
+        <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>を開く（Googleアカウントのみでよく、クレジットカード登録は不要）</li>
+        <li>「Create API key」でキーを発行してコピー</li>
+        <li>ツール（☰）→「⚙ 設定」を開き、「Gemini APIキー」欄に貼り付ける</li>
+      </ol>
+      <p>キーはこの端末にのみ保存されます（1日あたりの無料利用回数に上限あり）。</p>
     </div>
   </div>
 </div>
