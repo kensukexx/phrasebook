@@ -255,7 +255,6 @@
     <button class="tool-item" id="menuSync"><span>☁️</span><span id="syncMenuLabel">同期（未ログイン）</span></button>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuPractice"><span>🎓</span>練習ノート</button>
-    <button class="tool-item" id="menuWrite"><span>✎</span>書いて見せる</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
     <button class="tool-item" id="menuHelp"><span>❓</span>使い方</button>
@@ -277,19 +276,6 @@
       <p class="hint" id="syncStatusText" style="margin:0 0 14px;"></p>
       <button class="submitbtn" id="syncSignOutBtn" style="background:var(--ink-soft);">ログアウト</button>
     </div>
-  </div>
-</div>
-
-<div class="overlay" id="writeOverlay">
-  <div class="panel">
-    <h2>書いて見せる <button id="closeWrite">✕</button></h2>
-    <div class="field">
-      <label>伝えたいこと</label>
-      <textarea id="writeText" rows="3" placeholder="辞書にない言葉でも、ここに書いて大きく表示できます" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); resize:vertical;"></textarea>
-      <button class="mic-btn" id="micWrite" type="button" style="margin-top:8px; padding:8px 14px; border:1.5px solid var(--ink); border-radius:8px; background:transparent; color:var(--ink); font-size:13px; cursor:pointer;">🎤 音声で入力</button>
-    </div>
-    <button class="submitbtn" id="showWriteFullscreen">全画面で見せる</button>
-    <p class="hint">日本語で書けば日本語として、それ以外の言語で書けばその言語として読み上げます（読み上げは全画面表示の中で）。</p>
   </div>
 </div>
 
@@ -403,11 +389,6 @@
     <div class="manual-section">
       <h3>🎓 練習ノート</h3>
       <p>覚えたい単語を入力すると、AIがその単語を使った例文セットを作ってくれます（設定でGeminiキーの登録が必要）。</p>
-    </div>
-
-    <div class="manual-section">
-      <h3>✎ 書いて見せる</h3>
-      <p>辞書にない言葉でも、大きな文字で書いて相手に見せられます。日本語で書けば日本語として、それ以外の言語で書けばその言語として読み上げます。</p>
     </div>
 
     <div class="manual-section">
@@ -1262,7 +1243,7 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   }
 }
 
-// returnTo: 閉じた時に戻る先のオーバーレイID（話す・書いて見せるなど、連続して使う画面用）。
+// returnTo: 閉じた時に戻る先のオーバーレイID（話すなど、連続して使う画面用）。
 // 省略時は今まで通りフレーズ一覧に戻る。
 let presentReturnOverlayId = null;
 function openPresent({cat, ja, phrase, kana, speechLang, onSave, returnTo}){
@@ -1633,7 +1614,7 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["writeOverlay","speakOverlay","practiceOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay"].forEach(id=>{
+  ["speakOverlay","practiceOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
@@ -1899,11 +1880,6 @@ document.getElementById("backToPracticeList").addEventListener("click", ()=>{
   document.getElementById("practiceDetailView").style.display = "none";
   document.getElementById("practiceListView").style.display = "block";
 });
-document.getElementById("menuWrite").addEventListener("click", ()=>{
-  closeAllOverlays();
-  document.getElementById("writeOverlay").classList.add("open");
-  document.getElementById("writeText").focus();
-});
 document.getElementById("menuCurrency").addEventListener("click", ()=>{
   closeAllOverlays();
   document.getElementById("currencyOverlay").classList.add("open");
@@ -1913,21 +1889,6 @@ document.getElementById("menuSettings").addEventListener("click", ()=>{
   closeAllOverlays();
   document.getElementById("settingsOverlay").classList.add("open");
   refreshVoices();
-});
-
-document.getElementById("closeWrite").addEventListener("click", ()=> document.getElementById("writeOverlay").classList.remove("open"));
-document.getElementById("showWriteFullscreen").addEventListener("click", ()=>{
-  const text = document.getElementById("writeText").value.trim();
-  if(!text){ alert("表示したい文章を入力してください"); return; }
-  // \u3072\u3089\u304C\u306A\u30FB\u30AB\u30BF\u30AB\u30CA\u306F\u65E5\u672C\u8A9E\u306B\u3057\u304B\u7121\u3044\u306E\u3067\u78BA\u5B9F\u306A\u5224\u5B9A\u6750\u6599\u3002\u4E00\u65B9\u3001\u6F22\u5B57\uFF08CJK\u7D71\u5408\u6F22\u5B57\uFF09\u306F
-  // \u4E2D\u56FD\u8A9E\u3068\u3082\u5171\u6709\u3055\u308C\u308B\u7BC4\u56F2\u306A\u306E\u3067\u3001\u6F22\u5B57\u306E\u307F\u306E\u6587\u7AE0\u306F\u300C\u4ECA\u9078\u3093\u3067\u3044\u308B\u8A00\u8A9E\u304C\u4E2D\u56FD\u8A9E\u304B\u3069\u3046\u304B\u300D\u3067\u88DC\u3046
-  // \uFF08\u305D\u3046\u3057\u306A\u3044\u3068\u4E2D\u56FD\u8A9E\u306E\u6587\u7AE0\u304C\u65E5\u672C\u8A9E\u3068\u3057\u3066\u8AAD\u307F\u4E0A\u3052\u3089\u308C\u3066\u3057\u307E\u3046\uFF09\u3002
-  const hasKana = /[\u3040-\u30FF]/.test(text);
-  const hasHanCharacters = /[\u4E00-\u9FFF]/.test(text);
-  const isJapanese = hasKana || (hasHanCharacters && currentLang !== "zh");
-  const speechLang = isJapanese ? "ja-JP" : (LANGS.find(l=>l.key===currentLang)||{speech:"en-US"}).speech;
-  document.getElementById("writeOverlay").classList.remove("open");
-  openPresent({ cat:"メモ", ja:"", phrase:text, kana:"", speechLang, returnTo:"writeOverlay" });
 });
 document.getElementById("presentClose").addEventListener("click", ()=> closePresent());
 
@@ -2044,11 +2005,6 @@ setupMic(document.getElementById("micSearch"), (text)=>{
   const input = document.getElementById("search");
   input.value = text;
   input.dispatchEvent(new Event("input"));
-});
-
-setupMic(document.getElementById("micWrite"), (text)=>{
-  const ta = document.getElementById("writeText");
-  ta.value = (ta.value ? ta.value + " " : "") + text;
 });
 
 setupMic(document.getElementById("micSpeak"), (text)=>{
