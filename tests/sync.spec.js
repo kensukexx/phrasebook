@@ -139,4 +139,26 @@ test.describe('syncable state (catOrder / langOrder / phraseOrder included)', ()
     const after = await page.locator('.ticket').evaluateAll(els => els.map(e => e.dataset.key));
     expect(after).toEqual(reversedGreetings);
   });
+
+  test('a duplicate entry in a persisted catOrder/langOrder does not render as two tabs/rows', async ({ page }) => {
+    // Regression test: orderedCats()/orderedLangs() used to map catOrder/langOrder directly to
+    // rendered tabs, so if that array ever ended up with a duplicate key (old app version, a
+    // sync race, hand-edited localStorage), the same category or language would render twice
+    // and never self-heal.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.evaluate(() => window.applyCloudState({
+      catOrder: ['すべて', 'あいさつ', 'あいさつ', 'リアクション'],
+      langOrder: ['en', 'ko', 'en'],
+    }));
+
+    const cats = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
+    expect(cats.filter(c => c === 'あいさつ').length).toBe(1);
+
+    await page.click('#langPickerBtn');
+    await page.waitForSelector('#langPickerOverlay.open');
+    const langKeys = await page.locator('.lang-row').evaluateAll(els => els.map(e => e.dataset.key));
+    expect(langKeys.filter(k => k === 'en').length).toBe(1);
+  });
 });

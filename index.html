@@ -872,9 +872,24 @@ async function applyCloudState(state){
 function allData(){ return BUILTIN.concat(customData); }
 // どの言語も未入力（日本語のみ）のフレーズかどうか
 function isJaOnly(d){ return !LANGS.some(l=>d[l.key]); }
-function orderedLangs(){ return langOrder.map(k=>LANGS.find(l=>l.key===k)).filter(Boolean); }
+// langOrder/catOrderに重複キーが紛れ込んでいても（過去のバグや同期の競合で稀に起こりうる）、
+// 同じ項目のタブ・行が2つ並んでしまわないよう、ここで最初の1件だけを残す。
+function orderedLangs(){
+  const seen = new Set();
+  return langOrder
+    .filter(k=>{ if(seen.has(k)) return false; seen.add(k); return true; })
+    .map(k=>LANGS.find(l=>l.key===k)).filter(Boolean);
+}
 // 「すべて」は常に先頭固定、それ以外はcatOrderの並び替え結果に従う
-function orderedCats(){ return ["すべて", ...catOrder.filter(c=>CATS.includes(c) && c!=="すべて")]; }
+function orderedCats(){
+  const seen = new Set();
+  const rest = catOrder.filter(c=>{
+    if(c==="すべて" || !CATS.includes(c) || seen.has(c)) return false;
+    seen.add(c);
+    return true;
+  });
+  return ["すべて", ...rest];
+}
 
 function renderLangButton(){
   const btn = document.getElementById("langPickerBtn");
