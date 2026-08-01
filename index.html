@@ -790,6 +790,7 @@ let availableVoices = [];
 let listenState = { active:false, list:[], index:0 };
 let currentUtter = null;
 let currentTTSAudio = null;
+let currentPlayingBtn = null; // stopAllAudio()で中断された時、押しっぱなし表示が残らないようにするため
 
 // Claude Artifact 環境では window.storage、通常ブラウザでは localStorage を使う
 const store = (window.storage && typeof window.storage.get === "function")
@@ -1146,16 +1147,23 @@ function playGoogleTTS(text, ttsLang, rateVal){
     const audio = new Audio();
     currentTTSAudio = audio;
     let idx = 0;
+    // 失敗した時点でまだ再生していないチャンク（今再生を試みていた分から先）を
+    // エラーに載せて呼び出し元に渡す。フォールバック側が元の文章を最初から読み直さずに済む。
+    const fail = ()=>{
+      const err = new Error("google tts playback failed");
+      err.remainingText = chunks.slice(Math.max(idx - 1, 0)).join(" ");
+      reject(err);
+    };
     const playNext = ()=>{
       if(idx >= chunks.length){ resolve(); return; }
       const url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(ttsLang) + "&client=tw-ob&q=" + encodeURIComponent(chunks[idx]);
       idx++;
       audio.src = url; // srcの再設定でplaybackRateがリセットされるため、必ずこの後に再設定する
       audio.playbackRate = rateVal || 1;
-      audio.play().catch(reject);
+      audio.play().catch(fail);
     };
     audio.onended = playNext;
-    audio.onerror = ()=> reject(new Error("google tts playback failed"));
+    audio.onerror = fail;
     playNext();
   });
 }
@@ -1188,29 +1196,36 @@ async function playGeminiTTS(text, rateVal){
   const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=" + encodeURIComponent(geminiApiKey);
   const audio = new Audio();
   currentTTSAudio = audio;
-  for(const chunk of chunks){
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: chunk }] }],
-        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
-      }),
-    });
-    if(!res.ok) throw new Error("gemini tts failed: " + res.status);
-    const data = await res.json();
-    const part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0];
-    const b64 = part && part.inlineData && part.inlineData.data;
-    if(!b64) throw new Error("gemini tts: no audio data in response");
-    const blob = pcm16ToWavBlob(b64, 24000, 1);
-    const blobUrl = URL.createObjectURL(blob);
-    await new Promise((resolve, reject)=>{
-      audio.src = blobUrl; // srcの再設定でplaybackRateがリセットされるため、必ずこの後に再設定する
-      audio.playbackRate = rateVal || 1;
-      audio.onended = ()=>{ URL.revokeObjectURL(blobUrl); resolve(); };
-      audio.onerror = ()=>{ URL.revokeObjectURL(blobUrl); reject(new Error("gemini tts playback failed")); };
-      audio.play().catch(reject);
-    });
+  for(let i=0; i<chunks.length; i++){
+    const chunk = chunks[i];
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: chunk }] }],
+          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
+        }),
+      });
+      if(!res.ok) throw new Error("gemini tts failed: " + res.status);
+      const data = await res.json();
+      const part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0];
+      const b64 = part && part.inlineData && part.inlineData.data;
+      if(!b64) throw new Error("gemini tts: no audio data in response");
+      const blob = pcm16ToWavBlob(b64, 24000, 1);
+      const blobUrl = URL.createObjectURL(blob);
+      await new Promise((resolve, reject)=>{
+        audio.src = blobUrl; // srcの再設定でplaybackRateがリセットされるため、必ずこの後に再設定する
+        audio.playbackRate = rateVal || 1;
+        audio.onended = ()=>{ URL.revokeObjectURL(blobUrl); resolve(); };
+        audio.onerror = ()=>{ URL.revokeObjectURL(blobUrl); reject(new Error("gemini tts playback failed")); };
+        audio.play().catch(reject);
+      });
+    } catch(e){
+      // ここまでに再生できていない残り（このチャンク以降）だけをフォールバック側に渡す
+      e.remainingText = chunks.slice(i).join(" ");
+      throw e;
+    }
   }
 }
 
@@ -1221,6 +1236,12 @@ function stopAllAudio(){
     currentTTSAudio.onerror = null;
     currentTTSAudio.pause();
     currentTTSAudio = null;
+  }
+  // 中断された再生はfinish()を経由しないため、ここで明示的にボタンの「再生中」表示を消す
+  // （消さないと、別のカードに切り替えても前のボタンが再生中のまま光り続けてしまう）
+  if(currentPlayingBtn){
+    currentPlayingBtn.classList.remove("playing");
+    currentPlayingBtn = null;
   }
 }
 
@@ -1244,16 +1265,24 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   text = text.replace(/~/g, " ").replace(/\s+/g, " ").trim();
   const isJapanese = !!(speechLang && speechLang.toLowerCase().startsWith("ja"));
   const rateVal = rateOverride || (isJapanese ? jaRate : rate);
-  if(btn) btn.classList.add("playing");
-  const finish = ()=>{ if(btn) btn.classList.remove("playing"); if(onDone) onDone(); };
+  if(btn){ btn.classList.add("playing"); currentPlayingBtn = btn; }
+  const finish = ()=>{
+    if(btn) btn.classList.remove("playing");
+    if(currentPlayingBtn === btn) currentPlayingBtn = null;
+    if(onDone) onDone();
+  };
   const ttsLang = ttsLangFor(langKeyForVoice, speechLang);
-  const viaDevice = ()=> speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish);
-  // Google翻訳の音声合成→（失敗時、キーがあれば）Gemini音声合成→端末TTS、の3段フォールバック
-  const viaGeminiThenDevice = ()=>{
+  const viaDevice = (t)=> speakViaBrowserTTS(t || text, speechLang, langKeyForVoice, rateVal, finish);
+  // Google翻訳の音声合成→（失敗時、キーがあれば）Gemini音声合成→端末TTS、の3段フォールバック。
+  // 長文は複数チャンクに分けて順番に再生するため、途中のチャンクだけ失敗した場合はまだ
+  // 再生していない残りの部分だけを次の手段に渡す（そうしないと、既に読み上げ済みの
+  // 先頭部分までもう一度最初から読み直されて、聞いている側には音声が壊れたように聞こえる）。
+  const viaGeminiThenDevice = (err)=>{
+    const remaining = (err && err.remainingText) || text;
     if(geminiApiKey && navigator.onLine !== false){
-      playGeminiTTS(text, rateVal).then(finish).catch(viaDevice);
+      playGeminiTTS(remaining, rateVal).then(finish).catch((e)=> viaDevice((e && e.remainingText) || remaining));
     } else {
-      viaDevice();
+      viaDevice(remaining);
     }
   };
   if(ttsLang && navigator.onLine !== false){
