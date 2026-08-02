@@ -102,7 +102,7 @@ test.describe('syncable state (catOrder / langOrder / phraseOrder included)', ()
     expect(Array.isArray(state.langOrder)).toBe(true);
     expect(state.langOrder.length).toBe(9);
     expect(Array.isArray(state.phraseOrder)).toBe(true);
-    expect(state.phraseOrder.length).toBe(188); // built-in phrase count
+    expect(state.phraseOrder.length).toBe(208); // built-in phrase count
   });
 
   test('applyCloudState reorders category tabs and the language list', async ({ page }) => {
