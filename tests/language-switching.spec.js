@@ -20,7 +20,7 @@ test.describe('language switching', () => {
   for (const [label, category, expectedCount] of [
     ['韓国語', '数字', 22],
     ['ドイツ語', '時間', 10],
-    ['フランス語', '緊急', 9],
+    ['フランス語', '緊急', 18],
   ]) {
     test(`${category} cards still show in ${label} mode`, async ({ page }) => {
       await page.goto('/index.html');
