@@ -69,4 +69,30 @@ test.describe('TTS playback robustness', () => {
     expect(deviceCalls[0].length).toBeLessThan(longText.length);
     expect(deviceCalls[0]).not.toBe(longText);
   });
+
+  test('a manual tap tells the user when no TTS engine worked at all (Google fails, no device synth); background auto-play stays silent about it', async ({ page, browserName }) => {
+    // On mobile, occasionally *everything* fails (network hiccup on Google's endpoint, no Gemini
+    // key set, and the browser has no speechSynthesis support at all e.g. a restrictive in-app
+    // browser) and previously the app just did nothing with zero feedback - indistinguishable from
+    // a broken tap. Recognition failures already alert the user elsewhere in the app; playback
+    // failures should too, but only for a deliberate tap (not every step of a 聞き流し loop).
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
+    await page.route('**/translate_tts**', route => route.fulfill({ status: 500, body: 'fail' }));
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'speechSynthesis', { value: undefined, configurable: true });
+    });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    let alertMsg = null;
+    page.on('dialog', async (dialog) => { alertMsg = dialog.message(); await dialog.accept(); });
+
+    await page.locator('.ticket').first().locator('.speak').click();
+    await expect.poll(() => alertMsg).toContain('音声合成');
+
+    alertMsg = null;
+    await page.evaluate(() => window.speakRaw('テスト', 'ja-JP', null, () => {}, 'ja'));
+    await page.waitForTimeout(300);
+    expect(alertMsg).toBeNull();
+  });
 });

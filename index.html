@@ -1260,8 +1260,16 @@ function stopAllAudio(){
   }
 }
 
-function speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish){
-  if(!synth){ finish(); return; }
+function speakViaBrowserTTS(text, speechLang, langKeyForVoice, rateVal, finish, notifyIfUnsupported){
+  // Google翻訳・Geminiの音声合成が両方とも使えない状態でここまで来て、さらに端末側の読み上げにも
+  // 対応していない場合、今までは何の表示もなくただ無音になっていた（音声入力非対応の場合は既にalertで
+  // 案内しているのに、読み上げ側だけ無反応なのは不親切）。手動タップの時だけ、その場でわかるよう伝える
+  // （聞き流し再生中の自動再生では毎回alertが出て邪魔になるため出さない）。
+  if(!synth){
+    if(notifyIfUnsupported) alert("この端末・ブラウザは音声合成（読み上げ）に対応していないようです。SafariやChromeなど別のブラウザでお試しください。");
+    finish();
+    return;
+  }
   const utter = new SpeechSynthesisUtterance(text);
   currentUtter = utter; // Chromeで参照が消えるとonendが発火しなくなる問題への対策
   const voice = langKeyForVoice ? pickVoice(langKeyForVoice) : pickVoiceByPrefix(speechLang.split('-')[0].toLowerCase());
@@ -1287,7 +1295,7 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
     if(onDone) onDone();
   };
   const ttsLang = ttsLangFor(langKeyForVoice, speechLang);
-  const viaDevice = (t)=> speakViaBrowserTTS(t || text, speechLang, langKeyForVoice, rateVal, finish);
+  const viaDevice = (t)=> speakViaBrowserTTS(t || text, speechLang, langKeyForVoice, rateVal, finish, !!btn);
   // Google翻訳の音声合成→（失敗時、キーがあれば）Gemini音声合成→端末TTS、の3段フォールバック。
   // 長文は複数チャンクに分けて順番に再生するため、途中のチャンクだけ失敗した場合はまだ
   // 再生していない残りの部分だけを次の手段に渡す（そうしないと、既に読み上げ済みの
