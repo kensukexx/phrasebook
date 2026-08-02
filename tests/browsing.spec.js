@@ -47,6 +47,8 @@ test.describe('core browsing', () => {
     const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 5000 });
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
     await page.click('.cat[data-cat="会話パターン"]');
     await page.waitForTimeout(200);
     await page.locator('.ticket .speak').first().click();

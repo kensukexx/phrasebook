@@ -14,6 +14,54 @@ test.describe('usage manual', () => {
   });
 });
 
+test.describe('会話パターン⇄通常の単語 切替スイッチ', () => {
+  test('OFF shows すべて + normal categories only; ON shows only the pattern categories', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    const catsOff = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
+    expect(catsOff[0]).toBe('すべて');
+    expect(catsOff).not.toContain('会話パターン');
+    expect(catsOff).not.toContain('会話パターン2');
+
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
+    const catsOn = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
+    expect(catsOn).toEqual(['会話パターン', '会話パターン2']);
+
+    const cardCats = await page.locator('#deck .ticket .cat-tag').allTextContents();
+    expect(new Set(cardCats)).toEqual(new Set(['会話パターン']));
+  });
+
+  test('the toggle state and selected category persist across reload', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
+
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+    const cats = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
+    expect(cats).toEqual(['会話パターン', '会話パターン2']);
+    await expect(page.locator('.cat[data-cat="会話パターン"]')).toHaveClass(/active/);
+  });
+
+  test('switching back OFF returns to the previously normal category view', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
+
+    const cats = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
+    expect(cats[0]).toBe('すべて');
+    await expect(page.locator('.cat[data-cat="すべて"]')).toHaveClass(/active/);
+  });
+});
+
 test.describe('category tab reordering', () => {
   test('long-press drag reorders tabs and the order persists after reload', async ({ page }) => {
     await page.goto('/index.html');
@@ -184,6 +232,8 @@ test.describe('word-by-word gloss', () => {
     await page.click('.lang-row:has-text("ドイツ語")');
     await page.waitForTimeout(200);
 
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
     await page.click('.cat[data-cat="会話パターン"]');
     await page.waitForTimeout(200);
 
@@ -196,6 +246,8 @@ test.describe('word-by-word gloss', () => {
   test('the gloss updates when the displayed language changes', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
+    await page.click('#patternModeToggle');
+    await page.waitForTimeout(200);
     await page.click('.cat[data-cat="会話パターン"]');
     await page.waitForTimeout(200);
 

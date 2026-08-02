@@ -67,6 +67,10 @@
   .toolrow{ padding:10px 16px 0; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
   .toggles{ display:flex; gap:14px; }
   .toggle-wrap{ display:flex; align-items:center; gap:7px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
+  .pattern-mode-row{ padding:6px 16px 0; font-size:13px; font-weight:600; justify-content:center; gap:10px; }
+  .pattern-mode-row span{ transition:color .15s ease, opacity .15s ease; opacity:0.5; }
+  .pattern-mode-row.on span:last-child{ color:var(--ink); opacity:1; }
+  .pattern-mode-row:not(.on) span:first-child{ color:var(--ink); opacity:1; }
   .switch{ position:relative; width:36px; height:21px; background:rgba(29,43,58,0.2); border-radius:999px; cursor:pointer; flex:0 0 auto; }
   .switch::after{ content:""; position:absolute; top:2px; left:2px; width:17px; height:17px; border-radius:50%; background:var(--paper); transition:transform .15s ease; }
   .switch.on{ background:var(--green); }
@@ -372,7 +376,7 @@
 
     <div class="manual-section">
       <h3>📇 フレーズ一覧</h3>
-      <p>カードをタップすると発音します。左右にスワイプするとカテゴリを切替、カード右下の⤢で相手に画面を見せる全画面表示になります。カテゴリタブ・カード本体はどちらも長押ししてドラッグすると好きな順番に並び替えられます（カテゴリタブの「すべて」は常に先頭固定）。</p>
+      <p>カードをタップすると発音します。左右にスワイプするとカテゴリを切替、カード右下の⤢で相手に画面を見せる全画面表示になります。カテゴリタブ・カード本体はどちらも長押ししてドラッグすると好きな順番に並び替えられます（カテゴリタブの「すべて」は常に先頭固定）。検索欄の上のスイッチで「通常の単語」⇄「会話パターン」のカテゴリ表示を切り替えられます。</p>
     </div>
 
     <div class="manual-section">
@@ -465,6 +469,12 @@
   <span class="progress-label" id="progressLabel" style="margin-left:auto;"></span>
 </div>
 
+<div class="toggle-wrap pattern-mode-row" id="patternModeRow">
+  <span>📇 通常の単語</span>
+  <div class="switch" id="patternModeToggle"></div>
+  <span>🧩 会話パターン</span>
+</div>
+
 <div class="searchwrap">
   <input type="text" id="search" placeholder="日本語 or 現地語で検索">
   <button class="addbtn mic-btn" id="micSearch" aria-label="音声入力" type="button">🎤</button>
@@ -547,11 +557,14 @@ const LANGS = [
   { code:"PT", label:"ポルトガル語", speech:"pt-PT", key:"pt" },
 ];
 
-const CATS = ["すべて","会話パターン","基本ワード","あいさつ","リアクション","食事","レストランでの注文","移動","ホテル","買い物・観光","自己紹介","気持ち","数字","曜日","時間","緊急","豆知識","その他"];
+const CATS = ["すべて","会話パターン","会話パターン2","基本ワード","あいさつ","リアクション","食事","レストランでの注文","移動","ホテル","買い物・観光","自己紹介","気持ち","数字","曜日","時間","緊急","豆知識","その他"];
+// 「会話パターン」系カテゴリと通常のカテゴリを、検索バー付近のスイッチで切り替えて表示するための一覧
+const PATTERN_CATS = ["会話パターン","会話パターン2"];
 
 const CAT_META = {
   "すべて":      { icon:"🎫", color:"#576574" },
   "会話パターン": { icon:"🧩", color:"#5F27CD" },
+  "会話パターン2": { icon:"🧩", color:"#8854D0" },
   "基本ワード":  { icon:"🙆", color:"#6C5CE7" },
   "あいさつ":    { icon:"👋", color:"#FF6B6B" },
   "リアクション": { icon:"😲", color:"#F7B731" },
@@ -773,6 +786,7 @@ let currentLang = "en";
 let currentCat = "すべて";
 let showUnlearnedOnly = false;
 let showPinnedOnly = false;
+let patternMode = false; // ON: 会話パターン系カテゴリのみ表示、OFF: それ以外の通常カテゴリのみ表示
 let rate = 1.0;
 let jaRate = 1.25;
 let fsScale = 1.0;
@@ -805,7 +819,7 @@ function keyOf(d){ return d.id || d.ja; }
 
 async function loadState(){
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.phraseOrder && p.phraseOrder.length) phraseOrder = p.phraseOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.phraseOrder && p.phraseOrder.length) phraseOrder = p.phraseOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; patternMode = !!p.patternMode; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
   try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
@@ -813,6 +827,12 @@ async function loadState(){
   try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
   CATS.forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
+  // 保存されていたcurrentCatが読み込んだpatternModeの状態と矛盾する場合（例：以前OFFのまま
+  // 「あいさつ」を選んでいたのに、別画面でONに切り替えて保存された等）、そのモードで表示可能な
+  // カテゴリに合わせ直す。
+  if(patternMode !== PATTERN_CATS.includes(currentCat)){
+    currentCat = patternMode ? (catOrder.find(c=>PATTERN_CATS.includes(c)) || PATTERN_CATS[0]) : "すべて";
+  }
   // 既存のカスタムフレーズに一意IDを付与（同じ日本語のフレーズ同士の衝突防止）
   let migrated = false;
   customData.forEach((d, i)=>{
@@ -836,7 +856,7 @@ async function safeSet(key, value){
     }
   }
 }
-async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, catOrder, phraseOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly})); }
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, catOrder, phraseOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly, patternMode})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
 async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
@@ -881,14 +901,17 @@ function orderedLangs(){
     .map(k=>LANGS.find(l=>l.key===k)).filter(Boolean);
 }
 // 「すべて」は常に先頭固定、それ以外はcatOrderの並び替え結果に従う
+// patternMode ON: 会話パターン系カテゴリのみ（「すべて」タブは無し）
+// patternMode OFF: 「すべて」＋会話パターン系以外の通常カテゴリのみ、今まで通り
 function orderedCats(){
   const seen = new Set();
   const rest = catOrder.filter(c=>{
     if(c==="すべて" || !CATS.includes(c) || seen.has(c)) return false;
+    if(PATTERN_CATS.includes(c) !== patternMode) return false;
     seen.add(c);
     return true;
   });
-  return ["すべて", ...rest];
+  return patternMode ? rest : ["すべて", ...rest];
 }
 
 function renderLangButton(){
@@ -2673,6 +2696,18 @@ document.getElementById("autoTranslate").onclick = async ()=>{
 };
 document.getElementById("unlearnedToggle").addEventListener("click", (e)=>{ stopListening(); showUnlearnedOnly = !showUnlearnedOnly; e.currentTarget.classList.toggle("on", showUnlearnedOnly); saveSettings(); renderDeck(); });
 document.getElementById("pinnedToggle").addEventListener("click", (e)=>{ stopListening(); showPinnedOnly = !showPinnedOnly; e.currentTarget.classList.toggle("on", showPinnedOnly); saveSettings(); renderDeck(); });
+document.getElementById("patternModeToggle").addEventListener("click", ()=>{
+  stopListening();
+  patternMode = !patternMode;
+  document.getElementById("patternModeToggle").classList.toggle("on", patternMode);
+  document.getElementById("patternModeRow").classList.toggle("on", patternMode);
+  // 切り替え後、今選んでいるカテゴリが新しいモードに存在しなければ、そのモードの先頭カテゴリに合わせる
+  const cats = orderedCats();
+  if(!cats.includes(currentCat)) currentCat = cats[0];
+  saveSettings();
+  renderCats();
+  renderDeck();
+});
 document.getElementById("listenBtn").addEventListener("click", ()=>{ if(listenState.active) stopListening(); else startListening(); });
 
 document.getElementById("submitAdd").onclick = ()=>{
@@ -2709,6 +2744,8 @@ document.getElementById("submitAdd").onclick = ()=>{
   document.getElementById("jaToggle").classList.toggle("on", listenJaMode);
   document.getElementById("unlearnedToggle").classList.toggle("on", showUnlearnedOnly);
   document.getElementById("pinnedToggle").classList.toggle("on", showPinnedOnly);
+  document.getElementById("patternModeToggle").classList.toggle("on", patternMode);
+  document.getElementById("patternModeRow").classList.toggle("on", patternMode);
   document.getElementById("repeatSlider").value = listenRepeat;
   document.getElementById("repeatLabel").textContent = listenRepeat + "回";
   document.getElementById("gapSlider").value = listenGap;
