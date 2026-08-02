@@ -1,5 +1,28 @@
 const { test, expect } = require('@playwright/test');
 
+// A real, decodable (silent) WAV so the browser goes through its actual load/decode/play
+// lifecycle instead of erroring on a fake byte buffer - needed to catch a *real* async
+// playbackRate reset that only happens once genuine audio metadata has loaded.
+function makeSilentWavBuffer(durationSec = 0.3, sampleRate = 8000) {
+  const numSamples = Math.floor(durationSec * sampleRate);
+  const dataSize = numSamples * 2; // 16-bit mono
+  const buffer = Buffer.alloc(44 + dataSize);
+  buffer.write('RIFF', 0);
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write('WAVE', 8);
+  buffer.write('fmt ', 12);
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20); // PCM
+  buffer.writeUInt16LE(1, 22); // mono
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * 2, 28); // byte rate
+  buffer.writeUInt16LE(2, 32); // block align
+  buffer.writeUInt16LE(16, 34); // bits per sample
+  buffer.write('data', 36);
+  buffer.writeUInt32LE(dataSize, 40);
+  return buffer; // remaining bytes are already zero (silence)
+}
+
 // These tests drive playback with a fully scripted fake Audio element instead of mocked
 // network responses, because the bugs they guard against are about *when* onended/onerror
 // fire relative to other user actions - timing that's hard to control with real (even mocked)
@@ -94,5 +117,59 @@ test.describe('TTS playback robustness', () => {
     await page.evaluate(() => window.speakRaw('テスト', 'ja-JP', null, () => {}, 'ja'));
     await page.waitForTimeout(300);
     expect(alertMsg).toBeNull();
+  });
+
+  test('playbackRate stays correct through real audio decoding, for every one of the 9 languages', async ({ page, browserName }) => {
+    // Regression coverage for a reported "audio suddenly glitches / speed suddenly changes in
+    // Chrome" - uses a real (silent but genuinely decodable) WAV instead of a fake byte buffer, so
+    // the browser goes through its actual load/decode/play lifecycle. Confirms the fix that
+    // reapplies playbackRate after every .src assignment holds for real decoding, not just the
+    // instant a fake buffer resolves, and holds identically across all 9 target languages.
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
+    const wavBuf = makeSilentWavBuffer();
+    await page.route('**/translate_tts**', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wavBuf }));
+    await page.addInitScript(() => {
+      window.__log = [];
+      const NativeAudio = window.Audio;
+      class LoggingAudio extends NativeAudio {
+        constructor(...args){
+          super(...args);
+          const rec = { rates: [], sawError: false };
+          window.__log.push(rec);
+          ['loadedmetadata', 'canplay', 'playing', 'ended'].forEach(evt => {
+            this.addEventListener(evt, () => rec.rates.push(this.playbackRate));
+          });
+          this.addEventListener('error', () => { rec.sawError = true; });
+        }
+      }
+      window.Audio = LoggingAudio;
+    });
+
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await page.waitForSelector('#settingsOverlay.open');
+    await page.fill('#rateSlider', '1.5');
+    await page.dispatchEvent('#rateSlider', 'input');
+    await page.dispatchEvent('#rateSlider', 'change');
+    await page.click('#closeSettings');
+
+    const langLabels = ['英語', '韓国語', 'ドイツ語', 'ルーマニア語', 'スペイン語', 'フランス語', 'ベトナム語', '中国語', 'ポルトガル語'];
+    for (const label of langLabels) {
+      await page.click('#langPickerBtn');
+      await page.waitForSelector('#langPickerOverlay.open');
+      await page.click(`.lang-row:has-text("${label}")`);
+      await page.waitForTimeout(100);
+
+      await page.evaluate(() => { window.__log = []; });
+      await page.locator('.ticket .speak').first().click();
+      await expect.poll(() => page.evaluate(() => window.__log[0] && window.__log[0].rates.includes(1) === false && window.__log[0].rates.length > 0)).toBe(true);
+
+      const log = await page.evaluate(() => window.__log[0]);
+      expect(log.sawError, `${label}: unexpected decode error`).toBe(false);
+      expect(new Set(log.rates), `${label}: rate should stay 1.5 throughout, never reset to 1`).toEqual(new Set([1.5]));
+    }
   });
 });
