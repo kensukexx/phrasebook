@@ -18,7 +18,7 @@ test.describe('language switching', () => {
   }
 
   for (const [label, category, expectedCount] of [
-    ['韓国語', '数字', 10],
+    ['韓国語', '数字', 22],
     ['ドイツ語', '時間', 10],
     ['フランス語', '緊急', 9],
   ]) {
