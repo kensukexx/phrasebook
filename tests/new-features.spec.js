@@ -23,11 +23,12 @@ test.describe('会話パターン⇄通常の単語 切替スイッチ', () => {
     expect(catsOff[0]).toBe('すべて');
     expect(catsOff).not.toContain('会話パターン');
     expect(catsOff).not.toContain('会話パターン2');
+    expect(catsOff).not.toContain('会話パターン3');
 
     await page.click('#patternModeToggle');
     await page.waitForTimeout(200);
     const catsOn = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
-    expect(catsOn).toEqual(['会話パターン', '会話パターン2']);
+    expect(catsOn).toEqual(['会話パターン', '会話パターン2', '会話パターン3']);
 
     const cardCats = await page.locator('#deck .ticket .cat-tag').allTextContents();
     expect(new Set(cardCats)).toEqual(new Set(['会話パターン']));
@@ -43,7 +44,7 @@ test.describe('会話パターン⇄通常の単語 切替スイッチ', () => {
     await page.reload();
     await page.waitForSelector('#deck .ticket');
     const cats = await page.locator('.cat').evaluateAll(els => els.map(e => e.dataset.cat));
-    expect(cats).toEqual(['会話パターン', '会話パターン2']);
+    expect(cats).toEqual(['会話パターン', '会話パターン2', '会話パターン3']);
     await expect(page.locator('.cat[data-cat="会話パターン"]')).toHaveClass(/active/);
   });
 
