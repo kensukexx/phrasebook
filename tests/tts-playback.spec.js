@@ -84,13 +84,81 @@ test.describe('TTS playback robustness', () => {
     await expect.poll(() => page.evaluate(() => window.__audioInstances.length)).toBeGreaterThanOrEqual(1);
     await page.evaluate(() => window.__audioInstances[0].onended());
 
-    // now simulate the second chunk failing (e.g. a network hiccup on Google's endpoint)
+    // now simulate the second chunk failing twice in a row (the single retry also fails) - a
+    // network hiccup that clears up on the first retry should NOT reach the fallback at all,
+    // see the dedicated retry test below, so this needs a second failure to trigger it here.
+    await page.evaluate(() => window.__audioInstances[0].onerror());
+    await page.waitForTimeout(450); // past the 400ms retry delay
     await page.evaluate(() => window.__audioInstances[0].onerror());
 
     await expect.poll(() => page.evaluate(() => window.__deviceTTSCalls.length)).toBeGreaterThan(0);
     const deviceCalls = await page.evaluate(() => window.__deviceTTSCalls);
     expect(deviceCalls[0].length).toBeLessThan(longText.length);
     expect(deviceCalls[0]).not.toBe(longText);
+  });
+
+  test.describe('retrying a failed Google TTS chunk once before falling back', () => {
+    // Requested after a report of the voice/speed suddenly changing mid-聞き流し (auto-loop):
+    // Google's unofficial endpoint occasionally has a transient hiccup, and immediately switching
+    // to a different voice (Gemini/device) for that one phrase was jarring. Retrying the same
+    // chunk once after a short delay lets most transient failures recover silently.
+    async function installFakeAudioWithSrcLog(page) {
+      await page.addInitScript(() => {
+        window.__audioInstances = [];
+        window.__srcLog = [];
+        class FakeAudio {
+          constructor(){ this._src=''; this.playbackRate=1; this.onended=null; this.onerror=null; window.__audioInstances.push(this); }
+          set src(v){ this._src = v; window.__srcLog.push(v); }
+          get src(){ return this._src; }
+          play(){ return Promise.resolve(); }
+          pause(){}
+        }
+        window.Audio = FakeAudio;
+      });
+    }
+
+    test('a single transient failure retries the same chunk and succeeds without ever falling back', async ({ page }) => {
+      await installFakeAudioWithSrcLog(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.evaluate(() => {
+        window.__deviceCalls = [];
+        window.speakViaBrowserTTS = (text) => { window.__deviceCalls.push(text); };
+      });
+
+      await page.evaluate(() => { window.speakRaw('こんにちは', 'ja-JP', null, () => {}, 'ja'); });
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(1);
+
+      await page.evaluate(() => window.__audioInstances[0].onerror()); // transient failure
+      await page.waitForTimeout(200); // still well within the 400ms retry delay
+      expect(await page.evaluate(() => window.__srcLog.length)).toBe(1); // no retry request yet - not premature
+
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2); // retry fires after the delay
+      await page.evaluate(() => window.__audioInstances[0].onended()); // the retry succeeds
+
+      await page.waitForTimeout(100);
+      expect(await page.evaluate(() => window.__deviceCalls.length)).toBe(0); // fallback never engaged
+    });
+
+    test('two failures in a row for the same chunk still falls back (retry is not infinite)', async ({ page }) => {
+      await installFakeAudioWithSrcLog(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.evaluate(() => {
+        window.__deviceCalls = [];
+        window.speakViaBrowserTTS = (text) => { window.__deviceCalls.push(text); };
+      });
+
+      await page.evaluate(() => { window.speakRaw('こんにちは', 'ja-JP', null, () => {}, 'ja'); });
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(1);
+
+      await page.evaluate(() => window.__audioInstances[0].onerror()); // 1st failure
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2); // retry fires
+      await page.evaluate(() => window.__audioInstances[0].onerror()); // retry also fails
+
+      await expect.poll(() => page.evaluate(() => window.__deviceCalls.length)).toBeGreaterThan(0);
+      expect(await page.evaluate(() => window.__deviceCalls[0])).toBe('こんにちは');
+    });
   });
 
   test('a manual tap tells the user when no TTS engine worked at all (Google fails, no device synth); background auto-play stays silent about it', async ({ page, browserName }) => {

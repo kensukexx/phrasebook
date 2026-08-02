@@ -1162,6 +1162,8 @@ function playGoogleTTS(text, ttsLang, rateVal){
     const audio = new Audio();
     currentTTSAudio = audio;
     let idx = 0;
+    let retried = false; // 今のチャンクを既に一度リトライ済みか
+    let settled = false; // onerrorと.play().catch()が同じ失敗に対して二重発火するのを防ぐ
     // 失敗した時点でまだ再生していないチャンク（今再生を試みていた分から先）を
     // エラーに載せて呼び出し元に渡す。フォールバック側が元の文章を最初から読み直さずに済む。
     const fail = ()=>{
@@ -1169,16 +1171,36 @@ function playGoogleTTS(text, ttsLang, rateVal){
       err.remainingText = chunks.slice(Math.max(idx - 1, 0)).join(" ");
       reject(err);
     };
-    const playNext = ()=>{
-      if(idx >= chunks.length){ resolve(); return; }
-      const url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(ttsLang) + "&client=tw-ob&q=" + encodeURIComponent(chunks[idx]);
-      idx++;
+    const loadChunk = ()=>{
+      settled = false;
+      const url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(ttsLang) + "&client=tw-ob&q=" + encodeURIComponent(chunks[idx - 1]);
       audio.src = url; // srcの再設定でplaybackRateがリセットされるため、必ずこの後に再設定する
       audio.playbackRate = rateVal || 1;
-      audio.play().catch(fail);
+      audio.play().catch(onChunkError);
+    };
+    // Google側の一時的な通信不調はよくあるため、フォールバック（Gemini/端末の声）に切り替えて
+    // 聞き流し中に声が急に変わって聞こえる前に、同じチャンクを一度だけ間を置いて再試行する。
+    const onChunkError = ()=>{
+      if(settled) return;
+      settled = true;
+      if(!retried){
+        retried = true;
+        setTimeout(()=>{
+          if(currentTTSAudio !== audio) return; // その間に別の再生に切り替わっていたら何もしない
+          loadChunk();
+        }, 400);
+      } else {
+        fail();
+      }
+    };
+    const playNext = ()=>{
+      if(idx >= chunks.length){ resolve(); return; }
+      idx++;
+      retried = false;
+      loadChunk();
     };
     audio.onended = playNext;
-    audio.onerror = fail;
+    audio.onerror = onChunkError;
     playNext();
   });
 }
