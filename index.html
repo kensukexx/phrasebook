@@ -1307,9 +1307,12 @@ function playGoogleTTS(text, ttsLang, rateVal){
     let idx = 0;
     let retried = false; // 今のチャンクを既に一度リトライ済みか
     let settled = false; // onerrorと.play().catch()が同じ失敗に対して二重発火するのを防ぐ
+    let hangTimer = null;
+    const clearHangTimer = ()=>{ if(hangTimer){ clearTimeout(hangTimer); hangTimer = null; } };
     // 失敗した時点でまだ再生していないチャンク（今再生を試みていた分から先）を
     // エラーに載せて呼び出し元に渡す。フォールバック側が元の文章を最初から読み直さずに済む。
     const fail = ()=>{
+      clearHangTimer();
       const err = new Error("google tts playback failed");
       err.remainingText = chunks.slice(Math.max(idx - 1, 0)).join(" ");
       releaseAudioResources(audio);
@@ -1321,12 +1324,18 @@ function playGoogleTTS(text, ttsLang, rateVal){
       audio.src = url; // srcの再設定でplaybackRateがリセットされるため、必ずこの後に再設定する
       audio.playbackRate = rateVal || 1;
       audio.play().catch(onChunkError);
+      // ネットワークが応答を返さないままハングすると、onended/onerrorのどちらも一生発火せず、
+      // 聞き流し再生がそこで無言のまま止まってしまう（実際に報告があった不具合）。一定時間で
+      // 強制的に失敗扱いにし、リトライ・フォールバックへ進められるようにする。
+      clearHangTimer();
+      hangTimer = setTimeout(()=>{ if(!settled) onChunkError(); }, 8000);
     };
     // Google側の一時的な通信不調はよくあるため、フォールバック（Gemini/端末の声）に切り替えて
     // 聞き流し中に声が急に変わって聞こえる前に、同じチャンクを一度だけ間を置いて再試行する。
     const onChunkError = ()=>{
       if(settled) return;
       settled = true;
+      clearHangTimer();
       if(!retried){
         retried = true;
         setTimeout(()=>{
@@ -1338,6 +1347,8 @@ function playGoogleTTS(text, ttsLang, rateVal){
       }
     };
     const playNext = ()=>{
+      settled = true;
+      clearHangTimer();
       if(idx >= chunks.length){ releaseAudioResources(audio); resolve(); return; }
       idx++;
       retried = false;
@@ -1388,14 +1399,24 @@ async function playGeminiTTS(text, rateVal){
   for(let i=0; i<chunks.length; i++){
     const chunk = chunks[i];
     try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: chunk }] }],
-          generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
-        }),
-      });
+      // fetchはネットワークがハングすると既定でタイムアウトしないため、一定時間で
+      // 自分から打ち切ってフォールバック（端末TTS）へ進めるようにする。
+      const abortController = new AbortController();
+      const abortTimer = setTimeout(()=> abortController.abort(), 8000);
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: chunk }] }],
+            generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
+          }),
+          signal: abortController.signal,
+        });
+      } finally {
+        clearTimeout(abortTimer);
+      }
       if(!res.ok) throw new Error("gemini tts failed: " + res.status);
       const data = await res.json();
       const part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0];

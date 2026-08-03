@@ -184,6 +184,42 @@ test.describe('TTS playback robustness', () => {
       await expect.poll(() => page.evaluate(() => window.__deviceCalls.length)).toBeGreaterThan(0);
       expect(await page.evaluate(() => window.__deviceCalls[0])).toBe('こんにちは');
     });
+
+    test('a request that hangs forever (neither onended nor onerror ever fires) times out and eventually falls back, instead of leaving 聞き流し stuck silently', async ({ page }) => {
+      // Reported: audio playback would sometimes just stop partway through a loop, with no error
+      // shown. Root cause: if Google's endpoint accepts the connection but never actually responds
+      // (a real network failure mode, distinct from an outright error), neither onended nor onerror
+      // ever fires, so speakRaw's promise chain hangs forever and nothing calls finish()/goNext() -
+      // playback (and 聞き流し) just stalls silently with no way to recover. Uses Playwright's clock
+      // mock to fast-forward past the real 8s hang timeout without an 16s+ real wait.
+      await page.clock.install();
+      await installFakeAudioWithSrcLog(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.evaluate(() => {
+        window.__deviceCalls = [];
+        window.speakViaBrowserTTS = (text, speechLang, langKeyForVoice, rateVal, finish) => {
+          window.__deviceCalls.push(text);
+          finish();
+        };
+      });
+
+      await page.evaluate(() => {
+        window.__done = false;
+        window.speakRaw('こんにちは', 'ja-JP', null, () => { window.__done = true; }, 'ja');
+      });
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(1);
+
+      // never fire onended/onerror at all - simulate a hung connection. Fast-forward past the
+      // hang timeout (fires the retry) and then past the retry's own hang timeout too.
+      await page.clock.fastForward(8100);
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2);
+      await page.clock.fastForward(8100);
+
+      await expect.poll(() => page.evaluate(() => window.__deviceCalls.length)).toBeGreaterThan(0);
+      expect(await page.evaluate(() => window.__deviceCalls[0])).toBe('こんにちは');
+      expect(await page.evaluate(() => window.__done)).toBe(true);
+    });
   });
 
   test('a manual tap tells the user when no TTS engine worked at all (Google fails, no device synth); background auto-play stays silent about it', async ({ page, browserName }) => {
