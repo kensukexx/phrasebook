@@ -107,4 +107,42 @@ test.describe('settings', () => {
     const rates = await page.evaluate(() => window.__playbackRates);
     expect(rates.every(r => r === 1.8)).toBe(true);
   });
+
+  test('dragging the rate slider mid-playback speeds up/slows down the audio immediately, not just the next phrase', async ({ page }) => {
+    // Requested: users want to adjust speed while a phrase is still playing, not only have it
+    // apply starting from the next tap. HTMLMediaElement.playbackRate can be changed live, so the
+    // slider's input handler now pokes the currently-playing <audio> element directly - as long as
+    // it's the same rate "kind" (現地語 vs 日本語) as what's actually playing.
+    await installFakeAudio(page);
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.locator('.ticket .speak').first().click();
+    await expect.poll(() => page.evaluate(() => window.__audioInstances.length)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.__audioInstances[0].playbackRate)).toBe(1);
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await page.waitForSelector('#settingsOverlay.open');
+    await page.fill('#rateSlider', '1.8');
+    await page.dispatchEvent('#rateSlider', 'input');
+
+    expect(await page.evaluate(() => window.__audioInstances[0].playbackRate)).toBe(1.8);
+  });
 });
+
+async function installFakeAudio(page) {
+  await page.addInitScript(() => {
+    window.__audioInstances = [];
+    class FakeAudio {
+      constructor(){ this._src=''; this.playbackRate=1; this.onended=null; this.onerror=null; window.__audioInstances.push(this); }
+      set src(v){ this._src = v; }
+      get src(){ return this._src; }
+      play(){ return Promise.resolve(); }
+      pause(){}
+      removeAttribute(){ this._src = ''; }
+      load(){}
+    }
+    window.Audio = FakeAudio;
+  });
+}

@@ -922,6 +922,7 @@ let listenState = { active:false, list:[], index:0 };
 let currentUtter = null;
 let currentTTSAudio = null;
 let currentPlayingBtn = null; // stopAllAudio()で中断された時、押しっぱなし表示が残らないようにするため
+let currentTTSRateKind = null; // 今再生中の音声が"ja"（日本語スピード）か"foreign"（現地語スピード）か。再生中のスライダー操作に反映するため
 
 // Claude Artifact 環境では window.storage、通常ブラウザでは localStorage を使う
 const store = (window.storage && typeof window.storage.get === "function")
@@ -1426,6 +1427,7 @@ function stopAllAudio(){
     releaseAudioResources(currentTTSAudio);
     currentTTSAudio = null;
   }
+  currentTTSRateKind = null;
   // 中断された再生はfinish()を経由しないため、ここで明示的にボタンの「再生中」表示を消す
   // （消さないと、別のカードに切り替えても前のボタンが再生中のまま光り続けてしまう）
   if(currentPlayingBtn){
@@ -1462,6 +1464,8 @@ function speakRaw(text, speechLang, btn, onDone, langKeyForVoice, rateOverride){
   text = text.replace(/~/g, " ").replace(/\s+/g, " ").trim();
   const isJapanese = !!(speechLang && speechLang.toLowerCase().startsWith("ja"));
   const rateVal = rateOverride || (isJapanese ? jaRate : rate);
+  // rateOverride使用時は固定速度なので、スライダー操作による再生中の追従対象からは外す
+  currentTTSRateKind = rateOverride ? null : (isJapanese ? "ja" : "foreign");
   if(btn){ btn.classList.add("playing"); currentPlayingBtn = btn; }
   const finish = ()=>{
     if(btn) btn.classList.remove("playing");
@@ -2306,9 +2310,19 @@ document.getElementById("presentPlayback").addEventListener("click", ()=>{
 document.getElementById("closeSettings").addEventListener("click", ()=> document.getElementById("settingsOverlay").classList.remove("open"));
 document.getElementById("langPickerBtn").addEventListener("click", ()=>{ renderLangPickList(); document.getElementById("langPickerOverlay").classList.add("open"); });
 document.getElementById("closeLangPicker").addEventListener("click", ()=> document.getElementById("langPickerOverlay").classList.remove("open"));
-document.getElementById("rateSlider").addEventListener("input", (e)=>{ rate = parseFloat(e.target.value); document.getElementById("rateLabel").textContent = rate.toFixed(2).replace(/0$/,'') + "x"; });
+document.getElementById("rateSlider").addEventListener("input", (e)=>{
+  rate = parseFloat(e.target.value);
+  document.getElementById("rateLabel").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
+  // 再生中の現地語音声にもその場で反映する（端末TTSはWeb Speech APIの仕様上、話し始めた後の
+  // 速度変更が効かないため、Google/Gemini経由の<audio>再生の時だけ即座に反映できる）
+  if(currentTTSRateKind === "foreign" && currentTTSAudio) currentTTSAudio.playbackRate = rate;
+});
 document.getElementById("rateSlider").addEventListener("change", saveSettings);
-document.getElementById("jaRateSlider").addEventListener("input", (e)=>{ jaRate = parseFloat(e.target.value); document.getElementById("jaRateLabel").textContent = jaRate.toFixed(2).replace(/0$/,'') + "x"; });
+document.getElementById("jaRateSlider").addEventListener("input", (e)=>{
+  jaRate = parseFloat(e.target.value);
+  document.getElementById("jaRateLabel").textContent = jaRate.toFixed(2).replace(/0$/,'') + "x";
+  if(currentTTSRateKind === "ja" && currentTTSAudio) currentTTSAudio.playbackRate = jaRate;
+});
 document.getElementById("jaRateSlider").addEventListener("change", saveSettings);
 document.getElementById("geminiKeyInput").addEventListener("change", (e)=>{ geminiApiKey = e.target.value.trim(); saveSettings(); });
 document.getElementById("fsSlider").addEventListener("input", (e)=>{
