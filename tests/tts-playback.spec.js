@@ -31,11 +31,13 @@ async function installFakeAudio(page) {
   await page.addInitScript(() => {
     window.__audioInstances = [];
     class FakeAudio {
-      constructor(){ this._src=''; this.playbackRate=1; this.onended=null; this.onerror=null; window.__audioInstances.push(this); }
+      constructor(){ this._src=''; this.playbackRate=1; this.onended=null; this.onerror=null; this.released=false; window.__audioInstances.push(this); }
       set src(v){ this._src = v; }
       get src(){ return this._src; }
       play(){ return Promise.resolve(); }
       pause(){}
+      removeAttribute(){ this._src = ''; this.released = true; }
+      load(){}
     }
     window.Audio = FakeAudio;
   });
@@ -59,6 +61,27 @@ test.describe('TTS playback robustness', () => {
 
     await expect(card1.locator('.speak')).not.toHaveClass(/playing/);
     await expect(card2.locator('.speak')).toHaveClass(/playing/);
+  });
+
+  test('an Audio element\'s resources are released (src cleared) once it is done, on both natural completion and interruption', async ({ page }) => {
+    // Reported: audio during 聞き流し (auto-loop) in Chrome sometimes speeds up or stalls partway
+    // through a long session. Every phrase creates a fresh Audio element via new Audio(), and
+    // Chrome is known to accumulate decoder resources if those elements are never explicitly
+    // detached (relying on GC alone isn't prompt enough for media resources). Every path that's
+    // done with an Audio element must now release it.
+    await installFakeAudio(page);
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.locator('.ticket .speak').first().click();
+    await expect.poll(() => page.evaluate(() => window.__audioInstances.length)).toBeGreaterThan(0);
+    await page.evaluate(() => window.__audioInstances[0].onended());
+    await expect.poll(() => page.evaluate(() => window.__audioInstances[0].released)).toBe(true);
+
+    await page.locator('.ticket .speak').nth(1).click(); // interrupts nothing (previous already ended), but starts a new one
+    await expect.poll(() => page.evaluate(() => window.__audioInstances.length)).toBeGreaterThan(1);
+    await page.locator('.ticket .speak').nth(2).click(); // interrupts instance[1] mid-playback
+    await expect.poll(() => page.evaluate(() => window.__audioInstances[1].released)).toBe(true);
   });
 
   test('a TTS chunk failing partway through a long phrase only re-sends the unplayed remainder to the fallback, not the whole phrase', async ({ page }) => {
@@ -112,6 +135,8 @@ test.describe('TTS playback robustness', () => {
           get src(){ return this._src; }
           play(){ return Promise.resolve(); }
           pause(){}
+          removeAttribute(){ this._src = ''; }
+          load(){}
         }
         window.Audio = FakeAudio;
       });

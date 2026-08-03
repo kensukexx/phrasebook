@@ -1309,6 +1309,7 @@ function playGoogleTTS(text, ttsLang, rateVal){
     const fail = ()=>{
       const err = new Error("google tts playback failed");
       err.remainingText = chunks.slice(Math.max(idx - 1, 0)).join(" ");
+      releaseAudioResources(audio);
       reject(err);
     };
     const loadChunk = ()=>{
@@ -1334,7 +1335,7 @@ function playGoogleTTS(text, ttsLang, rateVal){
       }
     };
     const playNext = ()=>{
-      if(idx >= chunks.length){ resolve(); return; }
+      if(idx >= chunks.length){ releaseAudioResources(audio); resolve(); return; }
       idx++;
       retried = false;
       loadChunk();
@@ -1343,6 +1344,14 @@ function playGoogleTTS(text, ttsLang, rateVal){
     audio.onerror = onChunkError;
     playNext();
   });
+}
+
+// 再生し終えたAudio要素のデコーダー/ネットワークリソースを明示的に解放する。
+// speakRawは毎回new Audio()するため、聞き流し再生で何十件も連続再生すると、
+// 解放しないままだとChromeで蓄積して再生が不安定になることがある（速度が乱れる・途中で止まる等）。
+function releaseAudioResources(audio){
+  audio.removeAttribute("src");
+  audio.load();
 }
 
 // GeminiのTTSは生PCM(16bit/24kHz/モノラル)をbase64で返すのでWAVヘッダーを自分で付ける
@@ -1401,9 +1410,11 @@ async function playGeminiTTS(text, rateVal){
     } catch(e){
       // ここまでに再生できていない残り（このチャンク以降）だけをフォールバック側に渡す
       e.remainingText = chunks.slice(i).join(" ");
+      releaseAudioResources(audio);
       throw e;
     }
   }
+  releaseAudioResources(audio);
 }
 
 function stopAllAudio(){
@@ -1412,6 +1423,7 @@ function stopAllAudio(){
     currentTTSAudio.onended = null;
     currentTTSAudio.onerror = null;
     currentTTSAudio.pause();
+    releaseAudioResources(currentTTSAudio);
     currentTTSAudio = null;
   }
   // 中断された再生はfinish()を経由しないため、ここで明示的にボタンの「再生中」表示を消す
