@@ -129,6 +129,55 @@ test.describe('settings', () => {
 
     expect(await page.evaluate(() => window.__audioInstances[0].playbackRate)).toBe(1.8);
   });
+
+  test('the filterbar rate-quick button cycles through presets and stays in sync with the settings slider', async ({ page }) => {
+    // Requested: adjusting speed required opening 設定, which was awkward mid-聞き流し. This adds a
+    // one-tap speed control right in the filterbar next to 聞き流し, so no navigation is needed.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await expect(page.locator('#rateQuickBtn')).toHaveText('1.0x');
+    await page.click('#rateQuickBtn');
+    await expect(page.locator('#rateQuickBtn')).toHaveText('1.25x');
+    await page.click('#rateQuickBtn');
+    await expect(page.locator('#rateQuickBtn')).toHaveText('1.5x');
+
+    // stays in sync with the settings overlay's slider
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await page.waitForSelector('#settingsOverlay.open');
+    expect(await page.locator('#rateSlider').inputValue()).toBe('1.5');
+    await page.fill('#rateSlider', '0.75');
+    await page.dispatchEvent('#rateSlider', 'input');
+    await page.click('#closeSettings');
+    await expect(page.locator('#rateQuickBtn')).toHaveText('0.75x');
+
+    // wraps back around to the first preset after the last
+    for (let i = 0; i < 6; i++) await page.click('#rateQuickBtn');
+    await expect(page.locator('#rateQuickBtn')).toHaveText('0.75x');
+
+    // persists across reload
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+    await expect(page.locator('#rateQuickBtn')).toHaveText('0.75x');
+  });
+
+  test('the rate-quick button changes the currently playing audio live without interrupting 聞き流し', async ({ page }) => {
+    await installFakeAudio(page);
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#listenBtn');
+    await expect(page.locator('#listenBtn')).toHaveText('■');
+
+    await page.click('#rateQuickBtn');
+    await expect.poll(() => page.evaluate(() => {
+      const last = window.__audioInstances[window.__audioInstances.length - 1];
+      return last && last.playbackRate;
+    })).toBe(1.25);
+
+    await expect(page.locator('#listenBtn')).toHaveText('■'); // still playing, not interrupted
+  });
 });
 
 async function installFakeAudio(page) {

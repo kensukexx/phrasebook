@@ -238,6 +238,7 @@
   .currency-result{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:26px; color:var(--red); text-align:center; margin:10px 0; }
   .filterbar{ display:flex; align-items:center; gap:8px; padding:10px 16px 0; flex-wrap:wrap; }
   .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:12px; border:none; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(47,53,66,0.08); }
+  .rate-quick{ flex:0 0 auto; width:auto; padding:0 10px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:12.5px; }
   .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
   .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .fs-slider-row{ display:flex; align-items:center; gap:10px; }
@@ -376,7 +377,7 @@
 
     <div class="manual-section">
       <h3>📇 フレーズ一覧</h3>
-      <p>カードをタップすると発音します。左右にスワイプするとカテゴリを切替、カード右下の⤢で相手に画面を見せる全画面表示になります。カテゴリタブ・カード本体はどちらも長押ししてドラッグすると好きな順番に並び替えられます（カテゴリタブの「すべて」は常に先頭固定）。検索欄の上のスイッチで「通常の単語」⇄「会話パターン」のカテゴリ表示を切り替えられます。</p>
+      <p>カードをタップすると発音します。左右にスワイプするとカテゴリを切替、カード右下の⤢で相手に画面を見せる全画面表示になります。カテゴリタブ・カード本体はどちらも長押ししてドラッグすると好きな順番に並び替えられます（カテゴリタブの「すべて」は常に先頭固定）。検索欄の上のスイッチで「通常の単語」⇄「会話パターン」のカテゴリ表示を切り替えられます。▶（聞き流し再生）の横にある速度ボタンをタップすると、設定画面を開かずに現地語スピードをその場で切り替えられます。</p>
     </div>
 
     <div class="manual-section">
@@ -464,6 +465,7 @@
 
 <div class="filterbar">
   <button class="filter-icon" id="listenBtn" aria-label="聞き流し再生" title="聞き流し再生" style="width:44px;">▶</button>
+  <button class="filter-icon rate-quick" id="rateQuickBtn" aria-label="現地語スピード" title="タップで速度を切り替え">1.0x</button>
   <button class="filter-icon" id="pinnedToggle" aria-label="ピン留めのみ" title="📌のみ">📌</button>
   <button class="filter-icon" id="unlearnedToggle" aria-label="未習得のみ" title="未習得のみ">✓</button>
   <span class="progress-label" id="progressLabel" style="margin-left:auto;"></span>
@@ -2310,14 +2312,26 @@ document.getElementById("presentPlayback").addEventListener("click", ()=>{
 document.getElementById("closeSettings").addEventListener("click", ()=> document.getElementById("settingsOverlay").classList.remove("open"));
 document.getElementById("langPickerBtn").addEventListener("click", ()=>{ renderLangPickList(); document.getElementById("langPickerOverlay").classList.add("open"); });
 document.getElementById("closeLangPicker").addEventListener("click", ()=> document.getElementById("langPickerOverlay").classList.remove("open"));
-document.getElementById("rateSlider").addEventListener("input", (e)=>{
-  rate = parseFloat(e.target.value);
-  document.getElementById("rateLabel").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
+// 設定画面のスライダーと、フィルターバーの簡易速度ボタン(rateQuickBtn)の両方から
+// 呼ばれる共通処理。聞き流し再生中でも設定画面を開かずその場で速度を変えられるようにするため。
+function setForeignRate(newRate){
+  rate = newRate;
+  const label = rate.toFixed(2).replace(/0$/,'') + "x";
+  document.getElementById("rateLabel").textContent = label;
+  document.getElementById("rateSlider").value = rate;
+  document.getElementById("rateQuickBtn").textContent = label;
   // 再生中の現地語音声にもその場で反映する（端末TTSはWeb Speech APIの仕様上、話し始めた後の
   // 速度変更が効かないため、Google/Gemini経由の<audio>再生の時だけ即座に反映できる）
   if(currentTTSRateKind === "foreign" && currentTTSAudio) currentTTSAudio.playbackRate = rate;
-});
+}
+document.getElementById("rateSlider").addEventListener("input", (e)=> setForeignRate(parseFloat(e.target.value)));
 document.getElementById("rateSlider").addEventListener("change", saveSettings);
+const RATE_QUICK_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+document.getElementById("rateQuickBtn").addEventListener("click", ()=>{
+  const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
+  setForeignRate(next);
+  saveSettings();
+});
 document.getElementById("jaRateSlider").addEventListener("input", (e)=>{
   jaRate = parseFloat(e.target.value);
   document.getElementById("jaRateLabel").textContent = jaRate.toFixed(2).replace(/0$/,'') + "x";
@@ -2878,6 +2892,7 @@ document.getElementById("submitAdd").onclick = ()=>{
   await loadState();
   document.getElementById("rateSlider").value = rate;
   document.getElementById("rateLabel").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
+  document.getElementById("rateQuickBtn").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
   document.getElementById("jaRateSlider").value = jaRate;
   document.getElementById("jaRateLabel").textContent = jaRate.toFixed(2).replace(/0$/,'') + "x";
   document.getElementById("fsSlider").value = fsScale;
