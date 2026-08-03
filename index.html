@@ -19,10 +19,12 @@
     --fs-scale: 1;
   }
   *{box-sizing:border-box;}
-  body{ margin:0; background: var(--paper);
+  html{ background:#EAE3D8; }
+  body{ margin:0 auto; max-width:480px; background: var(--paper);
     background-image: radial-gradient(rgba(255,107,107,0.07) 1.5px, transparent 1.5px);
     background-size: 22px 22px;
-    color:var(--ink); font-family:"Zen Maru Gothic","Noto Sans JP","Noto Sans KR","Noto Sans SC", sans-serif; min-height:100vh; padding-bottom:70px; }
+    color:var(--ink); font-family:"Zen Maru Gothic","Noto Sans JP","Noto Sans KR","Noto Sans SC", sans-serif; min-height:100vh; padding-bottom:70px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.08); }
   header{ position:relative; background: linear-gradient(135deg, #FF6B6B 0%, #FF9F43 70%, #FEC84D 100%); color:#fff; padding:22px 20px 26px; overflow:hidden; }
   header::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:7px;
     background: linear-gradient(90deg, #FF6B6B, #F7B731, #20BF6B, #0FB9B1, #4D96FF, #A55EEA, #FF6FA5); }
@@ -260,7 +262,7 @@
 
 <div class="overlay" id="toolsOverlay">
   <div class="panel">
-    <h2>ツール <button id="closeTools">✕</button></h2>
+    <h2>ツール <button id="closeTools" aria-label="閉じる">✕</button></h2>
     <button class="tool-item" id="menuSync"><span>☁️</span><span id="syncMenuLabel">同期（未ログイン）</span></button>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuPractice"><span>🎓</span>練習ノート</button>
@@ -272,7 +274,7 @@
 
 <div class="overlay" id="syncOverlay">
   <div class="panel">
-    <h2>端末間の同期 <button id="closeSync">✕</button></h2>
+    <h2>端末間の同期 <button id="closeSync" aria-label="閉じる">✕</button></h2>
     <div id="syncSignedOut">
       <p class="hint" style="margin:0 0 14px;">Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノート・カテゴリと言語の並び順を他の端末と同期できます。</p>
       <button class="submitbtn" id="syncSignInBtn" style="background:var(--blue);">Googleでログイン</button>
@@ -290,7 +292,7 @@
 
 <div class="overlay" id="speakOverlay">
   <div class="panel">
-    <h2>話す <button id="closeSpeak">✕</button></h2>
+    <h2>話す <button id="closeSpeak" aria-label="閉じる">✕</button></h2>
     <div class="field">
       <label>会話する言語</label>
       <select id="speakLangSel" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink);"></select>
@@ -330,7 +332,7 @@
 <div class="overlay" id="practiceOverlay">
   <div class="panel">
     <div id="practiceListView">
-      <h2>練習ノート <button id="closePractice">✕</button></h2>
+      <h2>練習ノート <button id="closePractice" aria-label="閉じる">✕</button></h2>
       <div class="field">
         <label>新しく練習ノートを作る</label>
         <select id="practiceGenLang" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:8px;"></select>
@@ -357,7 +359,7 @@
 
 <div class="overlay" id="currencyOverlay">
   <div class="panel">
-    <h2>通貨換算 <button id="closeCurrency">✕</button></h2>
+    <h2>通貨換算 <button id="closeCurrency" aria-label="閉じる">✕</button></h2>
     <div class="currency-row">
       <input type="number" id="currAmount" value="1000" inputmode="decimal">
       <select id="currFrom"></select>
@@ -373,7 +375,7 @@
 
 <div class="overlay" id="helpOverlay">
   <div class="panel">
-    <h2>使い方 <button id="closeHelp">✕</button></h2>
+    <h2>使い方 <button id="closeHelp" aria-label="閉じる">✕</button></h2>
 
     <div class="manual-section">
       <h3>📇 フレーズ一覧</h3>
@@ -457,7 +459,7 @@
 
 <div class="overlay" id="langPickerOverlay">
   <div class="panel">
-    <h2>言語を選ぶ <button id="closeLangPicker">✕</button></h2>
+    <h2>言語を選ぶ <button id="closeLangPicker" aria-label="閉じる">✕</button></h2>
     <p class="hint">タップで選択。ハンドル「⠿」を長押ししたままドラッグすると並び替えできます。</p>
     <div id="langPickList"></div>
   </div>
@@ -489,7 +491,7 @@
 
 <div class="overlay" id="settingsOverlay">
   <div class="panel">
-    <h2>設定 <button id="closeSettings">✕</button></h2>
+    <h2>設定 <button id="closeSettings" aria-label="閉じる">✕</button></h2>
     <div class="field">
       <label>言語スピード <span class="rate-value" id="rateLabel">1.0x</span></label>
       <input type="range" id="rateSlider" min="0.5" max="2" step="0.05" value="1">
@@ -536,7 +538,7 @@
 
 <div class="overlay" id="addOverlay">
   <div class="panel">
-    <h2><span id="addTitle">フレーズを追加</span> <button id="closeAdd">✕</button></h2>
+    <h2><span id="addTitle">フレーズを追加</span> <button id="closeAdd" aria-label="閉じる">✕</button></h2>
     <div class="field"><label>日本語（必須）</label><input type="text" id="addJa" placeholder="例：乾杯"></div>
     <div class="field"><label>カテゴリ</label><select id="addCat"></select></div>
     <button class="submitbtn" id="autoTranslate" type="button" style="background:var(--blue); margin:0 0 12px;">🌐 空欄の言語を自動翻訳</button>
