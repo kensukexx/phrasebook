@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const LANGS = ['en', 'ko', 'de', 'ro', 'es', 'fr', 'vi', 'zh', 'pt'];
+const LANGS = ['en', 'ko', 'de', 'ro', 'es', 'fr', 'vi', 'zh', 'pt', 'ru'];
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 function extractArray(varName) {
@@ -40,14 +40,14 @@ const noJa = BUILTIN.filter(d => !d.ja || !d.ja.trim());
 check(noJa.length === 0, `${noJa.length} entries missing a ja field`);
 if (noJa.length === 0) ok('every entry has a non-empty ja field');
 
-// the regression this test exists for: every entry must have all 9 languages
+// the regression this test exists for: every entry must have all languages
 const missingLang = BUILTIN.filter(d => LANGS.some(l => !d[l]));
 check(
   missingLang.length === 0,
-  `${missingLang.length} entries missing at least one of the 9 languages:\n` +
+  `${missingLang.length} entries missing at least one of the ${LANGS.length} languages:\n` +
     missingLang.map(d => `  - ${d.ja}: missing ${LANGS.filter(l => !d[l]).join(', ')}`).join('\n')
 );
-if (missingLang.length === 0) ok('every entry has all 9 languages');
+if (missingLang.length === 0) ok(`every entry has all ${LANGS.length} languages`);
 
 // each [phrase, kana] pair must be a 2-element array of non-empty strings
 let badPairs = [];
@@ -74,7 +74,7 @@ check(
   `${badGloss.length} entries missing a gloss for at least one language:\n` +
     badGloss.map(d => `  - ${d.ja}: missing ${d.gloss ? LANGS.filter(l => !d.gloss[l] || !d.gloss[l].trim()).join(', ') : 'gloss entirely'}`).join('\n')
 );
-if (badGloss.length === 0) ok(`every entry (${BUILTIN.length}) has a gloss for all 9 languages`);
+if (badGloss.length === 0) ok(`every entry (${BUILTIN.length}) has a gloss for all ${LANGS.length} languages`);
 
 console.log('');
 if (failures > 0) {

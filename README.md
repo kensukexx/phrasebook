@@ -1,6 +1,6 @@
 # ツウジル — 言語別あいさつ帳
 
-日本語 → 9言語(英・韓・独・ルーマニア・西・仏・越・中・葡)対応の旅行フレーズブックです。
+日本語 → 10言語(英・韓・独・ルーマニア・西・仏・越・中・葡・露)対応の旅行フレーズブックです。
 アプリ本体は単一HTMLファイル(`index.html`)で動作し、サーバーやビルドは不要です
 (オフライン起動用に `manifest.json` / `sw.js` / アイコン画像を同梱しています)。
 
@@ -56,7 +56,7 @@ npm run test:data     # データ整合性チェックのみ（ブラウザ不�
 npm run test:ui       # Playwrightのインタラクティブ UI で実行
 ```
 
-`node tests/data-integrity.test.js` は `index.html` 内の全フレーズが9言語分そろっているか等を検証します
+`node tests/data-integrity.test.js` は `index.html` 内の全フレーズが10言語分そろっているか等を検証します
 （数字・曜日カードが英語だけ入っていて他言語で消えていた不具合の再発防止）。
 GitHub Actions (`.github/workflows/test.yml`) で push・PR時に自動実行されます。
 

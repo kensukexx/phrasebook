@@ -248,7 +248,7 @@ test.describe('TTS playback robustness', () => {
     expect(alertMsg).toBeNull();
   });
 
-  test('playbackRate stays correct through real audio decoding, for every one of the 9 languages', async ({ page, browserName }) => {
+  test('playbackRate stays correct through real audio decoding, for every one of the 10 languages', async ({ page, browserName }) => {
     // Regression coverage for a reported "audio suddenly glitches / speed suddenly changes in
     // Chrome" - uses a real (silent but genuinely decodable) WAV instead of a fake byte buffer, so
     // the browser goes through its actual load/decode/play lifecycle. Confirms the fix that
@@ -285,7 +285,7 @@ test.describe('TTS playback robustness', () => {
     await page.dispatchEvent('#rateSlider', 'change');
     await page.click('#closeSettings');
 
-    const langLabels = ['英語', '韓国語', 'ドイツ語', 'ルーマニア語', 'スペイン語', 'フランス語', 'ベトナム語', '中国語', 'ポルトガル語'];
+    const langLabels = ['英語', '韓国語', 'ドイツ語', 'ルーマニア語', 'スペイン語', 'フランス語', 'ベトナム語', '中国語', 'ポルトガル語', 'ロシア語'];
     for (const label of langLabels) {
       await page.click('#langPickerBtn');
       await page.waitForSelector('#langPickerOverlay.open');

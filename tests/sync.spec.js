@@ -100,7 +100,7 @@ test.describe('syncable state (catOrder / langOrder / phraseOrder included)', ()
     expect(Array.isArray(state.catOrder)).toBe(true);
     expect(state.catOrder[0]).toBe('すべて');
     expect(Array.isArray(state.langOrder)).toBe(true);
-    expect(state.langOrder.length).toBe(9);
+    expect(state.langOrder.length).toBe(10);
     expect(Array.isArray(state.phraseOrder)).toBe(true);
     expect(state.phraseOrder.length).toBe(308); // built-in phrase count
   });
