@@ -76,7 +76,8 @@ test.describe('settings', () => {
     expect(parseFloat(await page.locator('#rateSlider').inputValue())).toBeCloseTo(value, 1);
   });
 
-  test('the rate setting actually changes audio.playbackRate at playback time', async ({ page }) => {
+  test('the rate setting actually changes audio.playbackRate at playback time', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
     // Regression test: audio.playbackRate was set once on the <audio> element right after creation,
     // but assigning .src afterward resets playbackRate back to 1 in Chromium - so the slider updated
     // the label but never actually sped up (or slowed down) playback. Fixed by re-applying

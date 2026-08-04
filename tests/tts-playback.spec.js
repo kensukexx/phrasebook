@@ -26,13 +26,15 @@ function makeSilentWavBuffer(durationSec = 0.3, sampleRate = 8000) {
 // These tests drive playback with a fully scripted fake Audio element instead of mocked
 // network responses, because the bugs they guard against are about *when* onended/onerror
 // fire relative to other user actions - timing that's hard to control with real (even mocked)
-// audio decoding.
+// audio decoding. This also sidesteps translate_tts being cross-origin/no-CORS, which makes it
+// unreachable to page-level fetch() mocking approaches.
 async function installFakeAudio(page) {
   await page.addInitScript(() => {
     window.__audioInstances = [];
+    window.__srcLog = [];
     class FakeAudio {
       constructor(){ this._src=''; this.playbackRate=1; this.onended=null; this.onerror=null; this.released=false; window.__audioInstances.push(this); }
-      set src(v){ this._src = v; }
+      set src(v){ this._src = v; window.__srcLog.push(v); }
       get src(){ return this._src; }
       play(){ return Promise.resolve(); }
       pause(){}
@@ -107,11 +109,12 @@ test.describe('TTS playback robustness', () => {
     await expect.poll(() => page.evaluate(() => window.__audioInstances.length)).toBeGreaterThanOrEqual(1);
     await page.evaluate(() => window.__audioInstances[0].onended());
 
-    // now simulate the second chunk failing twice in a row (the single retry also fails) - a
-    // network hiccup that clears up on the first retry should NOT reach the fallback at all,
-    // see the dedicated retry test below, so this needs a second failure to trigger it here.
+    // now simulate the second chunk failing on both the primary and alternate host (the same
+    // reused Audio instance, since chunks stay on one Audio object) - a transient hiccup on one
+    // host recovering via the other should NOT reach the fallback at all (see the dedicated
+    // host-fallback test below), so this needs both to fail to trigger it here.
     await page.evaluate(() => window.__audioInstances[0].onerror());
-    await page.waitForTimeout(450); // past the 400ms retry delay
+    await page.waitForTimeout(450); // past the 400ms host-switch delay
     await page.evaluate(() => window.__audioInstances[0].onerror());
 
     await expect.poll(() => page.evaluate(() => window.__deviceTTSCalls.length)).toBeGreaterThan(0);
@@ -120,30 +123,16 @@ test.describe('TTS playback robustness', () => {
     expect(deviceCalls[0]).not.toBe(longText);
   });
 
-  test.describe('retrying a failed Google TTS chunk once before falling back', () => {
+  test.describe('falling back to an alternate host before giving up on Google entirely', () => {
     // Requested after a report of the voice/speed suddenly changing mid-聞き流し (auto-loop):
-    // Google's unofficial endpoint occasionally has a transient hiccup, and immediately switching
-    // to a different voice (Gemini/device) for that one phrase was jarring. Retrying the same
-    // chunk once after a short delay lets most transient failures recover silently.
-    async function installFakeAudioWithSrcLog(page) {
-      await page.addInitScript(() => {
-        window.__audioInstances = [];
-        window.__srcLog = [];
-        class FakeAudio {
-          constructor(){ this._src=''; this.playbackRate=1; this.onended=null; this.onerror=null; window.__audioInstances.push(this); }
-          set src(v){ this._src = v; window.__srcLog.push(v); }
-          get src(){ return this._src; }
-          play(){ return Promise.resolve(); }
-          pause(){}
-          removeAttribute(){ this._src = ''; }
-          load(){}
-        }
-        window.Audio = FakeAudio;
-      });
-    }
+    // Google's unofficial translate_tts endpoint occasionally has a transient hiccup on one host,
+    // and immediately switching to a different voice (Gemini/device) for that one phrase was
+    // jarring. Before falling back, a second attempt is made against a different host/param
+    // combination (translate.googleapis.com + client=gtx) - a different domain also recovers from
+    // the case where a browser extension (ad blocker etc.) blocks one specific host outright.
 
-    test('a single transient failure retries the same chunk and succeeds without ever falling back', async ({ page }) => {
-      await installFakeAudioWithSrcLog(page);
+    test('a single-host failure retries against the alternate host and succeeds without ever falling back', async ({ page }) => {
+      await installFakeAudio(page);
       await page.goto('/index.html');
       await page.waitForSelector('#deck .ticket');
       await page.evaluate(() => {
@@ -153,20 +142,22 @@ test.describe('TTS playback robustness', () => {
 
       await page.evaluate(() => { window.speakRaw('こんにちは', 'ja-JP', null, () => {}, 'ja'); });
       await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(1);
+      expect(await page.evaluate(() => window.__srcLog[0])).toContain('translate.google.com');
 
-      await page.evaluate(() => window.__audioInstances[0].onerror()); // transient failure
-      await page.waitForTimeout(200); // still well within the 400ms retry delay
-      expect(await page.evaluate(() => window.__srcLog.length)).toBe(1); // no retry request yet - not premature
+      await page.evaluate(() => window.__audioInstances[0].onerror()); // primary host fails
+      await page.waitForTimeout(200); // still well within the 400ms host-switch delay
+      expect(await page.evaluate(() => window.__srcLog.length)).toBe(1); // no retry yet - not premature
 
-      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2); // retry fires after the delay
-      await page.evaluate(() => window.__audioInstances[0].onended()); // the retry succeeds
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2); // switches host after the delay
+      expect(await page.evaluate(() => window.__srcLog[1])).toContain('translate.googleapis.com');
+      await page.evaluate(() => window.__audioInstances[0].onended()); // the alternate host succeeds
 
       await page.waitForTimeout(100);
       expect(await page.evaluate(() => window.__deviceCalls.length)).toBe(0); // fallback never engaged
     });
 
-    test('two failures in a row for the same chunk still falls back (retry is not infinite)', async ({ page }) => {
-      await installFakeAudioWithSrcLog(page);
+    test('failures on both hosts still falls back (not infinite)', async ({ page }) => {
+      await installFakeAudio(page);
       await page.goto('/index.html');
       await page.waitForSelector('#deck .ticket');
       await page.evaluate(() => {
@@ -177,9 +168,9 @@ test.describe('TTS playback robustness', () => {
       await page.evaluate(() => { window.speakRaw('こんにちは', 'ja-JP', null, () => {}, 'ja'); });
       await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(1);
 
-      await page.evaluate(() => window.__audioInstances[0].onerror()); // 1st failure
-      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2); // retry fires
-      await page.evaluate(() => window.__audioInstances[0].onerror()); // retry also fails
+      await page.evaluate(() => window.__audioInstances[0].onerror()); // primary host fails
+      await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2); // switches to alternate host
+      await page.evaluate(() => window.__audioInstances[0].onerror()); // alternate host also fails
 
       await expect.poll(() => page.evaluate(() => window.__deviceCalls.length)).toBeGreaterThan(0);
       expect(await page.evaluate(() => window.__deviceCalls[0])).toBe('こんにちは');
@@ -191,9 +182,9 @@ test.describe('TTS playback robustness', () => {
       // (a real network failure mode, distinct from an outright error), neither onended nor onerror
       // ever fires, so speakRaw's promise chain hangs forever and nothing calls finish()/goNext() -
       // playback (and 聞き流し) just stalls silently with no way to recover. Uses Playwright's clock
-      // mock to fast-forward past the real 8s hang timeout without an 16s+ real wait.
+      // mock to fast-forward past the real 8s-per-host timeouts without a 16s+ real wait.
       await page.clock.install();
-      await installFakeAudioWithSrcLog(page);
+      await installFakeAudio(page);
       await page.goto('/index.html');
       await page.waitForSelector('#deck .ticket');
       await page.evaluate(() => {
@@ -211,7 +202,7 @@ test.describe('TTS playback robustness', () => {
       await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(1);
 
       // never fire onended/onerror at all - simulate a hung connection. Fast-forward past the
-      // hang timeout (fires the retry) and then past the retry's own hang timeout too.
+      // per-host hang timeout (switches to the alternate host) and then past its own hang timeout too.
       await page.clock.fastForward(8100);
       await expect.poll(() => page.evaluate(() => window.__srcLog.length)).toBe(2);
       await page.clock.fastForward(8100);
@@ -222,83 +213,129 @@ test.describe('TTS playback robustness', () => {
     });
   });
 
-  test('a manual tap tells the user when no TTS engine worked at all (Google fails, no device synth); background auto-play stays silent about it', async ({ page, browserName }) => {
-    // On mobile, occasionally *everything* fails (network hiccup on Google's endpoint, no Gemini
-    // key set, and the browser has no speechSynthesis support at all e.g. a restrictive in-app
-    // browser) and previously the app just did nothing with zero feedback - indistinguishable from
-    // a broken tap. Recognition failures already alert the user elsewhere in the app; playback
-    // failures should too, but only for a deliberate tap (not every step of a 聞き流し loop).
-    test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
-    await page.route('**/translate_tts**', route => route.fulfill({ status: 500, body: 'fail' }));
-    await page.addInitScript(() => {
-      Object.defineProperty(window, 'speechSynthesis', { value: undefined, configurable: true });
+  // The service worker now intercepts and caches translate_tts requests itself (see below), and its
+  // own internal fetch() calls are NOT visible to page.route() - only requests the page makes
+  // directly are. These two tests need full, reliable control over what the "network" returns, so
+  // they disable the service worker entirely and fall back to a plain, uncached request that
+  // page.route() can see and control, exactly like the rest of the app's tests do.
+  test.describe('network-mocked cases (service worker disabled so page.route reliably applies)', () => {
+    test.use({ serviceWorkers: 'block' });
+
+    test('a manual tap tells the user when no TTS engine worked at all (Google fails, no device synth); background auto-play stays silent about it', async ({ page, browserName }) => {
+      // On mobile, occasionally *everything* fails (network hiccup on Google's endpoint, no Gemini
+      // key set, and the browser has no speechSynthesis support at all e.g. a restrictive in-app
+      // browser) and previously the app just did nothing with zero feedback - indistinguishable from
+      // a broken tap. Recognition failures already alert the user elsewhere in the app; playback
+      // failures should too, but only for a deliberate tap (not every step of a 聞き流し loop).
+      test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
+      await page.route('**/translate_tts**', route => route.fulfill({ status: 500, body: 'fail' }));
+      await page.addInitScript(() => {
+        Object.defineProperty(window, 'speechSynthesis', { value: undefined, configurable: true });
+      });
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+
+      let alertMsg = null;
+      page.on('dialog', async (dialog) => { alertMsg = dialog.message(); await dialog.accept(); });
+
+      await page.locator('.ticket').first().locator('.speak').click();
+      await expect.poll(() => alertMsg, { timeout: 15000 }).toContain('音声合成');
+
+      alertMsg = null;
+      await page.evaluate(() => window.speakRaw('テスト', 'ja-JP', null, () => {}, 'ja'));
+      await page.waitForTimeout(300);
+      expect(alertMsg).toBeNull();
     });
-    await page.goto('/index.html');
-    await page.waitForSelector('#deck .ticket');
 
-    let alertMsg = null;
-    page.on('dialog', async (dialog) => { alertMsg = dialog.message(); await dialog.accept(); });
+    test('playbackRate stays correct through real audio decoding, for every one of the 10 languages', async ({ page, browserName }) => {
+      // Regression coverage for a reported "audio suddenly glitches / speed suddenly changes in
+      // Chrome" - uses a real (silent but genuinely decodable) WAV instead of a fake byte buffer, so
+      // the browser goes through its actual load/decode/play lifecycle. Confirms the fix that
+      // reapplies playbackRate after every .src assignment holds for real decoding, not just the
+      // instant a fake buffer resolves, and holds identically across all 10 target languages.
+      test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
+      const wavBuf = makeSilentWavBuffer();
+      await page.route('**/translate_tts**', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wavBuf }));
+      await page.addInitScript(() => {
+        window.__log = [];
+        const NativeAudio = window.Audio;
+        class LoggingAudio extends NativeAudio {
+          constructor(...args){
+            super(...args);
+            const rec = { rates: [], sawError: false };
+            window.__log.push(rec);
+            ['loadedmetadata', 'canplay', 'playing', 'ended'].forEach(evt => {
+              this.addEventListener(evt, () => rec.rates.push(this.playbackRate));
+            });
+            this.addEventListener('error', () => { rec.sawError = true; });
+          }
+        }
+        window.Audio = LoggingAudio;
+      });
 
-    await page.locator('.ticket').first().locator('.speak').click();
-    await expect.poll(() => alertMsg).toContain('音声合成');
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
 
-    alertMsg = null;
-    await page.evaluate(() => window.speakRaw('テスト', 'ja-JP', null, () => {}, 'ja'));
-    await page.waitForTimeout(300);
-    expect(alertMsg).toBeNull();
+      await page.click('#toolsBtn');
+      await page.click('#menuSettings');
+      await page.waitForSelector('#settingsOverlay.open');
+      await page.fill('#rateSlider', '1.5');
+      await page.dispatchEvent('#rateSlider', 'input');
+      await page.dispatchEvent('#rateSlider', 'change');
+      await page.click('#closeSettings');
+
+      const langLabels = ['英語', '韓国語', 'ドイツ語', 'ルーマニア語', 'スペイン語', 'フランス語', 'ベトナム語', '中国語', 'ポルトガル語', 'ロシア語'];
+      for (const label of langLabels) {
+        await page.click('#langPickerBtn');
+        await page.waitForSelector('#langPickerOverlay.open');
+        await page.click(`.lang-row:has-text("${label}")`);
+        await page.waitForTimeout(100);
+
+        await page.evaluate(() => { window.__log = []; });
+        await page.locator('.ticket .speak').first().click();
+        await expect.poll(() => page.evaluate(() => window.__log[0] && window.__log[0].rates.includes(1) === false && window.__log[0].rates.length > 0)).toBe(true);
+
+        const log = await page.evaluate(() => window.__log[0]);
+        expect(log.sawError, `${label}: unexpected decode error`).toBe(false);
+        expect(new Set(log.rates), `${label}: rate should stay 1.5 throughout, never reset to 1`).toEqual(new Set([1.5]));
+      }
+    });
   });
 
-  test('playbackRate stays correct through real audio decoding, for every one of the 10 languages', async ({ page, browserName }) => {
-    // Regression coverage for a reported "audio suddenly glitches / speed suddenly changes in
-    // Chrome" - uses a real (silent but genuinely decodable) WAV instead of a fake byte buffer, so
-    // the browser goes through its actual load/decode/play lifecycle. Confirms the fix that
-    // reapplies playbackRate after every .src assignment holds for real decoding, not just the
-    // instant a fake buffer resolves, and holds identically across all 9 target languages.
+  test('a successful Google TTS playback is cached by the service worker, and replaying the same phrase is served instantly without a real network round-trip', async ({ page, browserName }) => {
+    // Added alongside the alternate-host fallback: repeated phrases (聞き流しのループ・繰り返し
+    // 再生 in particular) should play instantly on repeat without depending on Google's endpoint
+    // staying up for every single replay. Caching happens in sw.js (not page-level fetch()) because
+    // translate_tts has no Access-Control-Allow-Origin header - a page-level fetch() would either be
+    // blocked by CORS outright, or (in no-cors mode) return an opaque response whose body can't be
+    // read back into a usable Blob from page JS. The service worker can hand an opaque response
+    // straight back to <audio src> without ever reading its body, which is why the caching has to
+    // live there instead - and also why this test can't mock the response via page.route() (the
+    // service worker's own fetch() isn't visible to it): it exercises the real endpoint.
     test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
-    const wavBuf = makeSilentWavBuffer();
-    await page.route('**/translate_tts**', route => route.fulfill({ status: 200, contentType: 'audio/wav', body: wavBuf }));
-    await page.addInitScript(() => {
-      window.__log = [];
-      const NativeAudio = window.Audio;
-      class LoggingAudio extends NativeAudio {
-        constructor(...args){
-          super(...args);
-          const rec = { rates: [], sawError: false };
-          window.__log.push(rec);
-          ['loadedmetadata', 'canplay', 'playing', 'ended'].forEach(evt => {
-            this.addEventListener(evt, () => rec.rates.push(this.playbackRate));
-          });
-          this.addEventListener('error', () => { rec.sawError = true; });
-        }
-      }
-      window.Audio = LoggingAudio;
-    });
-
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
+    await page.evaluate(async () => { await navigator.serviceWorker.ready; });
 
-    await page.click('#toolsBtn');
-    await page.click('#menuSettings');
-    await page.waitForSelector('#settingsOverlay.open');
-    await page.fill('#rateSlider', '1.5');
-    await page.dispatchEvent('#rateSlider', 'input');
-    await page.dispatchEvent('#rateSlider', 'change');
-    await page.click('#closeSettings');
+    await page.evaluate(() => performance.clearResourceTimings());
+    await page.locator('.ticket .speak').first().click();
+    await page.waitForTimeout(2500); // real network round-trip + a short real audio clip playing out
 
-    const langLabels = ['英語', '韓国語', 'ドイツ語', 'ルーマニア語', 'スペイン語', 'フランス語', 'ベトナム語', '中国語', 'ポルトガル語', 'ロシア語'];
-    for (const label of langLabels) {
-      await page.click('#langPickerBtn');
-      await page.waitForSelector('#langPickerOverlay.open');
-      await page.click(`.lang-row:has-text("${label}")`);
-      await page.waitForTimeout(100);
+    await page.locator('.ticket .speak').first().click();
+    await page.waitForTimeout(1500);
 
-      await page.evaluate(() => { window.__log = []; });
-      await page.locator('.ticket .speak').first().click();
-      await expect.poll(() => page.evaluate(() => window.__log[0] && window.__log[0].rates.includes(1) === false && window.__log[0].rates.length > 0)).toBe(true);
+    const durations = await page.evaluate(() =>
+      performance.getEntriesByType('resource').filter(e => e.name.includes('translate_tts')).map(e => e.duration)
+    );
+    expect(durations.length).toBeGreaterThanOrEqual(2);
+    expect(durations[0]).toBeGreaterThan(20); // 1st: a real network fetch
+    expect(durations[1]).toBeLessThan(20); // 2nd: served from the service worker's cache, near-instant
 
-      const log = await page.evaluate(() => window.__log[0]);
-      expect(log.sawError, `${label}: unexpected decode error`).toBe(false);
-      expect(new Set(log.rates), `${label}: rate should stay 1.5 throughout, never reset to 1`).toEqual(new Set([1.5]));
-    }
+    const cachedUrls = await page.evaluate(async () => {
+      const cache = await caches.open('phrasebook-tts-audio-v1');
+      const keys = await cache.keys();
+      return keys.map(k => k.url);
+    });
+    expect(cachedUrls.some(u => u.includes('translate_tts'))).toBe(true);
   });
 });

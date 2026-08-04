@@ -5,6 +5,12 @@ const { setGeminiKey } = require('./helpers');
 // notice. When a Gemini key is configured, both fall back to Gemini instead of
 // failing outright.
 test.describe('Gemini fallback when Google endpoints fail', () => {
+  // The service worker now intercepts translate_tts itself to cache successful responses (see
+  // sw.js), and its own internal fetch() calls aren't visible to page.route() - only the page's
+  // own requests are. These tests need translate_tts to reliably fail as mocked, so the service
+  // worker is disabled here to keep page.route() in full control, same as the rest of the suite.
+  test.use({ serviceWorkers: 'block' });
+
   test('translation falls back to Gemini when Google Translate is unreachable', async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern (see other spec files)');
     await page.route('**/translate.googleapis.com/**', route => route.abort('failed'));

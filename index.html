@@ -1304,13 +1304,24 @@ function splitForTTS(text, maxLen){
   return parts;
 }
 
+// Googleの音声合成は非公式のエンドポイントのため、ホスト単体に依存すると、Google側の
+// 一時的な不調だけでなく、ブラウザの拡張機能（広告ブロッカー等）による特定ドメインの
+// ブロックにも巻き込まれやすい。ドメイン・パラメータの構成が異なる2つの候補を順番に試す。
+// （音声のキャッシュ自体はsw.js側で行う。このエンドポイントはAccess-Control-Allow-Originを
+// 返さないため、ページ側のfetch()では中身を読めず、CORSで弾かれるかopaqueな空レスポンスに
+// しかならない。<audio src>は元々no-corsの単純リクエストとして扱われるため問題なく再生できる。）
+const GOOGLE_TTS_URL_BUILDERS = [
+  (q, tl) => "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(tl) + "&client=tw-ob&q=" + encodeURIComponent(q),
+  (q, tl) => "https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(tl) + "&client=gtx&q=" + encodeURIComponent(q),
+];
+
 function playGoogleTTS(text, ttsLang, rateVal){
   return new Promise((resolve, reject)=>{
     const chunks = splitForTTS(text, 180);
     const audio = new Audio();
     currentTTSAudio = audio;
     let idx = 0;
-    let retried = false; // 今のチャンクを既に一度リトライ済みか
+    let hostIdx = 0;
     let settled = false; // onerrorと.play().catch()が同じ失敗に対して二重発火するのを防ぐ
     let hangTimer = null;
     const clearHangTimer = ()=>{ if(hangTimer){ clearTimeout(hangTimer); hangTimer = null; } };
@@ -1325,24 +1336,22 @@ function playGoogleTTS(text, ttsLang, rateVal){
     };
     const loadChunk = ()=>{
       settled = false;
-      const url = "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(ttsLang) + "&client=tw-ob&q=" + encodeURIComponent(chunks[idx - 1]);
+      const url = GOOGLE_TTS_URL_BUILDERS[hostIdx](chunks[idx - 1], ttsLang);
       audio.src = url; // srcの再設定でplaybackRateがリセットされるため、必ずこの後に再設定する
       audio.playbackRate = rateVal || 1;
       audio.play().catch(onChunkError);
       // ネットワークが応答を返さないままハングすると、onended/onerrorのどちらも一生発火せず、
       // 聞き流し再生がそこで無言のまま止まってしまう（実際に報告があった不具合）。一定時間で
-      // 強制的に失敗扱いにし、リトライ・フォールバックへ進められるようにする。
+      // 強制的に失敗扱いにし、次の候補ホスト・フォールバックへ進められるようにする。
       clearHangTimer();
       hangTimer = setTimeout(()=>{ if(!settled) onChunkError(); }, 8000);
     };
-    // Google側の一時的な通信不調はよくあるため、フォールバック（Gemini/端末の声）に切り替えて
-    // 聞き流し中に声が急に変わって聞こえる前に、同じチャンクを一度だけ間を置いて再試行する。
     const onChunkError = ()=>{
       if(settled) return;
       settled = true;
       clearHangTimer();
-      if(!retried){
-        retried = true;
+      if(hostIdx + 1 < GOOGLE_TTS_URL_BUILDERS.length){
+        hostIdx++;
         setTimeout(()=>{
           if(currentTTSAudio !== audio) return; // その間に別の再生に切り替わっていたら何もしない
           loadChunk();
@@ -1356,7 +1365,7 @@ function playGoogleTTS(text, ttsLang, rateVal){
       clearHangTimer();
       if(idx >= chunks.length){ releaseAudioResources(audio); resolve(); return; }
       idx++;
-      retried = false;
+      hostIdx = 0;
       loadChunk();
     };
     audio.onended = playNext;
