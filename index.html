@@ -266,6 +266,7 @@
     <button class="tool-item" id="menuSync"><span>☁️</span><span id="syncMenuLabel">同期（未ログイン）</span></button>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuPractice"><span>🎓</span>練習ノート</button>
+    <button class="tool-item" id="menuScan"><span>📷</span>メニュー翻訳（写真から）</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
     <button class="tool-item" id="menuHelp"><span>❓</span>使い方</button>
@@ -357,6 +358,20 @@
   </div>
 </div>
 
+<div class="overlay" id="menuScanOverlay">
+  <div class="panel">
+    <h2>メニュー翻訳 <button id="closeMenuScan" aria-label="閉じる">✕</button></h2>
+    <p class="hint">レストランのメニューや看板を撮影すると、書かれている内容をAIが読み取り、読み方と意味の一覧を作ります（設定でGemini APIキーの登録が必要）。</p>
+    <input type="file" id="menuScanFile" accept="image/*" style="display:none;">
+    <button class="submitbtn" id="menuScanPickBtn" style="background:var(--blue);">📷 写真を撮る・選ぶ</button>
+    <div id="menuScanPreviewWrap" style="display:none; margin-top:10px;">
+      <img id="menuScanPreview" alt="撮影したメニュー・看板の写真" style="width:100%; max-height:220px; object-fit:cover; border-radius:12px; display:block;">
+    </div>
+    <p class="hint" id="menuScanLangLabel" style="display:none; margin-top:10px;"></p>
+    <div id="menuScanResults" style="margin-top:6px;"></div>
+  </div>
+</div>
+
 <div class="overlay" id="currencyOverlay">
   <div class="panel">
     <h2>通貨換算 <button id="closeCurrency" aria-label="閉じる">✕</button></h2>
@@ -400,6 +415,11 @@
     <div class="manual-section">
       <h3>🎓 練習ノート</h3>
       <p>覚えたい単語を入力すると、AIがその単語を使った例文セットを作ってくれます（設定でGeminiキーの登録が必要）。</p>
+    </div>
+
+    <div class="manual-section">
+      <h3>📷 メニュー翻訳（写真から）</h3>
+      <p>レストランのメニューや街の看板を撮影すると、写っている文章をAIが読み取り、フレーズごとの読み方（カタカナ）と意味の一覧を作ります（設定でGeminiキーの登録が必要）。何語で書かれているかも自動で判定します。一覧の各項目は🔊で発音を確認できます。</p>
     </div>
 
     <div class="manual-section">
@@ -1285,7 +1305,10 @@ function ttsLangFor(langKeyForVoice, speechLang){
   const lower = speechLang.toLowerCase();
   if(lower.startsWith("ja")) return "ja";
   if(lower.startsWith("zh")) return "zh-CN";
-  return TTS_LANG_CODES[lower.split('-')[0]] || null;
+  // アプリで用意している10言語以外（メニュー翻訳で検出された言語など）でも、
+  // Google翻訳のTTS自体は対応言語が多いため、とりあえずその言語コードで試す。
+  // 対応していなければ通常の失敗フローでGemini/端末TTSに自動フォールバックする。
+  return TTS_LANG_CODES[lower.split('-')[0]] || lower.split('-')[0];
 }
 
 // Google翻訳の音声合成エンドポイントは1リクエストあたりの文字数に上限があるため、
@@ -1906,7 +1929,7 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["speakOverlay","practiceOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay"].forEach(id=>{
+  ["speakOverlay","practiceOverlay","menuScanOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
@@ -2043,13 +2066,15 @@ const PRACTICE_PACK_SCHEMA = {
 
 // Gemini APIを呼び、JSON Schemaに沿ったオブジェクトを返す共通ヘルパー。
 // "-latest"エイリアスを使うことで、Google側がモデル世代を更新してもコード変更不要にする。
-async function callGeminiJSON(prompt, schema){
+async function callGeminiJSON(prompt, schema, imagePart){
   const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=" + encodeURIComponent(geminiApiKey);
+  const parts = [{ text: prompt }];
+  if(imagePart) parts.push({ inlineData: imagePart });
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [{ parts }],
       generationConfig: { responseMimeType: "application/json", responseSchema: schema },
     }),
   });
@@ -2103,6 +2128,127 @@ async function generatePracticePack(langKey, word){
 - 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
   return callGeminiJSON(prompt, PRACTICE_PACK_SCHEMA);
 }
+
+// --- メニュー翻訳（写真から、Gemini APIのマルチモーダル入力を使用） ---
+const MENU_SCAN_SCHEMA = {
+  type: "object",
+  properties: {
+    languageLabel: { type: "string" },
+    speechLang: { type: "string" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          kana: { type: "string" },
+          ja: { type: "string" },
+        },
+        required: ["text","kana","ja"],
+      },
+    },
+  },
+  required: ["items"],
+};
+
+async function scanMenuPhoto(base64Image, mimeType){
+  const prompt = `あなたは日本語話者の旅行者を助けるガイドです。添付した写真には、海外のレストランのメニューや街の看板など、外国語で書かれた文章が写っています。
+
+写っている文章の中から、料理名・品目・案内文など意味のあるまとまりを最大20個まで抜き出し、日本語話者向けに次の情報を整理してください。
+- text: 写真に書かれている原文そのまま
+- kana: 日本語話者向けのカタカナ発音表記
+- ja: 簡潔な日本語訳
+
+languageLabel には写っている文章が何語かを日本語で一言（例："フランス語"）、speechLang にはその言語のBCP-47言語タグ（例:"fr-FR"）を入れてください。
+文章が読み取れない、または意味のある文章が見当たらない場合は items を空配列にしてください。`;
+  return callGeminiJSON(prompt, MENU_SCAN_SCHEMA, { mimeType, data: base64Image });
+}
+
+// Gemini APIのリクエストサイズを抑えるため、送信前に長辺1280px・JPEG品質0.82程度まで縮小する
+async function resizeImageForGemini(file, maxDim = 1280, quality = 0.82){
+  const bitmap = await createImageBitmap(file);
+  let width = bitmap.width, height = bitmap.height;
+  if(width > maxDim || height > maxDim){
+    const scale = maxDim / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width; canvas.height = height;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, width, height);
+  if(bitmap.close) bitmap.close();
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
+  const base64 = await new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onloadend = ()=> resolve(reader.result.split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+  return { base64, mimeType: "image/jpeg", blob };
+}
+
+function renderMenuScanResults(items, speechLang){
+  const wrap = document.getElementById("menuScanResults");
+  if(!items || items.length === 0){
+    wrap.innerHTML = '<p class="hint">文章を読み取れませんでした。もう少し近づいて、はっきり写るようにもう一度お試しください。</p>';
+    return;
+  }
+  wrap.innerHTML = items.map((it)=>`
+    <div class="practice-ex">
+      <div class="pe-text-wrap">
+        <div class="pe-text">${esc(it.text)}</div>
+        <div class="pe-kana">${esc(it.kana || "")}</div>
+        <div class="pe-ja">${esc(it.ja || "")}</div>
+      </div>
+      <button class="pe-speak" aria-label="発音を聞く">🔊</button>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('.practice-ex').forEach((row,i)=>{
+    const it = items[i];
+    row.querySelector('.pe-speak').addEventListener('click', (e)=>{
+      speakRaw(it.text, speechLang || "en-US", e.currentTarget);
+    });
+  });
+}
+
+let menuScanPreviewUrl = null;
+document.getElementById("menuScanPickBtn").addEventListener("click", ()=>{
+  document.getElementById("menuScanFile").click();
+});
+document.getElementById("menuScanFile").addEventListener("change", async (e)=>{
+  const file = e.target.files[0];
+  e.target.value = ""; // 同じ写真を選び直せるようにリセットしておく
+  if(!file) return;
+  if(!geminiApiKey){ alert("設定画面（⚙）でGemini APIキーを登録してください。Google AI Studioで無料発行できます。"); return; }
+  const btn = document.getElementById("menuScanPickBtn");
+  const originalLabel = btn.textContent;
+  const resultsWrap = document.getElementById("menuScanResults");
+  const langWrap = document.getElementById("menuScanLangLabel");
+  resultsWrap.innerHTML = "";
+  langWrap.style.display = "none";
+  btn.disabled = true;
+  try{
+    btn.textContent = "画像を準備中…";
+    const { base64, mimeType, blob } = await resizeImageForGemini(file);
+    if(menuScanPreviewUrl) URL.revokeObjectURL(menuScanPreviewUrl);
+    menuScanPreviewUrl = URL.createObjectURL(blob);
+    document.getElementById("menuScanPreview").src = menuScanPreviewUrl;
+    document.getElementById("menuScanPreviewWrap").style.display = "block";
+    btn.textContent = "AIが読み取り中…";
+    const parsed = await scanMenuPhoto(base64, mimeType);
+    if(parsed.languageLabel){
+      langWrap.textContent = "検出した言語：" + parsed.languageLabel;
+      langWrap.style.display = "block";
+    }
+    renderMenuScanResults(parsed.items, parsed.speechLang);
+  }catch(err){
+    console.error("menu scan error:", err);
+    alert(geminiErrorMessage(err));
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
 
 // addOverlayで空欄の言語を自動翻訳した後、Geminiキーがあれば10言語まとめてカタカナ読みを生成する
 async function generateKanaBatch(ja, translations){
@@ -2171,6 +2317,14 @@ document.getElementById("backToPracticeList").addEventListener("click", ()=>{
   stopAllAudio();
   document.getElementById("practiceDetailView").style.display = "none";
   document.getElementById("practiceListView").style.display = "block";
+});
+document.getElementById("menuScan").addEventListener("click", ()=>{
+  closeAllOverlays();
+  document.getElementById("menuScanOverlay").classList.add("open");
+});
+document.getElementById("closeMenuScan").addEventListener("click", ()=>{
+  stopAllAudio();
+  document.getElementById("menuScanOverlay").classList.remove("open");
 });
 document.getElementById("menuCurrency").addEventListener("click", ()=>{
   closeAllOverlays();
