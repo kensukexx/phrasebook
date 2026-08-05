@@ -42,7 +42,7 @@
     font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:14.5px; font-weight:700; text-align:center; cursor:pointer;
     box-shadow:0 3px 12px rgba(47,53,66,0.12); }
 
-  .lang-row{ display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid var(--line); touch-action:pan-y; user-select:none; -webkit-user-select:none; background:transparent; border-radius:8px; }
+  .lang-row{ display:flex; align-items:center; gap:12px; padding:12px 6px; border-bottom:1px solid var(--line); touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; background:transparent; border-radius:8px; }
   .lang-row:last-child{ border-bottom:none; }
   .lang-row.dragging{ background:#F7F1DE; box-shadow:0 4px 14px rgba(29,43,58,0.2); opacity:0.9; z-index:5; }
   .lang-row .handle{ font-size:18px; color:var(--ink-soft); flex:0 0 auto; cursor:grab; padding:4px 6px; }
@@ -54,6 +54,7 @@
     box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
   .cats::-webkit-scrollbar{ display:none; }
   .cat{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:9px 15px; border:none; border-radius:999px; background:#fff;
+    touch-action:pan-x; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
     font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; font-weight:700; color:var(--ink); cursor:pointer; white-space:nowrap;
     box-shadow:0 2px 8px rgba(47,53,66,0.08); transition: transform .1s ease; }
   .cat:active{ transform:scale(0.95); }
@@ -86,6 +87,7 @@
 
   .deck{ padding:14px 16px 10px; display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); align-items:start; gap:12px; }
   .ticket{ position:relative; background:#fff; border:none; border-radius:20px; padding:16px 16px 14px 20px;
+    touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
     display:flex; align-items:center; gap:10px; box-shadow: 0 4px 16px rgba(47,53,66,0.08); cursor:pointer; transition: box-shadow .2s ease, transform .1s ease; }
   .ticket:active{ transform:scale(0.985); }
   .ticket::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:6px; background:var(--cat-color, var(--blue)); border-radius:20px 0 0 20px; }

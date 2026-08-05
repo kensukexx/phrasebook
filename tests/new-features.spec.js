@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 const { mockCurrencyRates } = require('./helpers');
 
 test.describe('usage manual', () => {
@@ -97,9 +99,32 @@ test.describe('category tab reordering', () => {
     await page.click('.cat[data-cat="あいさつ"]');
     await expect(page.locator('.cat[data-cat="あいさつ"]')).toHaveClass(/active/);
   });
+
+  test('the tab CSS suppresses the browser\'s text-selection/copy UI (needed for long-press drag)', async () => {
+    // Reported: long-pressing to drag-reorder on both mobile and desktop was instead
+    // triggering native text selection (and, on iOS, the copy/callout menu). The category
+    // tabs and phrase cards were missing user-select/touch-action/-webkit-touch-callout,
+    // which the language-picker rows (a third draggable list) already had. Checked via source
+    // rather than getComputedStyle: -webkit-touch-callout isn't implemented by Chromium at all,
+    // and Playwright's bundled WebKit doesn't reliably expose these either way, so a live-DOM
+    // check can't be made to work consistently across projects here.
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const catRule = html.match(/\.cat\{[^}]*\}/)[0];
+    expect(catRule).toContain('user-select:none');
+    expect(catRule).toContain('-webkit-user-select:none');
+    expect(catRule).toContain('-webkit-touch-callout:none');
+  });
 });
 
 test.describe('phrase card reordering', () => {
+  test('the card CSS suppresses the browser\'s text-selection/copy UI (needed for long-press drag)', async () => {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const ticketRule = html.match(/\.ticket\{[^}]*\}/)[0];
+    expect(ticketRule).toContain('user-select:none');
+    expect(ticketRule).toContain('-webkit-user-select:none');
+    expect(ticketRule).toContain('-webkit-touch-callout:none');
+  });
+
   test('long-press drag reorders cards within the current view and the order persists after reload', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
