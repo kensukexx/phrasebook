@@ -67,4 +67,19 @@ test.describe('core browsing', () => {
     await page.waitForTimeout(300);
     expect(errors).toEqual([]);
   });
+
+  test('no horizontal overflow on a narrow viewport', async ({ page }) => {
+    // Reported: on a real phone (WebKit-based Chrome/Safari on iOS), the whole page rendered
+    // visibly shrunk with a gray gap down the right edge. Root cause: .searchwrap input had
+    // flex:1 but no min-width:0, so its browser-default min-width:auto stopped it from ever
+    // shrinking below its intrinsic content width, overflowing the row a few pixels wider than
+    // the viewport. Chromium tolerates a few px of overflow silently, but mobile WebKit reacts by
+    // auto-zooming the entire page out to avoid a horizontal scrollbar - which is why this was
+    // never caught by Chromium-only visual testing and needed a real phone screenshot to spot.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.waitForTimeout(300);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+  });
 });

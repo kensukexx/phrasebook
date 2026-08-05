@@ -38,7 +38,7 @@
 
   .langbar{ display:flex; align-items:center; gap:10px; padding:16px 16px 4px; }
   .langbar label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-soft); flex:0 0 auto; }
-  .langselect{ flex:1; padding:12px 14px; border:none; border-radius:999px; background:#fff; color:var(--ink);
+  .langselect{ flex:1; min-width:0; padding:12px 14px; border:none; border-radius:999px; background:#fff; color:var(--ink);
     font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:14.5px; font-weight:700; text-align:center; cursor:pointer;
     box-shadow:0 3px 12px rgba(47,53,66,0.12); }
 
@@ -80,7 +80,7 @@
   .progress-label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
 
   .searchwrap{ padding:10px 16px 4px; display:flex; gap:8px; }
-  .searchwrap input{ flex:1; padding:11px 16px; border:none; border-radius:999px; background:#fff;
+  .searchwrap input{ flex:1; min-width:0; padding:11px 16px; border:none; border-radius:999px; background:#fff;
     font-family:"Zen Maru Gothic","Noto Sans JP", sans-serif; font-size:15px; color:var(--ink); box-shadow:0 2px 10px rgba(47,53,66,0.08); }
   .addbtn{ flex:0 0 auto; width:44px; border:none; border-radius:999px; background:var(--red); color:#fff; font-size:20px; cursor:pointer; box-shadow:0 3px 10px rgba(255,107,107,0.35); }
 
@@ -234,7 +234,7 @@
   .back-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   .back-row button{ background:none; border:none; font-size:14px; color:var(--ink-soft); cursor:pointer; padding:4px 0; }
   .currency-row{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-  .currency-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:16px; color:var(--ink); }
+  .currency-row input{ flex:1; min-width:0; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:16px; color:var(--ink); }
   .currency-row select{ flex:0 0 auto; width:110px; padding:10px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink); }
   .currency-swap{ text-align:center; color:var(--ink-soft); font-size:13px; margin:2px 0 10px; }
   .currency-result{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:26px; color:var(--red); text-align:center; margin:10px 0; }
