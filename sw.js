@@ -1,10 +1,17 @@
 // オフラインでもアプリ本体（index.html）が開けるようにするための最小限のservice worker。
-// 翻訳・為替レートなど外部APIへのリクエストはそのままネットに流し、失敗したときの扱いは
-// アプリ側（index.html）の既存のフォールバック処理に任せる。Google翻訳の音声合成だけは
-// 例外で、下のfetchハンドラでこのservice worker自身がキャッシュする（詳細はそちらのコメント）。
+// 翻訳・音声合成・為替レートなど外部APIへのリクエストはそのままネットに流し、失敗したときの
+// 扱いはアプリ側（index.html）の既存のフォールバック処理に任せる。
+//
+// 過去の経緯（あえて残す）: 一度はGoogle音声合成（translate_tts）だけこのservice worker自身が
+// 横取りしてCache APIに保存し、同じフレーズの再生を2回目以降オフラインでも即座に鳴らせるように
+// していたが、撤去した。理由: このservice worker内でfetch()を使ってtranslate_tts宛てにリクエスト
+// すると、同じリクエストでも<audio src>から直接読み込む場合とは異なりGoogle側が404を返すことが
+// 実機検証で判明したため（fetch()由来のリクエストだけを弾いているとみられる、非公式エンドポイント
+// 特有の挙動）。つまりこの横取り自体が、キャッシュの恩恵と引き換えに再生失敗を招きうる状態だった。
+// <audio src>からの直接リクエスト（このservice workerが一切関与しない経路）は安定して成功するため、
+// translate_tts宛てのリクエストは他の外部APIと同様、素通しに戻している。
 const CACHE_NAME = "phrasebook-shell-v2";
 const SHELL_FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
-const TTS_CACHE_NAME = "phrasebook-tts-audio-v1";
 
 self.addEventListener("install", (event) => {
   // cache: "reload" でブラウザのHTTPキャッシュを無視して必ずオリジンから取得する。
@@ -20,9 +27,7 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   // "phrasebook-shell-"で始まるキャッシュだけを対象に古いバージョンを掃除する。
-  // index.html側が持つ音声キャッシュ（phrasebook-tts-audio-*）など、シェル以外の
-  // キャッシュ名はここでは一切触らない（誤って削除すると再生のたびに毎回オンラインで
-  // 取得し直すことになってしまうため）。
+  // それ以外の名前のキャッシュ（将来また何か追加する場合に備えて）はここでは一切触らない。
   event.waitUntil(
     caches.keys()
       .then((names) => Promise.all(
@@ -37,29 +42,10 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // Google翻訳の音声合成（発音再生）は無料・非公式のエンドポイントで、一時的な不調や
-  // レート制限が起きやすい。一度取得できた音声はここでキャッシュしておき、同じフレーズの
-  // 再生（特に聞き流しのループ・繰り返し再生）はオンライン状況に関わらず即座に鳴らせるようにする。
-  // このエンドポイントはAccess-Control-Allow-Originを返さないため、<audio src>からの
-  // リクエストはno-cors（不透明・opaqueなレスポンス）になる。中身をJS側で読むことはできないが、
-  // ブラウザにそのまま再生させる分には問題なく、Cache APIへの保存・再利用もopaqueなまま行える。
-  if (url.hostname === "translate.google.com" || url.hostname === "translate.googleapis.com") {
-    if (url.pathname !== "/translate_tts") return; // 音声合成以外（翻訳API等）はそのまま素通し
-    event.respondWith(
-      caches.open(TTS_CACHE_NAME).then((cache) =>
-        cache.match(req).then((cached) => cached || fetch(req).then((res) => {
-          cache.put(req, res.clone());
-          return res;
-        }))
-      )
-    );
-    return;
-  }
-
-  if (url.origin !== self.location.origin) return; // 上記以外の外部API（翻訳・為替・Gemini・同期）はそのまま素通し
+  if (url.origin !== self.location.origin) return; // 外部API（翻訳・音声合成・為替・Gemini・同期）はそのまま素通し
 
   event.respondWith(
-    fetch(req, { cache: "no-store" }) // ブラウザのHTTPキャッシュを経由させず、必ずオリジンに新しさを確認しにいく
+    fetchWithTimeout(req, { cache: "no-store" }) // ブラウザのHTTPキャッシュを経由させず、必ずオリジンに新しさを確認しにいく
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
@@ -68,3 +54,17 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(req).then((cached) => cached || caches.match("./index.html")))
   );
 });
+
+// 通常のfetch()は、接続はできているのに応答が返ってこない（回線があるように見えて実際は
+// つながっていない等）ケースでは何秒でもハングし続けることがある。ページ側にも同様の
+// setTimeoutによるタイムアウトがあるが、service worker内のfetch()自体がハングしている間は
+// ページ側のタイマーが発火しないことが実機検証で判明した（オフラインだと音声が延々と鳴らない
+// まま止まる、という形で実際に報告された不具合の原因の一つ）。ハング自体をservice worker側で
+// 確実に打ち切る必要がある。現状ここで使っているのはシェルファイル（同一オリジン）のfetchのみ。
+function fetchWithTimeout(req, opts, timeoutMs) {
+  timeoutMs = timeoutMs || 8000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(req, Object.assign({}, opts, { signal: controller.signal }))
+    .finally(() => clearTimeout(timer));
+}

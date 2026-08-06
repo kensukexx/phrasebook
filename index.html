@@ -1368,6 +1368,8 @@ function playGoogleTTS(text, ttsLang, rateVal){
       // ネットワークが応答を返さないままハングすると、onended/onerrorのどちらも一生発火せず、
       // 聞き流し再生がそこで無言のまま止まってしまう（実際に報告があった不具合）。一定時間で
       // 強制的に失敗扱いにし、次の候補ホスト・フォールバックへ進められるようにする。
+      // 注意: service workerがtranslate_tts宛のfetch()自体でハングしていると、このタイマーが
+      // 発火しないことがある（検証済み）。そちらはsw.js側のAbortControllerで別途対策している。
       clearHangTimer();
       hangTimer = setTimeout(()=>{ if(!settled) onChunkError(); }, 8000);
     };

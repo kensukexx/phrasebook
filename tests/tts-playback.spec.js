@@ -302,40 +302,33 @@ test.describe('TTS playback robustness', () => {
     });
   });
 
-  test('a successful Google TTS playback is cached by the service worker, and replaying the same phrase is served instantly without a real network round-trip', async ({ page, browserName }) => {
-    // Added alongside the alternate-host fallback: repeated phrases (聞き流しのループ・繰り返し
-    // 再生 in particular) should play instantly on repeat without depending on Google's endpoint
-    // staying up for every single replay. Caching happens in sw.js (not page-level fetch()) because
-    // translate_tts has no Access-Control-Allow-Origin header - a page-level fetch() would either be
-    // blocked by CORS outright, or (in no-cors mode) return an opaque response whose body can't be
-    // read back into a usable Blob from page JS. The service worker can hand an opaque response
-    // straight back to <audio src> without ever reading its body, which is why the caching has to
-    // live there instead - and also why this test can't mock the response via page.route() (the
-    // service worker's own fetch() isn't visible to it): it exercises the real endpoint.
+  test('the service worker does not intercept translate_tts - it passes straight through to the network', async ({ page, browserName }) => {
+    // Regression test for a removed feature: translate_tts requests were briefly cached by the
+    // service worker (fetch() there, store the opaque response, serve it back on repeat plays).
+    // Reverted after finding, via real-device testing, that Google's endpoint sometimes returns 404
+    // specifically for fetch()-originated requests while the exact same request from a genuine
+    // <audio src> load succeeds - meaning the caching layer itself could silently break playback.
+    // <audio src> requests must reach the network directly, un-intercepted, every time.
     test.skip(browserName === 'webkit', 'Playwright WebKit does not reliably intercept this route; the real translate_tts network call goes through instead of the mock');
+    const wavBuf = makeSilentWavBuffer();
+    let requestCount = 0;
+    await page.route('**/translate_tts**', route => { requestCount++; route.fulfill({ status: 200, contentType: 'audio/wav', body: wavBuf }); });
+
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
 
-    await page.evaluate(() => performance.clearResourceTimings());
     await page.locator('.ticket .speak').first().click();
-    await page.waitForTimeout(2500); // real network round-trip + a short real audio clip playing out
+    await expect.poll(() => requestCount).toBe(1);
+    await page.waitForTimeout(500);
 
     await page.locator('.ticket .speak').first().click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(500);
+    // if the service worker were still intercepting/caching, this replay would be served from
+    // cache and requestCount would stay at 1 - it must hit the network again every time now.
+    expect(requestCount).toBe(2);
 
-    const durations = await page.evaluate(() =>
-      performance.getEntriesByType('resource').filter(e => e.name.includes('translate_tts')).map(e => e.duration)
-    );
-    expect(durations.length).toBeGreaterThanOrEqual(2);
-    expect(durations[0]).toBeGreaterThan(20); // 1st: a real network fetch
-    expect(durations[1]).toBeLessThan(20); // 2nd: served from the service worker's cache, near-instant
-
-    const cachedUrls = await page.evaluate(async () => {
-      const cache = await caches.open('phrasebook-tts-audio-v1');
-      const keys = await cache.keys();
-      return keys.map(k => k.url);
-    });
-    expect(cachedUrls.some(u => u.includes('translate_tts'))).toBe(true);
+    const cacheNames = await page.evaluate(() => caches.keys());
+    expect(cacheNames).not.toContain('phrasebook-tts-audio-v1');
   });
 });
