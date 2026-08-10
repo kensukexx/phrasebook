@@ -22,6 +22,7 @@
 - **端末間の同期（任意）**: Googleアカウントでログイン（常にポップアップ方式。redirectはサードパーティCookie制限で失敗するため不可）。Firebase Auth + Firestore。`/users/{uid}`単位でデータ分離、他人のデータは見えない。
 - **通貨換算**: open.er-api.com（旧frankfurter.appがリダイレクトするようになったため移行済み）。オフライン時は最後に取得したレートを使用。
 - **全画面提示・聞き流し再生・学習管理（覚えた✓/ピン留め📌）・自分の発音の録音比較・音声入力検索・カスタムフレーズ追加（自動翻訳ボタン付き）**なども実装済み。
+- **日本語を学ぶ（外国人向け、v1実験機能）**: 「知っている言語」を選ぶとその言語のフレーズが表になり、タップで裏の日本語＋ローマ字読み（`jaRomaji`、308件全件に用意。Google翻訳の非公式ローマ字化エンドポイントで機械生成後、漢字の読み違い等をレビュー・修正）が見える、独立オーバーレイ（`learnJaOverlay`）。周辺のツールメニュー・言語名は日本語のままなので「日本語話者が一緒に操作する」前提で、この画面自体のラベルだけ英語。カテゴリ絞り込みは無し（カテゴリ名が日本語のみのため）。組み込み308件のみが対象で`customData`は対象外（`jaRomaji`が無いため）。**日本語再生時は`speakRaw(d.ja, "ja-JP", btn)`のように第5引数(langKeyForVoice)を渡さないこと** — "ja"はLANGSに存在しないキーなので、渡すとフォールバック時に`pickVoice("ja")`内で`meta`がundefinedになりクラッシュする（他のJapanese再生箇所と同じ理由、`tests/learn-japanese.spec.js`に回帰防止テストあり）。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -34,12 +35,12 @@
 
 ## ファイル構成
 ```
-index.html          アプリ本体（UI・データ・ロジック全て、単一ファイル、約630KB）
+index.html          アプリ本体（UI・データ・ロジック全て、単一ファイル、約645KB）
 manifest.json        PWAマニフェスト
 sw.js                 Service Worker（オフラインシェルキャッシュのみ、v2）
 firestore.rules       Firestoreセキュリティルール
-tests/                Playwright仕様13本 + data-integrity.test.js + helpers.js（外部APIのモック）
-playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計188テスト
+tests/                Playwright仕様14本 + data-integrity.test.js + helpers.js（外部APIのモック）
+playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計198テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 

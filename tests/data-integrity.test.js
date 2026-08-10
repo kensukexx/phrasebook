@@ -76,6 +76,12 @@ check(
 );
 if (badGloss.length === 0) ok(`every entry (${BUILTIN.length}) has a gloss for all ${LANGS.length} languages`);
 
+// every entry needs a romanized reading of its own ja text, for the 学ぶ (reverse/Learn
+// Japanese) mode - without it that mode would silently show a blank pronunciation line.
+const noRomaji = BUILTIN.filter(d => !d.jaRomaji || !d.jaRomaji.trim());
+check(noRomaji.length === 0, `${noRomaji.length} entries have no jaRomaji: ${noRomaji.map(d => d.ja).join(', ')}`);
+if (noRomaji.length === 0) ok('every entry has a jaRomaji (romanized reading)');
+
 console.log('');
 if (failures > 0) {
   console.error(`${failures} check(s) failed.`);
