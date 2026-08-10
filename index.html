@@ -64,6 +64,7 @@
     -webkit-overflow-scrolling:touch; background:var(--paper); scrollbar-width:none;
     box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
   .cats::-webkit-scrollbar{ display:none; }
+  .cats.wrap{ flex-wrap:wrap; overflow-x:visible; }
   .cat{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:9px 15px; border:none; border-radius:999px; background:#fff;
     touch-action:pan-x; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
     font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; font-weight:700; color:var(--ink); cursor:pointer; white-space:nowrap;
@@ -444,7 +445,7 @@
 
     <div class="manual-section">
       <h3>⚙ 設定</h3>
-      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、聞き流し再生の設定（日本語も続けて読み上げるか・最後まで行ったらループするか・繰り返し回数・フレーズ間の間隔）、言語ごとの声、Gemini APIキーの登録などができます。言語の並び順は設定画面ではなく、一覧上部の言語ドロップダウンをタップして開く「言語を選ぶ」画面でハンドル「⠿」をドラッグして変更します。</p>
+      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、カテゴリバーの表示（1行スクロール⇄複数行の折り返し表示）、聞き流し再生の設定（日本語も続けて読み上げるか・最後まで行ったらループするか・繰り返し回数・フレーズ間の間隔）、言語ごとの声、Gemini APIキーの登録などができます。言語の並び順は設定画面ではなく、一覧上部の言語ドロップダウンをタップして開く「言語を選ぶ」画面でハンドル「⠿」をドラッグして変更します。</p>
     </div>
 
     <div class="manual-section">
@@ -541,6 +542,13 @@
         <span style="font-size:12px;">A</span>
         <input type="range" id="fsSlider" min="0.85" max="1.6" step="0.05" value="1">
         <span style="font-size:20px;">A</span>
+      </div>
+    </div>
+    <div class="field">
+      <label>カテゴリバー</label>
+      <div class="toggle-wrap">
+        <span>折り返し表示にする（1行スクロールの代わりに複数行で表示）</span>
+        <div class="switch" id="catBarWrapToggle"></div>
       </div>
     </div>
     <div class="field">
@@ -965,6 +973,7 @@ let currentCat = "すべて";
 let showUnlearnedOnly = false;
 let showPinnedOnly = false;
 let patternMode = false; // ON: 会話パターン系カテゴリのみ表示、OFF: それ以外の通常カテゴリのみ表示
+let catBarWrap = false; // ON: カテゴリバーを複数行に折り返し表示、OFF(既定): 1行の横スクロール
 let rate = 1.0;
 let jaRate = 1.25;
 let fsScale = 1.0;
@@ -1000,7 +1009,7 @@ function keyOf(d){ return d.id || d.ja; }
 async function loadState(){
   try{ const cc = await store.get('phrasebook-custom-cats'); if(cc && cc.value){ customCats = JSON.parse(cc.value); } }catch(e){}
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.phraseOrder && p.phraseOrder.length) phraseOrder = p.phraseOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && allCats().includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; patternMode = !!p.patternMode; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.phraseOrder && p.phraseOrder.length) phraseOrder = p.phraseOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && allCats().includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; patternMode = !!p.patternMode; catBarWrap = !!p.catBarWrap; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
   try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
@@ -1037,7 +1046,7 @@ async function safeSet(key, value){
     }
   }
 }
-async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, catOrder, phraseOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly, patternMode})); }
+async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, catOrder, phraseOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly, patternMode, catBarWrap})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
 async function saveCustomCats(){ await safeSet('phrasebook-custom-cats', JSON.stringify(customCats)); }
 async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
@@ -1190,6 +1199,7 @@ function attachRowDrag(row){
 
 function renderCats(){
   const wrap = document.getElementById("cats");
+  wrap.classList.toggle("wrap", catBarWrap);
   wrap.innerHTML = "";
   let activeBtn = null;
   orderedCats().forEach(c=>{
@@ -1206,8 +1216,8 @@ function renderCats(){
     }
     wrap.appendChild(btn);
   });
-  // 選択中のカテゴリがバーの中央に来るよう横スクロール
-  if(activeBtn){
+  // 選択中のカテゴリがバーの中央に来るよう横スクロール（折り返し表示中は縦に並ぶだけなので不要）
+  if(activeBtn && !catBarWrap){
     requestAnimationFrame(()=>{
       wrap.scrollTo({ left: activeBtn.offsetLeft - wrap.clientWidth/2 + activeBtn.clientWidth/2, behavior:"smooth" });
     });
@@ -1238,8 +1248,14 @@ function attachCatDrag(btn, key){
       ev.preventDefault();
       // 「すべて」タブは並び替え対象から除外（常に先頭固定）
       const targets = Array.from(wrap.querySelectorAll(".cat")).filter(b=>b!==btn && b.dataset.cat!=="すべて");
+      // 折り返し表示中は複数行にまたがるため、まず指のY座標と同じ行にある候補だけに絞り込んでから
+      // X座標で比較する（絞り込めなければ全候補にフォールバック）。1行表示中は従来通りX座標のみで比較。
+      const pool = catBarWrap
+        ? targets.filter(b=>{ const r = b.getBoundingClientRect(); return ev.clientY >= r.top && ev.clientY <= r.bottom; })
+        : targets;
+      const searchPool = pool.length ? pool : targets;
       let target = null;
-      for(const b of targets){
+      for(const b of searchPool){
         const rect = b.getBoundingClientRect();
         if(ev.clientX < rect.left + rect.width/2){ target = b; break; }
       }
@@ -2604,6 +2620,12 @@ document.getElementById("jaToggle").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", listenJaMode);
   saveSettings();
 });
+document.getElementById("catBarWrapToggle").addEventListener("click", (e)=>{
+  catBarWrap = !catBarWrap;
+  e.currentTarget.classList.toggle("on", catBarWrap);
+  saveSettings();
+  renderCats();
+});
 document.getElementById("repeatSlider").addEventListener("input", (e)=>{
   listenRepeat = parseInt(e.target.value, 10);
   document.getElementById("repeatLabel").textContent = listenRepeat + "回";
@@ -3191,6 +3213,7 @@ document.getElementById("submitAdd").onclick = ()=>{
   document.getElementById("pinnedToggle").classList.toggle("on", showPinnedOnly);
   document.getElementById("patternModeToggle").classList.toggle("on", patternMode);
   document.getElementById("patternModeRow").classList.toggle("on", patternMode);
+  document.getElementById("catBarWrapToggle").classList.toggle("on", catBarWrap);
   document.getElementById("repeatSlider").value = listenRepeat;
   document.getElementById("repeatLabel").textContent = listenRepeat + "回";
   document.getElementById("gapSlider").value = listenGap;

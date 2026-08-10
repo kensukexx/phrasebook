@@ -19,6 +19,31 @@ test.describe('settings', () => {
     await expect(page.locator('#rateLabel')).toHaveText(rateBefore);
   });
 
+  test('the category bar wrap toggle switches between scrolling and multi-row, and persists across reload', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await expect(page.locator('#cats')).not.toHaveClass(/wrap/);
+
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await page.waitForSelector('#settingsOverlay.open');
+    await page.click('#catBarWrapToggle');
+    await page.click('#closeSettings');
+    await page.waitForTimeout(200);
+
+    await expect(page.locator('#cats')).toHaveClass(/wrap/);
+    // in wrap mode, later category tabs sit on a lower row (greater offsetTop) than the first ones
+    const tops = await page.locator('.cat').evaluateAll(els => els.map(el => el.offsetTop));
+    expect(new Set(tops).size).toBeGreaterThan(1);
+
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+    await expect(page.locator('#cats')).toHaveClass(/wrap/);
+    const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('phrasebook-settings')));
+    expect(stored.catBarWrap).toBe(true);
+  });
+
   test('Gemini API key persists across reload', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
