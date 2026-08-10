@@ -419,7 +419,7 @@
 
     <div class="manual-section">
       <h3>＋ フレーズを追加</h3>
-      <p>右下の＋ボタンから自分の言葉を手動追加できます。日本語を入力して「自動翻訳」を押すと空欄の言語がまとめて翻訳されます（設定でGeminiキーを登録していれば、カタカナ読みも自動生成されます）。自分で追加したフレーズのカードには✎（編集）と✕（削除）が表示され、いつでも修正・削除できます。</p>
+      <p>右下の＋ボタンから自分の言葉を手動追加できます。日本語を入力して「自動翻訳」を押すと空欄の言語がまとめて翻訳されます（設定でGeminiキーを登録していれば、カタカナ読みも自動生成されます）。自分で追加したフレーズのカードには✎（編集）と✕（削除）が表示され、いつでも修正・削除できます。カテゴリ選択欄の「＋」から自分だけのカテゴリも作成でき、作ったカテゴリはカテゴリタブにも表示されます（🗑で削除も可能。削除すると、そのカテゴリのフレーズは自動で「その他」に移動します）。</p>
     </div>
 
     <div class="manual-section">
@@ -580,7 +580,14 @@
   <div class="panel">
     <h2><span id="addTitle">フレーズを追加</span> <button id="closeAdd" aria-label="閉じる">✕</button></h2>
     <div class="field"><label>日本語（必須）</label><input type="text" id="addJa" placeholder="例：乾杯"></div>
-    <div class="field"><label>カテゴリ</label><select id="addCat"></select></div>
+    <div class="field">
+      <label>カテゴリ</label>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="addCat" style="flex:1;"></select>
+        <button class="mini-btn" id="addCatNew" type="button" aria-label="新しいカテゴリを作る" style="flex:0 0 auto; width:36px; height:36px; font-size:18px;">＋</button>
+      </div>
+      <p class="hint" id="addCatDeleteRow" style="display:none; margin-top:6px;"><button type="button" id="addCatDelete" style="background:none; border:none; color:var(--red); text-decoration:underline; cursor:pointer; padding:0; font-size:12px;">🗑 このカテゴリを削除（フレーズは「その他」に移動します）</button></p>
+    </div>
     <button class="submitbtn" id="autoTranslate" type="button" style="background:var(--blue); margin:0 0 12px;">🌐 空欄の言語を自動翻訳</button>
     <div class="grid2" id="addFieldsGrid"></div>
     <p class="hint">「自動翻訳」で11言語がまとめて埋まります（Google翻訳・ネット接続が必要）。訳が気に入らなければ手で直してOK。設定画面でGemini APIキーを登録していれば、カナ読みもあわせて自動生成されます（未登録の場合はカナ欄は空のまま手入力）。日本語だけで追加した場合は全言語で表示され、日本語で読み上げます。</p>
@@ -632,6 +639,8 @@ const CAT_META = {
   "その他":      { icon:"📎", color:"#8395A7" },
 };
 function catMeta(c){ return CAT_META[c] || { icon:"🏷️", color:"#8395A7" }; }
+// ユーザーが自分で作った追加カテゴリ（customCats）も含めた全カテゴリ一覧
+function allCats(){ return CATS.concat(customCats); }
 
 const BUILTIN = [
 {ja:"こんにちは",cat:"あいさつ",gloss:{en:"Hello(こんにちは)",ko:"안녕(安寧)하세요(ですか)",de:"Guten(良い) Tag(日)",ro:"Bună(良い) ziua(一日を)",es:"Hola(こんにちは)",fr:"Bon(良い)jour(日)",vi:"Xin(どうか) chào(挨拶)",zh:"你(あなた)好(良い)",pt:"Olá(こんにちは)",ru:"Здравствуйте(こんにちは)",hi:"नमस्ते(こんにちは)"},en:["Hello","ハロー"],ko:["안녕하세요","アンニョンハセヨ"],de:["Guten Tag","グーテン ターク"],ro:["Bună ziua","ブナ ズィウア"],es:["Hola","オラ"],fr:["Bonjour","ボンジュール"],vi:["Xin chào","シンチャオ"],zh:["你好","ニーハオ"],pt:["Olá","オラー"],ru:["Здравствуйте","ズドラーストヴィチェ"],hi:["नमस्ते","ナマステ"],note:"独Guten Tag・仏Bonjour・ルーマニア語Bună ziuaは「良い日を」という時間帯の挨拶。西Hola・葡Olá・英Helloは特定の時間を指さない呼びかけの間投詞です。韓国語안녕하세요は直訳「安寧でいらっしゃいますか」と相手の安否を尋ねる形、中国語你好は「あなたは良い」とストレートな表現です。"},
@@ -967,6 +976,7 @@ let voiceMap = {};
 let geminiApiKey = "";
 let langOrder = LANGS.map(l=>l.key);
 let catOrder = CATS.slice();
+let customCats = []; // ユーザーが自分で作った追加カテゴリ（名前の配列）
 let phraseOrder = []; // フレーズカードの並び順（キーの配列）。loadState()で不足分を補完する
 let synth = window.speechSynthesis;
 let availableVoices = [];
@@ -988,15 +998,16 @@ function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").rep
 function keyOf(d){ return d.id || d.ja; }
 
 async function loadState(){
+  try{ const cc = await store.get('phrasebook-custom-cats'); if(cc && cc.value){ customCats = JSON.parse(cc.value); } }catch(e){}
   try{ const s = await store.get('phrasebook-settings');
-    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.phraseOrder && p.phraseOrder.length) phraseOrder = p.phraseOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && CATS.includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; patternMode = !!p.patternMode; }
+    if(s && s.value){ const p = JSON.parse(s.value); rate = p.rate||1.0; jaRate = p.jaRate||1.25; fsScale = p.fsScale||1.0; listenLoop = !!p.listenLoop; listenJaMode = !!p.listenJaMode; listenRepeat = p.listenRepeat||1; listenGap = (p.listenGap!==undefined) ? p.listenGap : 450; voiceMap = p.voiceMap||{}; geminiApiKey = p.geminiApiKey||""; if(p.langOrder && p.langOrder.length) langOrder = p.langOrder; if(p.catOrder && p.catOrder.length) catOrder = p.catOrder; if(p.phraseOrder && p.phraseOrder.length) phraseOrder = p.phraseOrder; if(p.currentLang) currentLang = p.currentLang; if(p.currentCat && allCats().includes(p.currentCat)) currentCat = p.currentCat; showPinnedOnly = !!p.showPinnedOnly; showUnlearnedOnly = !!p.showUnlearnedOnly; patternMode = !!p.patternMode; }
   }catch(e){}
   try{ const c = await store.get('phrasebook-custom'); if(c && c.value){ customData = JSON.parse(c.value); } }catch(e){}
   try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
   try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
-  CATS.forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
+  allCats().forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
   // 保存されていたcurrentCatが読み込んだpatternModeの状態と矛盾する場合（例：以前OFFのまま
   // 「あいさつ」を選んでいたのに、別画面でONに切り替えて保存された等）、そのモードで表示可能な
   // カテゴリに合わせ直す。
@@ -1028,6 +1039,7 @@ async function safeSet(key, value){
 }
 async function saveSettings(){ await safeSet('phrasebook-settings', JSON.stringify({rate, jaRate, fsScale, listenLoop, listenJaMode, listenRepeat, listenGap, voiceMap, geminiApiKey, langOrder, catOrder, phraseOrder, currentLang, currentCat, showPinnedOnly, showUnlearnedOnly, patternMode})); }
 async function saveCustom(){ await safeSet('phrasebook-custom', JSON.stringify(customData)); }
+async function saveCustomCats(){ await safeSet('phrasebook-custom-cats', JSON.stringify(customCats)); }
 async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
@@ -1037,21 +1049,23 @@ async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(p
 // それ以外の設定（読み上げ速度など）は端末ごとのローカル保存のまま同期しない。
 // let宣言の変数はwindowに乗らないため、再代入が必要なapplyCloudStateはここ（クラシックスクリプト側）に置く。
 function getSyncableState(){
-  return { customData, customPracticePacks, learned, pinned, catOrder, langOrder, phraseOrder };
+  return { customData, customCats, customPracticePacks, learned, pinned, catOrder, langOrder, phraseOrder };
 }
 async function applyCloudState(state){
   if(!state) return;
   if(Array.isArray(state.customData)) customData = state.customData;
+  if(Array.isArray(state.customCats)) customCats = state.customCats;
   if(Array.isArray(state.customPracticePacks)) customPracticePacks = state.customPracticePacks;
   if(state.learned && typeof state.learned === "object") learned = state.learned;
   if(state.pinned && typeof state.pinned === "object") pinned = state.pinned;
   if(Array.isArray(state.catOrder) && state.catOrder.length) catOrder = state.catOrder;
   if(Array.isArray(state.langOrder) && state.langOrder.length) langOrder = state.langOrder;
   if(Array.isArray(state.phraseOrder) && state.phraseOrder.length) phraseOrder = state.phraseOrder;
-  CATS.forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
+  allCats().forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
   allData().forEach(d=>{ const k = keyOf(d); if(!phraseOrder.includes(k)) phraseOrder.push(k); });
-  await saveCustom(); await savePracticePacks(); await saveLearned(); await savePinned(); await saveSettings();
+  await saveCustom(); await saveCustomCats(); await savePracticePacks(); await saveLearned(); await savePinned(); await saveSettings();
+  populateAddCatSelect();
   renderCats();
   renderDeck();
   renderLangButton();
@@ -1076,7 +1090,7 @@ function orderedLangs(){
 function orderedCats(){
   const seen = new Set();
   const rest = catOrder.filter(c=>{
-    if(c==="すべて" || !CATS.includes(c) || seen.has(c)) return false;
+    if(c==="すべて" || !allCats().includes(c) || seen.has(c)) return false;
     if(PATTERN_CATS.includes(c) !== patternMode) return false;
     seen.add(c);
     return true;
@@ -1278,7 +1292,11 @@ function switchCategory(dir){
 }
 
 function populateAddCatSelect(){
-  document.getElementById("addCat").innerHTML = CATS.filter(c=>c!=="すべて").map(c=>`<option value="${c}">${c}</option>`).join('');
+  const builtinOpts = CATS.filter(c=>c!=="すべて").map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  const customOpts = customCats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  document.getElementById("addCat").innerHTML = customOpts
+    ? `${builtinOpts}<optgroup label="自分で作ったカテゴリ">${customOpts}</optgroup>`
+    : builtinOpts;
 }
 
 function buildAddFields(){
@@ -2610,11 +2628,49 @@ function openAddPanel(entry){
     document.getElementById(`add_${l.key}`).value = pair[0] || "";
     document.getElementById(`add_${l.key}_kana`).value = pair[1] || "";
   });
+  updateAddCatDeleteVisibility();
   document.getElementById("addOverlay").classList.add("open");
 }
 
 document.getElementById("openAdd").onclick = ()=> openAddPanel(null);
 document.getElementById("closeAdd").onclick = ()=> document.getElementById("addOverlay").classList.remove("open");
+
+// カテゴリ選択欄の「＋」で自分だけのカテゴリを作成。組み込みカテゴリと違い、削除もできる
+// （削除時は該当フレーズを「その他」へ自動で移す）。
+function updateAddCatDeleteVisibility(){
+  const val = document.getElementById("addCat").value;
+  document.getElementById("addCatDeleteRow").style.display = customCats.includes(val) ? "" : "none";
+}
+document.getElementById("addCat").addEventListener("change", updateAddCatDeleteVisibility);
+document.getElementById("addCatNew").addEventListener("click", ()=>{
+  const name = (prompt("新しいカテゴリ名を入力してください") || "").trim();
+  if(!name) return;
+  if(allCats().includes(name)){ alert("そのカテゴリ名はすでに使われています"); return; }
+  customCats.push(name);
+  if(!catOrder.includes(name)) catOrder.push(name);
+  saveCustomCats();
+  saveSettings();
+  populateAddCatSelect();
+  document.getElementById("addCat").value = name;
+  updateAddCatDeleteVisibility();
+  renderCats();
+});
+document.getElementById("addCatDelete").addEventListener("click", ()=>{
+  const name = document.getElementById("addCat").value;
+  if(!customCats.includes(name)) return;
+  if(!confirm(`「${name}」を削除しますか？\nこのカテゴリのフレーズは「その他」に移動します。`)) return;
+  customCats = customCats.filter(c=>c!==name);
+  catOrder = catOrder.filter(c=>c!==name);
+  customData.forEach(d=>{ if(d.cat===name) d.cat = "その他"; });
+  saveCustomCats();
+  saveSettings();
+  saveCustom();
+  populateAddCatSelect();
+  updateAddCatDeleteVisibility();
+  if(currentCat === name){ currentCat = "すべて"; saveSettings(); }
+  renderCats();
+  renderDeck();
+});
 
 // Google翻訳の無料エンドポイントで日本語から各言語へ翻訳。
 // 失敗時、Gemini APIキーが設定されていればGeminiに翻訳させるフォールバック付き

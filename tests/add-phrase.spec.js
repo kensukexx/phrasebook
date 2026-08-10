@@ -75,3 +75,69 @@ test.describe('add custom phrase', () => {
     await expect(page.locator('#deck .ticket .ja').first()).toHaveText('テストフレーズ');
   });
 });
+
+test.describe('custom categories', () => {
+  test('the ＋ button creates a new category, selects it, and it appears as a tab', async ({ page }) => {
+    let promptMessage = '';
+    page.on('dialog', async d => { promptMessage = d.message(); await d.accept('推し活グッズ'); });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#openAdd');
+    await page.waitForSelector('#addOverlay.open');
+    await page.click('#addCatNew');
+    expect(promptMessage).toContain('新しいカテゴリ');
+    await expect(page.locator('#addCat')).toHaveValue('推し活グッズ');
+    await expect(page.locator('#addCatDeleteRow')).toBeVisible();
+
+    await page.fill('#addJa', 'ペンライトを持ってきましたか？');
+    await page.click('#submitAdd');
+    await page.waitForTimeout(300);
+    await expect(page.locator('.cat[data-cat="推し活グッズ"]')).toBeVisible();
+
+    // persists across reload
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+    await expect(page.locator('.cat[data-cat="推し活グッズ"]')).toBeVisible();
+    const stored = await page.evaluate(() => localStorage.getItem('phrasebook-custom-cats'));
+    expect(JSON.parse(stored)).toEqual(['推し活グッズ']);
+  });
+
+  test('a duplicate category name is rejected', async ({ page }) => {
+    const alerts = [];
+    page.on('dialog', async d => {
+      if (d.type() === 'prompt') { await d.accept('あいさつ'); return; }
+      alerts.push(d.message());
+      await d.accept();
+    });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#openAdd');
+    await page.click('#addCatNew');
+    await page.waitForTimeout(200);
+    expect(alerts.join()).toContain('すでに使われています');
+  });
+
+  test('the delete link only shows for custom categories, and deleting one moves its phrases to その他', async ({ page }) => {
+    page.on('dialog', async d => { await d.accept(d.type() === 'prompt' ? '推し活グッズ' : undefined); });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#openAdd');
+    // a built-in category should never show the delete option
+    await expect(page.locator('#addCatDeleteRow')).toBeHidden();
+
+    await page.click('#addCatNew');
+    await page.fill('#addJa', 'ペンライトを持ってきましたか？');
+    await page.click('#submitAdd');
+    await page.waitForTimeout(300);
+
+    const card = page.locator('.ticket:has-text("ペンライトを持ってきましたか")');
+    await card.locator('[data-role=edit]').click();
+    await page.waitForSelector('#addOverlay.open');
+    await expect(page.locator('#addCatDeleteRow')).toBeVisible();
+    await page.click('#addCatDelete');
+    await page.waitForTimeout(300);
+
+    await expect(page.locator('.cat[data-cat="推し活グッズ"]')).toHaveCount(0);
+    await expect(card.locator('.cat-tag')).toHaveText('その他');
+  });
+});
