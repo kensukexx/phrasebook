@@ -50,7 +50,7 @@ test.describe('practice notes (練習ノート)', () => {
     await setGeminiKey(page, 'FAKE_KEY');
     await mockGemini(page, {
       word: 'school', wordKana: 'スクール', meaning: '学校',
-      groups: [{ title: '基本の例文', examples: [{ text: 'I go to school.', kana: 'アイ ゴー トゥー スクール', ja: '学校に行きます。' }] }],
+      groups: [{ title: '基本の例文', examples: [{ text: 'I go to school.', kana: 'アイ ゴー トゥー スクール', ja: '学校に行きます。', gloss: 'I(私は) go(行きます) to school(学校に)' }] }],
     });
 
     await page.click('#toolsBtn');
@@ -60,6 +60,7 @@ test.describe('practice notes (練習ノート)', () => {
     await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
     await expect(page.locator('#pdWord')).toHaveText('school');
     await expect(page.locator('.practice-ex')).toHaveCount(1);
+    await expect(page.locator('.pe-gloss')).toHaveText('🔤 I(私は) go(行きます) to school(学校に)');
 
     const stored = await page.evaluate(() => localStorage.getItem('phrasebook-practice-custom'));
     expect(JSON.parse(stored)).toHaveLength(1);

@@ -244,6 +244,7 @@
   .practice-ex .pe-text-wrap{ flex:1; min-width:0; }
   .practice-ex .pe-text{ font-size:14.5px; font-weight:600; }
   .practice-ex .pe-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .practice-ex .pe-gloss{ font-size:12px; color:var(--ink); font-weight:600; margin-top:6px; }
   .practice-ex .pe-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
   .practice-ex .pe-speak{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--red); cursor:pointer; }
   .practice-ex .pe-btns{ flex:0 0 auto; display:flex; gap:6px; }
@@ -432,7 +433,7 @@
 
     <div class="manual-section">
       <h3>🎓 練習ノート</h3>
-      <p>覚えたい単語を入力すると、AIがその単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます（設定でGeminiキーの登録が必要）。作成したノートは自動で保存され、一覧からタップすればいつでも見返せます。自分で作ったノートは✕で削除できます。気に入った例文は★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
+      <p>覚えたい単語を入力すると、AIがその単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます（設定でGeminiキーの登録が必要）。各例文には🔤で単語ごとの意味対応も表示され、どの単語がどの日本語に当たるか一目でわかります。作成したノートは自動で保存され、一覧からタップすればいつでも見返せます。自分で作ったノートは✕で削除できます。気に入った例文は★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
     </div>
 
     <div class="manual-section">
@@ -2077,6 +2078,7 @@ function openPracticeDetail(idx){
           <div class="pe-text-wrap">
             <div class="pe-text">${esc(ex.text)}</div>
             <div class="pe-kana">${esc(ex.kana || "")}</div>
+            ${ex.gloss ? `<div class="pe-gloss">🔤 ${esc(ex.gloss)}</div>` : ''}
             <div class="pe-ja">${esc(ex.ja || "")}</div>
           </div>
           <div class="pe-btns">
@@ -2125,8 +2127,9 @@ const PRACTICE_PACK_SCHEMA = {
                 text: { type: "string" },
                 kana: { type: "string" },
                 ja: { type: "string" },
+                gloss: { type: "string" },
               },
-              required: ["text","kana","ja"],
+              required: ["text","kana","ja","gloss"],
             },
           },
         },
@@ -2197,6 +2200,9 @@ async function generatePracticePack(langKey, word){
 - groups は「基本の例文」から始め、用法パターンごとに2〜4グループに分ける（例：品詞や文型で使い方が変わる場合はパターン別に）
 - 各グループの examples は自然でよく使われる例文を2〜3個
 - 例文には対象言語の文（text）、カタカナでの発音表記（kana）、日本語訳（ja）を必ずつける
+- gloss は、textをどこで区切ってもよいので単語・意味のまとまりごとに分け、各まとまりの直後にそれが日本語で何を意味するかをカッコ書きで添える。
+  例（英語の場合）："Is(です) there(いる) anyone(誰か) you're interested in(気になる人)?"
+  対応する日本語（ja）のどの部分に当たるかが一目で分かるようにすること
 - 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
 - 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
   return callGeminiJSON(prompt, PRACTICE_PACK_SCHEMA);
