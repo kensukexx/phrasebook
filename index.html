@@ -243,6 +243,8 @@
   .practice-ex .pe-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
   .practice-ex .pe-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
   .practice-ex .pe-speak{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--red); cursor:pointer; }
+  .practice-ex .pe-btns{ flex:0 0 auto; display:flex; gap:6px; }
+  .practice-ex .pe-save{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--gold); cursor:pointer; }
   .practice-ex .pe-speak.playing{ background:var(--red); color:#fff; border-color:var(--red); }
   .back-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   .back-row button{ background:none; border:none; font-size:14px; color:var(--ink-soft); cursor:pointer; padding:4px 0; }
@@ -427,7 +429,7 @@
 
     <div class="manual-section">
       <h3>🎓 練習ノート</h3>
-      <p>覚えたい単語を入力すると、AIがその単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます（設定でGeminiキーの登録が必要）。作成したノートは自動で保存され、一覧からタップすればいつでも見返せます。自分で作ったノートは✕で削除できます。</p>
+      <p>覚えたい単語を入力すると、AIがその単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます（設定でGeminiキーの登録が必要）。作成したノートは自動で保存され、一覧からタップすればいつでも見返せます。自分で作ったノートは✕で削除できます。気に入った例文は★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
     </div>
 
     <div class="manual-section">
@@ -2041,7 +2043,10 @@ function openPracticeDetail(idx){
             <div class="pe-kana">${esc(ex.kana || "")}</div>
             <div class="pe-ja">${esc(ex.ja || "")}</div>
           </div>
-          <button class="pe-speak" aria-label="発音を聞く">🔊</button>
+          <div class="pe-btns">
+            <button class="pe-speak" aria-label="発音を聞く">🔊</button>
+            <button class="pe-save" aria-label="フレーズ帳に追加">★</button>
+          </div>
         </div>
       `).join('')}
     </div>
@@ -2051,6 +2056,13 @@ function openPracticeDetail(idx){
     const ex = allExamples[i];
     row.querySelector('.pe-speak').addEventListener('click', (e)=>{
       speakRaw(ex.text, meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
+    });
+    row.querySelector('.pe-save').addEventListener('click', ()=>{
+      document.getElementById("practiceOverlay").classList.remove("open");
+      openAddPanel(null);
+      document.getElementById("addJa").value = ex.ja || "";
+      document.getElementById(`add_${pack.lang}`).value = ex.text || "";
+      document.getElementById(`add_${pack.lang}_kana`).value = ex.kana || "";
     });
   });
 }
@@ -2607,7 +2619,7 @@ document.getElementById("closeAdd").onclick = ()=> document.getElementById("addO
 // Google翻訳の無料エンドポイントで日本語から各言語へ翻訳。
 // 失敗時、Gemini APIキーが設定されていればGeminiに翻訳させるフォールバック付き
 // （Google翻訳は非公式エンドポイントのため、将来的に予告なく仕様変更・遮断される可能性がある）。
-const GOOGLE_LANG_CODES = { en:"en", ko:"ko", de:"de", ro:"ro", es:"es", fr:"fr", vi:"vi", zh:"zh-CN", pt:"pt" };
+const GOOGLE_LANG_CODES = { en:"en", ko:"ko", de:"de", ro:"ro", es:"es", fr:"fr", vi:"vi", zh:"zh-CN", pt:"pt", ru:"ru", hi:"hi" };
 async function translateText(text, target){
   try{
     const url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=" + encodeURIComponent(target) + "&dt=t&q=" + encodeURIComponent(text);

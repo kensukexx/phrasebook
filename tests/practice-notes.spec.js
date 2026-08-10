@@ -84,6 +84,41 @@ test.describe('practice notes (練習ノート)', () => {
     expect(alerts.join()).toContain('安全フィルター');
   });
 
+  test('the ★ button on an example saves it as a new custom phrase, letting the user pick the category', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGemini(page, {
+      word: 'school', wordKana: 'スクール', meaning: '学校',
+      groups: [{ title: '基本の例文', examples: [{ text: 'I go to school.', kana: 'アイ ゴー トゥー スクール', ja: '学校に行きます。' }] }],
+    });
+
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.fill('#practiceGenWord', '学校');
+    await page.click('#practiceGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+
+    await page.click('.pe-save');
+    await expect(page.locator('#addOverlay')).toHaveClass(/open/);
+    await expect(page.locator('#practiceOverlay')).not.toHaveClass(/open/);
+    await expect(page.locator('#addJa')).toHaveValue('学校に行きます。');
+    await expect(page.locator('#add_en')).toHaveValue('I go to school.');
+    await expect(page.locator('#add_en_kana')).toHaveValue('アイ ゴー トゥー スクール');
+
+    // the category is left for the user to pick, not forced - the select stays interactive
+    await page.selectOption('#addCat', 'その他');
+    await page.click('#submitAdd');
+
+    const stored = await page.evaluate(() => localStorage.getItem('phrasebook-custom'));
+    const saved = JSON.parse(stored);
+    expect(saved).toHaveLength(1);
+    expect(saved[0].ja).toBe('学校に行きます。');
+    expect(saved[0].cat).toBe('その他');
+    expect(saved[0].en).toEqual(['I go to school.', 'アイ ゴー トゥー スクール']);
+  });
+
   test('an invalid-key error surfaces the raw API message', async ({ page, browserName }) => {
     // On WebKit this happens to pass even without the mock applying, because a fake
     // key against the real API returns the same "API key not valid" message - but
