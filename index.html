@@ -64,7 +64,9 @@
     -webkit-overflow-scrolling:touch; background:var(--paper); scrollbar-width:none;
     box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
   .cats::-webkit-scrollbar{ display:none; }
-  .cats.wrap{ flex-wrap:wrap; overflow-x:visible; }
+  /* 折り返し表示：無制限に折り返すと縦に伸びすぎてスマホの画面を圧迫するため、
+     常に2行に収め、収まりきらない分は（1行表示の時と同じく）横スクロールで見せる。 */
+  .cats.wrap{ display:grid; grid-auto-flow:column; grid-template-rows:repeat(2, auto); grid-auto-columns:max-content; overflow-y:hidden; }
   .cat{ flex:0 0 auto; display:flex; align-items:center; gap:6px; padding:9px 15px; border:none; border-radius:999px; background:#fff;
     touch-action:pan-x; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
     font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; font-weight:700; color:var(--ink); cursor:pointer; white-space:nowrap;
@@ -445,7 +447,7 @@
 
     <div class="manual-section">
       <h3>⚙ 設定</h3>
-      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、カテゴリバーの表示（1行スクロール⇄複数行の折り返し表示）、聞き流し再生の設定（日本語も続けて読み上げるか・最後まで行ったらループするか・繰り返し回数・フレーズ間の間隔）、言語ごとの声、Gemini APIキーの登録などができます。言語の並び順は設定画面ではなく、一覧上部の言語ドロップダウンをタップして開く「言語を選ぶ」画面でハンドル「⠿」をドラッグして変更します。</p>
+      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、カテゴリバーの表示（1行スクロール⇄2行表示・はみ出た分は横スクロール）、聞き流し再生の設定（日本語も続けて読み上げるか・最後まで行ったらループするか・繰り返し回数・フレーズ間の間隔）、言語ごとの声、Gemini APIキーの登録などができます。言語の並び順は設定画面ではなく、一覧上部の言語ドロップダウンをタップして開く「言語を選ぶ」画面でハンドル「⠿」をドラッグして変更します。</p>
     </div>
 
     <div class="manual-section">
@@ -547,7 +549,7 @@
     <div class="field">
       <label>カテゴリバー</label>
       <div class="toggle-wrap">
-        <span>折り返し表示にする（1行スクロールの代わりに複数行で表示）</span>
+        <span>2行で表示する（画面を圧迫しないよう常に2行に収め、はみ出た分は横スクロール）</span>
         <div class="switch" id="catBarWrapToggle"></div>
       </div>
     </div>
@@ -1216,8 +1218,8 @@ function renderCats(){
     }
     wrap.appendChild(btn);
   });
-  // 選択中のカテゴリがバーの中央に来るよう横スクロール（折り返し表示中は縦に並ぶだけなので不要）
-  if(activeBtn && !catBarWrap){
+  // 選択中のカテゴリがバーの中央に来るよう横スクロール（折り返し表示中も2行×横スクロールなので同様に必要）
+  if(activeBtn){
     requestAnimationFrame(()=>{
       wrap.scrollTo({ left: activeBtn.offsetLeft - wrap.clientWidth/2 + activeBtn.clientWidth/2, behavior:"smooth" });
     });
