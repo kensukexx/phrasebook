@@ -19,6 +19,31 @@ test.describe('cross-device sync (configured)', () => {
     expect(errors).toEqual([]);
   });
 
+  test('backgrounding the tab (visibilitychange to hidden) does not crash, signed out or in', async ({ page }) => {
+    // Regression guard for a real bug: schedulePush() debounces pushes by 1.2s, so closing
+    // the tab / backgrounding the app / locking the phone right after an edit could drop
+    // that change before the debounced setTimeout ever fires. The fix listens for
+    // visibilitychange and flushes any pending push immediately. Completing a real sign-in
+    // isn't possible in CI (see the file header), so this only pins down that toggling
+    // visibility - the common signed-out case, and after opening the sync UI - never throws.
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.waitForTimeout(1000);
+
+    await page.evaluate(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await page.waitForTimeout(200);
+
+    const stillResponsive = await page.evaluate(() => document.getElementById('deck') !== null);
+    expect(stillResponsive).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
   test('sign-in button opens the sign-in overlay with a working button (not the "not configured" message)', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');

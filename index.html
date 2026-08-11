@@ -3515,13 +3515,28 @@ if("serviceWorker" in navigator){
     // saveSettingsは他の端末固有設定（読み上げ速度等）も含む1つの塊で保存されるため、
     // 頻繁な操作（スライダー等）でも呼ばれるが、schedulePushの1.2秒デバウンスで実害はない。
     // 実際にクラウドへ送る内容はgetSyncableState()が選んだフィールド（catOrder/langOrder等）のみ。
-    ["saveCustom", "savePracticePacks", "saveLearned", "savePinned", "saveSettings"].forEach(fnName=>{
+    ["saveCustom", "saveCustomCats", "savePracticePacks", "saveLearned", "savePinned", "saveSettings"].forEach(fnName=>{
       const orig = window[fnName];
       window[fnName] = async function(...args){
         const result = await orig.apply(this, args);
         schedulePush();
         return result;
       };
+    });
+
+    // 「同期がうまくいっていないことがある」の主因と思われる不具合への対策：
+    // schedulePushは1.2秒のデバウンスなので、変更した直後にタブを閉じる・アプリを
+    // バックグラウンドに回す・スマホの画面をロックすると、setTimeoutが発火する前に
+    // ページが破棄され、その変更が一度もクラウドに届かないまま消えてしまう。
+    // beforeunload/unloadはモバイル（特にiOS Safari・PWA）では信頼できないため、
+    // ページのライフサイクル的に確実な visibilitychange（hidden化）で
+    // 保留中のpushがあれば即座に確定させる。
+    document.addEventListener("visibilitychange", ()=>{
+      if(document.visibilityState === "hidden" && pushTimer){
+        clearTimeout(pushTimer);
+        pushTimer = null;
+        pushNow();
+      }
     });
   }
 </script>
