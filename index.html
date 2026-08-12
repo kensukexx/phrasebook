@@ -266,6 +266,12 @@
   .pd-chat-input-row{ display:flex; gap:8px; margin-top:14px; position:sticky; bottom:0; background:var(--paper); padding-top:8px; }
   .pd-chat-input-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
   .pd-chat-input-row button{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:none; background:var(--blue); color:#fff; font-size:16px; cursor:pointer; }
+  .whatsnew-item{ margin-bottom:16px; padding-bottom:16px; border-bottom:1px solid var(--line); }
+  .whatsnew-item:last-child{ border-bottom:none; margin-bottom:6px; padding-bottom:0; }
+  .whatsnew-item .whatsnew-date{ font-size:11px; color:var(--ink-soft); letter-spacing:.05em; }
+  .whatsnew-item .whatsnew-title{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:15px; margin:2px 0 8px; }
+  .whatsnew-item ul{ margin:0; padding-left:1.3em; font-size:13.5px; color:var(--ink-soft); line-height:1.65; }
+  .whatsnew-item li{ margin-bottom:4px; }
   .back-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   .back-row button{ background:none; border:none; font-size:14px; color:var(--ink-soft); cursor:pointer; padding:4px 0; }
   .currency-row{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
@@ -540,6 +546,14 @@
       </ol>
       <p>キーはこの端末にのみ保存されます（1日あたりの無料利用回数に上限あり）。</p>
     </div>
+  </div>
+</div>
+
+<div class="overlay" id="whatsNewOverlay">
+  <div class="panel">
+    <h2>🎉 新機能のお知らせ <button id="closeWhatsNew" aria-label="閉じる">✕</button></h2>
+    <div id="whatsNewList"></div>
+    <button class="submitbtn" id="whatsNewOkBtn" style="background:var(--blue);">わかった</button>
   </div>
 </div>
 
@@ -1052,6 +1066,7 @@ let showPinnedOnly = false;
 let patternMode = false; // ON: 会話パターン系カテゴリのみ表示、OFF: それ以外の通常カテゴリのみ表示
 let catBarWrap = false; // ON: カテゴリバーを複数行に折り返し表示、OFF(既定): 1行の横スクロール
 let practiceListLimit = 20; // 学習ラウンジ一覧に表示する件数（新しい方から）。設定画面で変更可能
+let whatsNewSeenId = 0; // 「新機能のお知らせ」ポップアップで既読済みのCHANGELOGエントリid（未読分だけ起動時に表示）
 let rate = 1.0;
 let jaRate = 1.25;
 let fsScale = 1.0;
@@ -1093,6 +1108,7 @@ async function loadState(){
   try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
   try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
+  try{ const wn = await store.get('phrasebook-whatsnew-seen'); if(wn && wn.value){ whatsNewSeenId = parseInt(wn.value, 10) || 0; } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
   allCats().forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
   // 保存されていたcurrentCatが読み込んだpatternModeの状態と矛盾する場合（例：以前OFFのまま
@@ -2072,6 +2088,39 @@ function closeAllOverlays(){
     document.getElementById(id).classList.remove("open");
   });
 }
+
+// --- 新機能のお知らせ ---
+// 機能を追加したら配列の末尾に新しいエントリを足すこと（idは既存の最大+1、昇順を維持）。
+// 起動時、whatsNewSeenIdより大きいidのエントリだけをまとめてポップアップ表示し、
+// 閉じた時点の最新idをwhatsNewSeenIdとして保存する（個人利用前提なので、初回起動時
+// （キー未保存＝0扱い）も含めて未読分は全部見せる）。
+const CHANGELOG = [
+  { id: 1, date: "2026-08-12", title: "学習ラウンジに💬AIに質問モードを追加", items: [
+    "「練習ノート」を「学習ラウンジ」に改名しました。",
+    "単語1つに収まらない自由な質問をAIに聞ける「💬AIに質問」モードを追加。回答に具体的なフレーズが含まれる場合は発音・保存もできます。",
+    "回答の続きを聞く（フォローアップ）こともできます。",
+  ]},
+];
+
+function checkWhatsNew(){
+  const unseen = CHANGELOG.filter(e=>e.id > whatsNewSeenId);
+  if(unseen.length === 0) return;
+  document.getElementById("whatsNewList").innerHTML = unseen.map(entry=>`
+    <div class="whatsnew-item">
+      <div class="whatsnew-date">${esc(entry.date)}</div>
+      <div class="whatsnew-title">${esc(entry.title)}</div>
+      <ul>${entry.items.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>
+    </div>
+  `).join('');
+  document.getElementById("whatsNewOverlay").classList.add("open");
+}
+async function dismissWhatsNew(){
+  document.getElementById("whatsNewOverlay").classList.remove("open");
+  whatsNewSeenId = CHANGELOG[CHANGELOG.length - 1].id;
+  await safeSet('phrasebook-whatsnew-seen', String(whatsNewSeenId));
+}
+document.getElementById("whatsNewOkBtn").addEventListener("click", dismissWhatsNew);
+document.getElementById("closeWhatsNew").addEventListener("click", dismissWhatsNew);
 document.getElementById("toolsBtn").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.add("open"));
 document.getElementById("closeTools").addEventListener("click", ()=> document.getElementById("toolsOverlay").classList.remove("open"));
 document.getElementById("menuSync").addEventListener("click", ()=>{
@@ -3570,6 +3619,7 @@ document.getElementById("submitAdd").onclick = ()=>{
   renderCats();
   renderDeck();
   if(synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; }
+  checkWhatsNew();
 })();
 
 // オフラインでもアプリを開けるようにする（GitHub Pagesの1ページのみキャッシュ）

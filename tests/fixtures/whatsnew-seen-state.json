@@ -1,0 +1,11 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:8934",
+      "localStorage": [
+        { "name": "phrasebook-whatsnew-seen", "value": "999999" }
+      ]
+    }
+  ]
+}

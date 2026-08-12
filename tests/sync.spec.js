@@ -90,6 +90,12 @@ test.describe('cross-device sync (configured)', () => {
     const context = await browser.newContext({
       userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
     });
+    // a manually-created context doesn't inherit playwright.config.js's default storageState
+    // (and this test navigates to a different origin than that fixture covers anyway), so the
+    // 🎉 新機能のお知らせ popup would otherwise open here and block the clicks below.
+    await context.addInitScript(() => {
+      localStorage.setItem('phrasebook-whatsnew-seen', '999999');
+    });
     const page = await context.newPage();
     // Firebase authorizes "localhost" by default but not "127.0.0.1" (the config's baseURL) -
     // go there directly so sign-in isn't rejected client-side with auth/unauthorized-domain.
