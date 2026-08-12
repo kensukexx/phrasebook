@@ -66,6 +66,50 @@ test.describe('practice notes (練習ノート)', () => {
     expect(JSON.parse(stored)).toHaveLength(1);
   });
 
+  test('the list shows at most the configured number of notes (default 20), with a hint for the rest, and the setting is adjustable', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    // seed 25 packs directly rather than driving 25 real generations through the UI
+    await page.evaluate(() => {
+      const packs = Array.from({ length: 25 }, (_, i) => ({
+        id: 'seed-' + i, lang: 'en', word: 'word' + i, wordKana: '', meaning: 'meaning' + i,
+        groups: [{ title: 'g', examples: [{ text: 'text' + i, kana: '', ja: 'ja' + i, gloss: '' }] }], custom: true,
+      }));
+      localStorage.setItem('phrasebook-practice-custom', JSON.stringify(packs));
+    });
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.waitForSelector('#practiceOverlay.open');
+
+    // default limit is 20: newest 20 (word24 down to word5) shown, oldest 5 hidden
+    await expect(page.locator('.practice-card')).toHaveCount(20);
+    await expect(page.locator('.pc-word').first()).toHaveText('word24');
+    await expect(page.locator('.pc-word').last()).toHaveText('word5');
+    await expect(page.locator('#practiceList .hint')).toHaveText('全25件中、新しい20件を表示中（設定の「練習ノート一覧の表示件数」で増やせます）。');
+
+    // narrow the limit from settings and confirm the list re-renders live
+    await page.click('#closePractice');
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await page.waitForSelector('#settingsOverlay.open');
+    await expect(page.locator('#practiceLimitInput')).toHaveValue('20');
+    await page.fill('#practiceLimitInput', '3');
+    await page.dispatchEvent('#practiceLimitInput', 'change');
+    await page.click('#closeSettings');
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await expect(page.locator('.practice-card')).toHaveCount(3);
+
+    // the setting persists across reload
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuSettings');
+    await expect(page.locator('#practiceLimitInput')).toHaveValue('3');
+  });
+
   test('the most recently generated note is listed first, but its stored position (data-idx) is unchanged', async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
     await page.goto('/index.html');
