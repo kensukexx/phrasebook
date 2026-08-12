@@ -1,14 +1,14 @@
 const { test, expect } = require('@playwright/test');
 const { mockGemini, mockGeminiError, setGeminiKey } = require('./helpers');
 
-test.describe('practice notes (練習ノート)', () => {
+test.describe('practice notes / 学習ラウンジ (📝例文セット mode)', () => {
   test('list starts empty with a helpful message', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('#toolsBtn');
     await page.click('#menuPractice');
     await page.waitForSelector('#practiceOverlay.open');
-    await expect(page.locator('#practiceList')).toContainText('まだ練習ノートがありません');
+    await expect(page.locator('#practiceList')).toContainText('まだ学習ラウンジの記録がありません');
   });
 
   test('word input field is visible and usable on a narrow (mobile) viewport', async ({ page }) => {
@@ -87,7 +87,7 @@ test.describe('practice notes (練習ノート)', () => {
     await expect(page.locator('.practice-card')).toHaveCount(20);
     await expect(page.locator('.pc-word').first()).toHaveText('word24');
     await expect(page.locator('.pc-word').last()).toHaveText('word5');
-    await expect(page.locator('#practiceList .hint')).toHaveText('全25件中、新しい20件を表示中（設定の「練習ノート一覧の表示件数」で増やせます）。');
+    await expect(page.locator('#practiceList .hint')).toHaveText('全25件中、新しい20件を表示中（設定の「学習ラウンジ一覧の表示件数」で増やせます）。');
 
     // narrow the limit from settings and confirm the list re-renders live
     await page.click('#closePractice');
@@ -264,5 +264,107 @@ test.describe('practice notes (練習ノート)', () => {
     await page.click('#practiceGenBtn');
     await page.waitForTimeout(300);
     expect(alerts.join()).toContain('API key not valid');
+  });
+});
+
+test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
+  test('the mode tabs show/hide the correct pane', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.waitForSelector('#practiceOverlay.open');
+    await expect(page.locator('#practiceExamplesPane')).toBeVisible();
+    await expect(page.locator('#practiceChatPane')).toBeHidden();
+    await page.click('#practiceModeChatBtn');
+    await expect(page.locator('#practiceExamplesPane')).toBeHidden();
+    await expect(page.locator('#practiceChatPane')).toBeVisible();
+  });
+
+  test('asking without a key shows a clear prompt', async ({ page }) => {
+    const alerts = [];
+    page.on('dialog', async d => { alerts.push(d.message()); await d.accept(); });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.click('#practiceModeChatBtn');
+    await page.fill('#chatGenQuestion', 'おすすめを聞く時の質問文は？');
+    await page.click('#chatGenBtn');
+    await page.waitForTimeout(200);
+    expect(alerts.join()).toContain('Gemini APIキー');
+  });
+
+  test('a successful question creates a 💬-badged entry with a saveable phrase card, and a follow-up continues the same thread', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGemini(page, {
+      reply: 'おすすめを尋ねるときはこう言います。',
+      phrase: { text: 'What do you recommend?', kana: 'ワット ドゥー ユー レコメンド', ja: 'おすすめは何ですか？' },
+    });
+
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.click('#practiceModeChatBtn');
+    await page.fill('#chatGenQuestion', 'おすすめを聞く時の質問文は？');
+    await page.click('#chatGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+
+    await expect(page.locator('#pdChatWrap')).toBeVisible();
+    await expect(page.locator('#pdHead')).toBeHidden();
+    await expect(page.locator('.chat-bubble.user')).toHaveText('おすすめを聞く時の質問文は？');
+    await expect(page.locator('.chat-bubble.ai')).toHaveText('おすすめを尋ねるときはこう言います。');
+    await expect(page.locator('.chat-phrase-card .cp-text')).toHaveText('What do you recommend?');
+
+    // back to the list: the entry shows a 💬 badge, not a language label like example sets do
+    await page.click('#backToPracticeList');
+    await expect(page.locator('.lang-badge').first()).toHaveText('💬');
+
+    // reopening it and asking a follow-up continues the same thread rather than starting a new entry
+    await page.click('.practice-card >> nth=0');
+    await mockGemini(page, {
+      reply: '他にもこんな聞き方があります。',
+      phrase: { text: 'Any recommendations?', kana: 'エニー レコメンデーションズ', ja: 'おすすめはありますか？' },
+    });
+    await page.fill('#pdChatInput', '他の言い方も知りたい');
+    await page.click('#pdChatSendBtn');
+    await expect(page.locator('.chat-bubble.ai')).toHaveCount(2, { timeout: 8000 });
+    await expect(page.locator('.chat-bubble.user')).toHaveCount(2);
+    await expect(page.locator('.chat-phrase-card')).toHaveCount(2);
+
+    // saving a phrase card from the chat feeds the add-phrase panel just like example-set cards do
+    await page.locator('.chat-phrase-card').nth(1).locator('.cp-save').click();
+    await expect(page.locator('#addOverlay')).toHaveClass(/open/);
+    await expect(page.locator('#addJa')).toHaveValue('おすすめはありますか？');
+    await expect(page.locator('#add_en')).toHaveValue('Any recommendations?');
+
+    // still exactly one list entry (the follow-up appended to it, it didn't create a second one)
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-practice-custom')));
+    expect(stored).toHaveLength(1);
+    expect(stored[0].type).toBe('chat');
+    expect(stored[0].messages).toHaveLength(4);
+  });
+
+  test('a question with no specific phrase to suggest shows only the reply bubble, no phrase card', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGemini(page, {
+      reply: '一般的には、笑顔でうなずくのが良いリアクションです。',
+      phrase: { text: '', kana: '', ja: '' },
+    });
+
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.click('#practiceModeChatBtn');
+    await page.fill('#chatGenQuestion', 'こんなときのリアクションは？');
+    await page.click('#chatGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+
+    await expect(page.locator('.chat-bubble.ai')).toHaveText('一般的には、笑顔でうなずくのが良いリアクションです。');
+    await expect(page.locator('.chat-phrase-card')).toHaveCount(0);
   });
 });

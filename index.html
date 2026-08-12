@@ -250,6 +250,22 @@
   .practice-ex .pe-btns{ flex:0 0 auto; display:flex; gap:6px; }
   .practice-ex .pe-save{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--gold); cursor:pointer; }
   .practice-ex .pe-speak.playing{ background:var(--red); color:#fff; border-color:var(--red); }
+  .mode-tabs{ display:flex; gap:8px; margin-bottom:14px; }
+  .mode-tab{ flex:1; padding:10px 8px; border-radius:10px; border:1.5px solid var(--line); background:rgba(255,255,255,0.5); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; font-weight:700; color:var(--ink-soft); cursor:pointer; }
+  .mode-tab.active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .pd-chat-title{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:900; font-size:18px; margin-bottom:14px; line-height:1.4; }
+  .pd-chat-messages{ display:flex; flex-direction:column; gap:10px; }
+  .chat-bubble{ max-width:85%; padding:10px 13px; border-radius:14px; font-size:14px; line-height:1.6; }
+  .chat-bubble.user{ align-self:flex-end; background:var(--blue); color:#fff; border-bottom-right-radius:4px; }
+  .chat-bubble.ai{ align-self:flex-start; background:rgba(47,53,66,0.06); color:var(--ink); border-bottom-left-radius:4px; }
+  .chat-phrase-card{ align-self:flex-start; max-width:85%; border:1.5px solid var(--line); border-radius:12px; padding:10px 12px; background:#fff; }
+  .chat-phrase-card .cp-text{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:14.5px; }
+  .chat-phrase-card .cp-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .chat-phrase-card .cp-ja{ font-size:12.5px; color:var(--ink); margin-top:4px; }
+  .chat-phrase-card .cp-btns{ display:flex; gap:8px; margin-top:8px; }
+  .pd-chat-input-row{ display:flex; gap:8px; margin-top:14px; position:sticky; bottom:0; background:var(--paper); padding-top:8px; }
+  .pd-chat-input-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
+  .pd-chat-input-row button{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:none; background:var(--blue); color:#fff; font-size:16px; cursor:pointer; }
   .back-row{ display:flex; align-items:center; gap:10px; margin-bottom:10px; }
   .back-row button{ background:none; border:none; font-size:14px; color:var(--ink-soft); cursor:pointer; padding:4px 0; }
   .currency-row{ display:flex; align-items:center; gap:8px; margin-bottom:10px; }
@@ -295,7 +311,7 @@
     <h2>ツール <button id="closeTools" aria-label="閉じる">✕</button></h2>
     <button class="tool-item" id="menuSync"><span>☁️</span><span id="syncMenuLabel">同期（未ログイン）</span></button>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
-    <button class="tool-item" id="menuPractice"><span>🎓</span>練習ノート</button>
+    <button class="tool-item" id="menuPractice"><span>🎓</span>学習ラウンジ</button>
     <button class="tool-item" id="menuScan"><span>📷</span>メニュー翻訳（写真から）</button>
     <button class="tool-item" id="menuLearnJa"><span>🌏</span>日本語を学ぶ（外国人向け）</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
@@ -308,7 +324,7 @@
   <div class="panel">
     <h2>端末間の同期 <button id="closeSync" aria-label="閉じる">✕</button></h2>
     <div id="syncSignedOut">
-      <p class="hint" style="margin:0 0 14px;">Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・練習ノート・カテゴリと言語の並び順を他の端末と同期できます。</p>
+      <p class="hint" style="margin:0 0 14px;">Googleアカウントでログインすると、カスタムフレーズ・覚えた/ピン留め・学習ラウンジ・カテゴリと言語の並び順を他の端末と同期できます。</p>
       <button class="submitbtn" id="syncSignInBtn" style="background:var(--blue);">Googleでログイン</button>
     </div>
     <div id="syncSignedIn" style="display:none;">
@@ -364,13 +380,28 @@
 <div class="overlay" id="practiceOverlay">
   <div class="panel">
     <div id="practiceListView">
-      <h2>練習ノート <button id="closePractice" aria-label="閉じる">✕</button></h2>
-      <div class="field">
-        <label>新しく練習ノートを作る</label>
-        <select id="practiceGenLang" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:8px;"></select>
-        <input type="text" id="practiceGenWord" placeholder="例：without" style="width:100%;">
-        <button class="submitbtn" id="practiceGenBtn" style="background:var(--blue); margin-top:8px;">✨ AIで例文セットを作る</button>
-        <p class="hint" id="practiceGenHint">設定画面でGemini APIキーを登録すると、その場でAIが例文セットを生成します（オンライン時のみ）。</p>
+      <h2>学習ラウンジ <button id="closePractice" aria-label="閉じる">✕</button></h2>
+      <div class="mode-tabs" id="practiceModeTabs">
+        <button class="mode-tab active" id="practiceModeExamplesBtn" data-mode="examples">📝 例文セット</button>
+        <button class="mode-tab" id="practiceModeChatBtn" data-mode="chat">💬 AIに質問</button>
+      </div>
+      <div id="practiceExamplesPane">
+        <div class="field">
+          <label>新しく例文セットを作る</label>
+          <select id="practiceGenLang" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:8px;"></select>
+          <input type="text" id="practiceGenWord" placeholder="例：without" style="width:100%;">
+          <button class="submitbtn" id="practiceGenBtn" style="background:var(--blue); margin-top:8px;">✨ AIで例文セットを作る</button>
+          <p class="hint" id="practiceGenHint">設定画面でGemini APIキーを登録すると、その場でAIが例文セットを生成します（オンライン時のみ）。</p>
+        </div>
+      </div>
+      <div id="practiceChatPane" style="display:none;">
+        <div class="field">
+          <label>AIに質問する</label>
+          <select id="chatGenLang" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:8px;"></select>
+          <input type="text" id="chatGenQuestion" placeholder="例：おすすめを聞く時の質問文は？" style="width:100%;">
+          <button class="submitbtn" id="chatGenBtn" style="background:var(--blue); margin-top:8px;">💬 AIに聞く</button>
+          <p class="hint" id="chatGenHint">言い回し・リアクションなど、単語1つに収まらない質問はこちら（設定でGemini APIキーの登録が必要）。回答の続きを聞く（フォローアップ）こともできます。</p>
+        </div>
       </div>
       <div id="practiceList"></div>
     </div>
@@ -378,13 +409,21 @@
       <div class="back-row">
         <button id="backToPracticeList">← 一覧へ戻る</button>
       </div>
-      <div class="pd-head">
+      <div class="pd-head" id="pdHead">
         <span class="pd-word" id="pdWord"></span>
         <button class="mini-btn" id="pdSpeak" aria-label="発音を聞く" style="width:34px;height:34px;">🔊</button>
       </div>
       <div class="pd-kana" id="pdKana"></div>
       <div class="pd-meaning" id="pdMeaning"></div>
       <div id="pdGroups"></div>
+      <div id="pdChatWrap" style="display:none;">
+        <div class="pd-chat-title" id="pdChatTitle"></div>
+        <div id="pdChatMessages" class="pd-chat-messages"></div>
+        <div class="pd-chat-input-row">
+          <input type="text" id="pdChatInput" placeholder="続けて質問する…">
+          <button id="pdChatSendBtn" aria-label="送信">➤</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -457,8 +496,8 @@
     </div>
 
     <div class="manual-section">
-      <h3>🎓 練習ノート</h3>
-      <p>覚えたい単語を入力すると、AIがその単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます（設定でGeminiキーの登録が必要）。各例文には🔤で単語ごとの意味対応も表示され、どの単語がどの日本語に当たるか一目でわかります。作成したノートは自動で保存され、新しいものから順に一覧に並びます（タップすればいつでも見返せます）。表示件数は既定20件で、それより多い分は設定画面の「練習ノート一覧の表示件数」で増やせます。自分で作ったノートは✕で削除できます。気に入った例文は★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
+      <h3>🎓 学習ラウンジ</h3>
+      <p>AIと一緒に言い回しを深掘りするための機能で、2つのモードがあります（いずれも設定でGeminiキーの登録が必要）。<b>📝 例文セット</b>は覚えたい単語を入力すると、その単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます。各例文には🔤で単語ごとの意味対応も表示され、どの単語がどの日本語に当たるか一目でわかります。<b>💬 AIに質問</b>は「おすすめを聞く時の質問文は？」のような、単語1つに収まらない質問を自由に投げかけられるチャットで、回答に具体的なフレーズが含まれる場合はカード形式で表示され、続けてフォローアップの質問もできます。どちらのモードで作った項目も自動で保存され、新しいものから順に1つの一覧に並びます（💬のバッジでチャットの項目と見分けられます。タップすればいつでも見返せます）。表示件数は既定20件で、それより多い分は設定画面の「学習ラウンジ一覧の表示件数」で増やせます。自分で作った項目は✕で削除できます。気に入ったフレーズは★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
     </div>
 
     <div class="manual-section">
@@ -478,7 +517,7 @@
 
     <div class="manual-section">
       <h3>⚙ 設定</h3>
-      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、カテゴリバーの表示（1行スクロール⇄2行表示・はみ出た分は横スクロール）、練習ノート一覧の表示件数（既定20件、数字を増やせばもっと表示できます）、聞き流し再生の設定（日本語も続けて読み上げるか・最後まで行ったらループするか・繰り返し回数・フレーズ間の間隔）、言語ごとの声、Gemini APIキーの登録などができます。言語の並び順は設定画面ではなく、一覧上部の言語ドロップダウンをタップして開く「言語を選ぶ」画面でハンドル「⠿」をドラッグして変更します。</p>
+      <p>読み上げ速度（現地語・日本語それぞれ）や文字サイズ、カテゴリバーの表示（1行スクロール⇄2行表示・はみ出た分は横スクロール）、学習ラウンジ一覧の表示件数（既定20件、数字を増やせばもっと表示できます）、聞き流し再生の設定（日本語も続けて読み上げるか・最後まで行ったらループするか・繰り返し回数・フレーズ間の間隔）、言語ごとの声、Gemini APIキーの登録などができます。言語の並び順は設定画面ではなく、一覧上部の言語ドロップダウンをタップして開く「言語を選ぶ」画面でハンドル「⠿」をドラッグして変更します。</p>
     </div>
 
     <div class="manual-section">
@@ -488,12 +527,12 @@
         <li>「Googleでログイン」を押す</li>
         <li>ポップアップで自分のGoogleアカウントを選ぶだけでログイン完了（新規登録やパスワード入力は不要）</li>
       </ol>
-      <p>ログインすると、カスタムフレーズ・独自カテゴリ・覚えた/ピン留め・練習ノート・カテゴリ/言語/カードの並び順が他の端末と自動で同期されます。読み上げ速度・カテゴリバーの表示・練習ノート一覧の表示件数など、それ以外の設定は端末ごとのままです。ログアウトは同じ画面から行えます。</p>
+      <p>ログインすると、カスタムフレーズ・独自カテゴリ・覚えた/ピン留め・学習ラウンジ・カテゴリ/言語/カードの並び順が他の端末と自動で同期されます。読み上げ速度・カテゴリバーの表示・学習ラウンジ一覧の表示件数など、それ以外の設定は端末ごとのままです。ログアウトは同じ画面から行えます。</p>
     </div>
 
     <div class="manual-section">
       <h3>🔑 Gemini APIキーの設定</h3>
-      <p>練習ノートのAI例文生成・メニュー翻訳（写真から）には必須です。そのほか、フレーズ追加時のカタカナ自動生成や、翻訳・読み上げがGoogle翻訳側で失敗した時の予備手段としても使われます。未登録でも一覧・話す・通貨換算・日本語を学ぶなど他の機能は問題なく使えます。</p>
+      <p>学習ラウンジ（AIによる例文生成・AIチャット）・メニュー翻訳（写真から）には必須です。そのほか、フレーズ追加時のカタカナ自動生成や、翻訳・読み上げがGoogle翻訳側で失敗した時の予備手段としても使われます。未登録でも一覧・話す・通貨換算・日本語を学ぶなど他の機能は問題なく使えます。</p>
       <ol>
         <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>を開く（Googleアカウントのみでよく、クレジットカード登録は不要）</li>
         <li>「Create API key」でキーを発行してコピー</li>
@@ -585,7 +624,7 @@
       </div>
     </div>
     <div class="field">
-      <label>練習ノート一覧の表示件数</label>
+      <label>学習ラウンジ一覧の表示件数</label>
       <input type="number" id="practiceLimitInput" min="1" step="1" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink);">
       <p class="hint">一覧の新しい方から何件表示するか（既定20件）。もっと見たい場合はここで数字を増やしてください。</p>
     </div>
@@ -611,7 +650,7 @@
       <p class="hint">声の種類・性別は端末に入っている読み上げ音声次第です。iPhoneなら「設定→アクセシビリティ→音声コンテンツ→声」から言語ごとに追加ダウンロードできます。</p>
     </div>
     <div class="field">
-      <label>Gemini APIキー（練習ノートのAI生成用）</label>
+      <label>Gemini APIキー（学習ラウンジのAI生成用）</label>
       <input type="password" id="geminiKeyInput" placeholder="AIza...">
       <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>でGoogleアカウントのみ・クレジットカード登録不要で無料発行できます（1日あたりの無料利用回数に上限あり）。入力するとこの端末に保存されます。</p>
     </div>
@@ -999,7 +1038,7 @@ const BUILTIN = [
 {ja:"それができるなら、手伝ってください。",cat:"会話パターン3",gloss:{en:"If(なら) you can do(できる) that(それが), please help(手伝ってください) me(私を)",ko:"그것을(それを) 할 수 있으면(できれば) 도와주세요(手伝ってください)",de:"Wenn(なら) du das tun kannst(それができる), hilf mir(手伝って) bitte(ください)",ro:"Dacă(なら) poți face asta(それができる), ajută-mă(手伝って) te rog(ください)",es:"Si(なら) puedes hacer eso(それができる), ayúdame(手伝って) por favor(ください)",fr:"Si(なら) tu peux faire ça(それができる), aide-moi(手伝って) s'il te plaît(ください)",vi:"Nếu(なら) bạn có thể làm việc đó(それができる), hãy giúp tôi(手伝ってください)",zh:"如果(なら)你能(できる)做那个(それをする)，请帮帮我(手伝ってください)",pt:"Se(なら) você puder fazer isso(それができる), me ajude(手伝って) por favor(ください)",ru:"Если(なら) вы(あなたは) можете(できる) это(それを) сделать(する), помогите(手伝ってください) мне(私を)",hi:"यदि(もし) आप(あなたが) ऐसा(それが) कर सकते हैं(できる) तो(なら) कृपया(どうか) मदद करें(手伝ってください)。"},en:["If you can do that, please help me","イフ ユー キャン ドゥー ザット プリーズ ヘルプ ミー"],ko:["그것을 할 수 있으면 도와주세요","クゴスル ハル ス イッスミョン トワジュセヨ"],de:["Wenn du das tun kannst, hilf mir bitte","ヴェン ドゥ ダス トゥーン カンスト ヒルフ ミア ビッテ"],ro:["Dacă poți face asta, ajută-mă te rog","ダカ ポツィ ファチェ アスタ アジュタマ テ ログ"],es:["Si puedes hacer eso, ayúdame por favor","シ プエデス アセール エソ アユダメ ポルファボール"],fr:["Si tu peux faire ça, aide-moi s'il te plaît","シ テュ プ フェール サ エドモワ シルトゥプレ"],vi:["Nếu bạn có thể làm việc đó, hãy giúp tôi","ネウ バン コー テー ラム ヴィエック ドー ハイ ズップ トイ"],zh:["如果你能做那个，请帮帮我","ルーグオニーネンズオナーガ チンバンバンウォ"],pt:["Se você puder fazer isso, me ajude por favor","セ ヴォセ プデール ファゼール イッソ ミ アジュージ ポルファヴォール"],ru:["Если вы можете это сделать, помогите мне","イェスリ ヴィ モージェチェ イェタ ズヂェラチ パマギーチェ ムニェ"],hi:["यदि आप ऐसा कर सकते हैं तो कृपया मदद करें।","ヤディ アープ アイサ カル サクテ ハイン ト クリピャ マダドゥ カレン"],jaRomaji:"Sore ga dekirunara, tetsudattekudasai.",note:"「〜なら/if」は「もし〜なら」より、日常会話でよく使うくだけた条件表現です。「もし」を省略しても通じます。"}
 ];
 
-// 練習ノート：覚えた単語・表現をもとにした例文集。Claudeに「〇〇を使って例文作って」と頼んで追加していく。
+// 学習ラウンジ：覚えた単語・表現をもとにした例文集(type未指定)と、AIとのチャット(type:"chat")。
 const PRACTICE_PACKS = [];
 
 let customData = [];
@@ -1012,7 +1051,7 @@ let showUnlearnedOnly = false;
 let showPinnedOnly = false;
 let patternMode = false; // ON: 会話パターン系カテゴリのみ表示、OFF: それ以外の通常カテゴリのみ表示
 let catBarWrap = false; // ON: カテゴリバーを複数行に折り返し表示、OFF(既定): 1行の横スクロール
-let practiceListLimit = 20; // 練習ノート一覧に表示する件数（新しい方から）。設定画面で変更可能
+let practiceListLimit = 20; // 学習ラウンジ一覧に表示する件数（新しい方から）。設定画面で変更可能
 let rate = 1.0;
 let jaRate = 1.25;
 let fsScale = 1.0;
@@ -1093,7 +1132,7 @@ async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
 
 // --- 端末間同期（Firebase）から使う橋渡し関数 ---
-// 同期対象：カスタムフレーズ・練習ノート・覚えた/ピン留め・カテゴリ/言語/フレーズカードの並び順。
+// 同期対象：カスタムフレーズ・学習ラウンジ・覚えた/ピン留め・カテゴリ/言語/フレーズカードの並び順。
 // それ以外の設定（読み上げ速度など）は端末ごとのローカル保存のまま同期しない。
 // let宣言の変数はwindowに乗らないため、再代入が必要なapplyCloudStateはここ（クラシックスクリプト側）に置く。
 function getSyncableState(){
@@ -2125,14 +2164,14 @@ document.getElementById("closeLearnJa").addEventListener("click", ()=> document.
 document.getElementById("learnJaLangSel").addEventListener("change", renderLearnJaList);
 document.getElementById("learnJaSearch").addEventListener("input", renderLearnJaList);
 
-// --- 練習ノート ---
+// --- 学習ラウンジ（📝例文セット + 💬AIチャット） ---
 function allPracticePacks(){ return PRACTICE_PACKS.concat(customPracticePacks); }
 
 function renderPracticeList(){
   const wrap = document.getElementById("practiceList");
   const all = allPracticePacks();
   if(all.length === 0){
-    wrap.innerHTML = '<p class="practice-empty">まだ練習ノートがありません。<br>上の欄に単語を入れて作ってみましょう。</p>';
+    wrap.innerHTML = '<p class="practice-empty">まだ学習ラウンジの記録がありません。<br>上の欄から作ってみましょう。</p>';
     return;
   }
   // data-idxはallPracticePacks()（生成順=古い順）の中での実際の位置を指す必要があるため、
@@ -2141,9 +2180,10 @@ function renderPracticeList(){
   const shown = newestFirst.slice(0, practiceListLimit);
   wrap.innerHTML = shown.map(({p,i})=>{
     const meta = LANGS.find(l=>l.key===p.lang);
+    const badge = p.type === "chat" ? "💬" : (meta ? meta.label : p.lang);
     return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
       <button class="practice-card" data-idx="${i}" style="margin-bottom:0;">
-        <span class="lang-badge">${esc(meta ? meta.label : p.lang)}</span>
+        <span class="lang-badge">${esc(badge)}</span>
         <span class="pc-main">
           <span class="pc-word">${esc(p.word)}</span>
           <span class="pc-meaning">${esc(p.meaning)}</span>
@@ -2152,7 +2192,7 @@ function renderPracticeList(){
       ${p.custom ? `<button class="mini-btn" data-del-idx="${i}" aria-label="削除" style="flex:0 0 auto;">✕</button>` : ''}
     </div>`;
   }).join('') + (all.length > shown.length
-    ? `<p class="hint">全${all.length}件中、新しい${shown.length}件を表示中（設定の「練習ノート一覧の表示件数」で増やせます）。</p>`
+    ? `<p class="hint">全${all.length}件中、新しい${shown.length}件を表示中（設定の「学習ラウンジ一覧の表示件数」で増やせます）。</p>`
     : '');
   wrap.querySelectorAll('.practice-card').forEach(btn=>{
     btn.addEventListener('click', ()=> openPracticeDetail(parseInt(btn.dataset.idx,10)));
@@ -2179,9 +2219,23 @@ function cleanExampleText(s){
 function openPracticeDetail(idx){
   const pack = allPracticePacks()[idx];
   if(!pack) return;
-  const meta = LANGS.find(l=>l.key===pack.lang);
   document.getElementById("practiceListView").style.display = "none";
   document.getElementById("practiceDetailView").style.display = "block";
+  if(pack.type === "chat"){
+    document.getElementById("pdHead").style.display = "none";
+    document.getElementById("pdKana").style.display = "none";
+    document.getElementById("pdMeaning").style.display = "none";
+    document.getElementById("pdGroups").style.display = "none";
+    document.getElementById("pdChatWrap").style.display = "block";
+    renderChatDetail(idx);
+    return;
+  }
+  document.getElementById("pdHead").style.display = "flex";
+  document.getElementById("pdKana").style.display = "block";
+  document.getElementById("pdMeaning").style.display = "block";
+  document.getElementById("pdGroups").style.display = "block";
+  document.getElementById("pdChatWrap").style.display = "none";
+  const meta = LANGS.find(l=>l.key===pack.lang);
   document.getElementById("pdWord").textContent = pack.word;
   document.getElementById("pdKana").textContent = pack.wordKana || "";
   document.getElementById("pdMeaning").textContent = pack.meaning;
@@ -2222,7 +2276,78 @@ function openPracticeDetail(idx){
   });
 }
 
-// --- 練習ノートのAI生成（Gemini API、無料枠・APIキーはユーザー自身が設定画面で登録） ---
+// AIチャット詳細（openPracticeDetail(idx)がpack.type==="chat"の時に呼ぶ）。
+// pdChatSendBtnのハンドラがどのpackに続きを送るか分かるよう、moduleスコープにidxを控える。
+let openChatIdx = null;
+function renderChatDetail(idx){
+  openChatIdx = idx;
+  const pack = allPracticePacks()[idx];
+  const meta = LANGS.find(l=>l.key===pack.lang);
+  document.getElementById("pdChatTitle").textContent = pack.word;
+  const wrap = document.getElementById("pdChatMessages");
+  wrap.innerHTML = pack.messages.map(m=>{
+    if(m.role === "user") return `<div class="chat-bubble user">${esc(m.text)}</div>`;
+    const hasPhrase = m.phrase && m.phrase.text;
+    const phraseHtml = hasPhrase ? `
+      <div class="chat-phrase-card">
+        <div class="cp-text">${esc(m.phrase.text)}</div>
+        ${m.phrase.kana ? `<div class="cp-kana">${esc(m.phrase.kana)}</div>` : ''}
+        ${m.phrase.ja ? `<div class="cp-ja">${esc(m.phrase.ja)}</div>` : ''}
+        <div class="cp-btns">
+          <button class="mini-btn cp-speak" aria-label="発音を聞く">🔊</button>
+          <button class="mini-btn cp-save" aria-label="フレーズ帳に追加">★</button>
+        </div>
+      </div>` : '';
+    return `<div class="chat-bubble ai">${esc(m.text)}</div>${phraseHtml}`;
+  }).join('');
+  const aiWithPhrase = pack.messages.filter(m=>m.role==="ai" && m.phrase && m.phrase.text);
+  wrap.querySelectorAll('.chat-phrase-card').forEach((card, i)=>{
+    const ph = aiWithPhrase[i].phrase;
+    card.querySelector('.cp-speak').addEventListener('click', (e)=>{
+      speakRaw(ph.text, meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
+    });
+    card.querySelector('.cp-save').addEventListener('click', ()=>{
+      document.getElementById("practiceOverlay").classList.remove("open");
+      openAddPanel(null);
+      document.getElementById("addJa").value = ph.ja || "";
+      document.getElementById(`add_${pack.lang}`).value = ph.text;
+      document.getElementById(`add_${pack.lang}_kana`).value = ph.kana || "";
+    });
+  });
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+document.getElementById("pdChatSendBtn").addEventListener("click", async ()=>{
+  if(openChatIdx === null) return;
+  const input = document.getElementById("pdChatInput");
+  const question = input.value.trim();
+  if(!question) return;
+  if(!geminiApiKey){ alert("設定画面（⚙）でGemini APIキーを登録してください。Google AI Studioで無料発行できます。"); return; }
+  const pack = allPracticePacks()[openChatIdx];
+  const history = pack.messages.slice();
+  input.value = "";
+  pack.messages.push({role:"user", text: question});
+  renderChatDetail(openChatIdx);
+  const btn = document.getElementById("pdChatSendBtn");
+  btn.disabled = true;
+  try{
+    const reply = await generateChatReply(pack.lang, history, question);
+    pack.messages.push({role:"ai", text: reply.reply, phrase: reply.phrase});
+    pack.meaning = reply.reply.length > 40 ? reply.reply.slice(0,40) + "…" : reply.reply;
+    await savePracticePacks();
+    renderChatDetail(openChatIdx);
+  }catch(e){
+    console.error("chat reply error:", e);
+    pack.messages.pop();
+    input.value = question;
+    alert(geminiErrorMessage(e));
+    renderChatDetail(openChatIdx);
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+// --- 学習ラウンジのAI生成（Gemini API、無料枠・APIキーはユーザー自身が設定画面で登録） ---
 const PRACTICE_PACK_SCHEMA = {
   type: "object",
   properties: {
@@ -2307,7 +2432,7 @@ function geminiErrorMessage(e){
 
 async function generatePracticePack(langKey, word){
   const meta = LANGS.find(l=>l.key===langKey);
-  const prompt = `あなたは日本語話者向けの語学講師です。次の単語・表現について、旅行フレーズブックアプリに載せる練習ノートを作成してください。
+  const prompt = `あなたは日本語話者向けの語学講師です。次の単語・表現について、旅行フレーズブックアプリに載せる例文セットを作成してください。
 
 対象言語：${meta ? meta.label : langKey}
 単語・表現："${word}"
@@ -2324,6 +2449,38 @@ async function generatePracticePack(langKey, word){
 - 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
 - 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;
   return callGeminiJSON(prompt, PRACTICE_PACK_SCHEMA);
+}
+
+// 💬AIに質問モード：単語1つに収まらない自由な質問（「おすすめを聞く時の質問文は？」等）に、
+// 日本語での説明（reply）＋（該当があれば）対象言語のフレーズ（phrase）を返させる。
+// phraseの3項目は「該当なし」の時は空文字列にする方針（PRACTICE_PACK_SCHEMAのwordKana等と同じ、必須フィールドを空文字で許容するスタイル）。
+const CHAT_REPLY_SCHEMA = {
+  type: "object",
+  properties: {
+    reply: { type: "string" },
+    phrase: {
+      type: "object",
+      properties: {
+        text: { type: "string" },
+        kana: { type: "string" },
+        ja: { type: "string" },
+      },
+      required: ["text","kana","ja"],
+    },
+  },
+  required: ["reply","phrase"],
+};
+
+async function generateChatReply(langKey, history, question){
+  const meta = LANGS.find(l=>l.key===langKey);
+  const historyText = history.map(m=> m.role==="user" ? `ユーザー：${m.text}` : `あなた：${m.text}`).join('\n');
+  const prompt = `あなたは日本語話者向けの語学講師です。ユーザーは${meta ? meta.label : langKey}を話す相手との旅行・日常会話に向けて、言い回しについて質問しています。
+${historyText ? 'これまでの会話：\n' + historyText + '\n\n' : ''}新しい質問：「${question}」
+
+日本語で分かりやすく答えてください（reply）。
+質問に対して提案できる、${meta ? meta.label : langKey}の具体的なフレーズが1つある場合は、phraseに文（text）・カタカナでの発音表記（kana）・日本語訳（ja）を入れてください。
+特定のフレーズを提案する内容でない質問（雑談的な質問など）の場合は、phraseの各項目を空文字列にしてください。`;
+  return callGeminiJSON(prompt, CHAT_REPLY_SCHEMA);
 }
 
 // --- メニュー翻訳（写真から、Gemini APIのマルチモーダル入力を使用） ---
@@ -2499,10 +2656,60 @@ document.getElementById("practiceGenBtn").addEventListener("click", async ()=>{
   }
 });
 
+document.getElementById("chatGenBtn").addEventListener("click", async ()=>{
+  const question = document.getElementById("chatGenQuestion").value.trim();
+  const langKey = document.getElementById("chatGenLang").value;
+  if(!question){ alert("質問を入力してください"); return; }
+  if(!geminiApiKey){ alert("設定画面（⚙）でGemini APIキーを登録してください。Google AI Studioで無料発行できます。"); return; }
+  const btn = document.getElementById("chatGenBtn");
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "考え中…";
+  try{
+    const reply = await generateChatReply(langKey, [], question);
+    const pack = {
+      id: "chat-" + langKey + "-" + Date.now().toString(36),
+      type: "chat", lang: langKey,
+      word: question.length > 40 ? question.slice(0,40) + "…" : question,
+      meaning: reply.reply.length > 40 ? reply.reply.slice(0,40) + "…" : reply.reply,
+      messages: [
+        {role:"user", text: question},
+        {role:"ai", text: reply.reply, phrase: reply.phrase},
+      ],
+      custom: true,
+    };
+    customPracticePacks.push(pack);
+    await savePracticePacks();
+    document.getElementById("chatGenQuestion").value = "";
+    renderPracticeList();
+    openPracticeDetail(allPracticePacks().length - 1);
+  }catch(e){
+    console.error("chat generation error:", e);
+    alert(geminiErrorMessage(e));
+  }finally{
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+});
+
+document.querySelectorAll('.mode-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.mode-tab').forEach(b=>b.classList.remove('active'));
+    tab.classList.add('active');
+    const mode = tab.dataset.mode;
+    document.getElementById("practiceExamplesPane").style.display = mode === "examples" ? "block" : "none";
+    document.getElementById("practiceChatPane").style.display = mode === "chat" ? "block" : "none";
+  });
+});
+
 document.getElementById("menuPractice").addEventListener("click", ()=>{
   closeAllOverlays();
   document.getElementById("practiceListView").style.display = "block";
   document.getElementById("practiceDetailView").style.display = "none";
+  document.querySelectorAll('.mode-tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById("practiceModeExamplesBtn").classList.add('active');
+  document.getElementById("practiceExamplesPane").style.display = "block";
+  document.getElementById("practiceChatPane").style.display = "none";
   renderPracticeList();
   document.getElementById("practiceOverlay").classList.add("open");
 });
@@ -3355,6 +3562,8 @@ document.getElementById("submitAdd").onclick = ()=>{
   document.getElementById("geminiKeyInput").value = geminiApiKey;
   document.getElementById("practiceGenLang").innerHTML = LANGS.map(l=>`<option value="${l.key}">${l.label}</option>`).join('');
   document.getElementById("practiceGenLang").value = currentLang;
+  document.getElementById("chatGenLang").innerHTML = LANGS.map(l=>`<option value="${l.key}">${l.label}</option>`).join('');
+  document.getElementById("chatGenLang").value = currentLang;
   populateAddCatSelect();
   buildAddFields();
   renderLangButton();
