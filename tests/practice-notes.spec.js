@@ -245,6 +245,32 @@ test.describe('practice notes / 学習ラウンジ (📝例文セット mode)', 
     expect(saved[0].en).toEqual(['I go to school.', 'アイ ゴー トゥー スクール']);
   });
 
+  test('the ★ button also copies the group\'s grammar note and the word-by-word gloss into 解説, so the saved phrase carries an explanation like a built-in phrase would', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGemini(page, {
+      word: 'school', wordKana: 'スクール', meaning: '学校',
+      groups: [{ title: '基本の例文', note: '一般的な通学を表す基本表現です。', examples: [{
+        text: 'I go to school.', kana: 'アイ ゴー トゥー スクール', ja: '学校に行きます。', gloss: 'I(私は) go(行きます) to school(学校に)',
+      }] }],
+    });
+
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.fill('#practiceGenWord', '学校');
+    await page.click('#practiceGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+
+    await page.click('.pe-save');
+    await expect(page.locator('#addNote')).toHaveValue('一般的な通学を表す基本表現です。\n🔤 I(私は) go(行きます) to school(学校に)');
+
+    await page.click('#submitAdd');
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-custom')));
+    expect(stored[0].note).toBe('一般的な通学を表す基本表現です。\n🔤 I(私は) go(行きます) to school(学校に)');
+  });
+
   test('an invalid-key error surfaces the raw API message', async ({ page, browserName }) => {
     // On WebKit this happens to pass even without the mock applying, because a fake
     // key against the real API returns the same "API key not valid" message - but
@@ -334,11 +360,14 @@ test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
     await expect(page.locator('.chat-bubble.user')).toHaveCount(2);
     await expect(page.locator('.chat-phrase-card')).toHaveCount(2);
 
-    // saving a phrase card from the chat feeds the add-phrase panel just like example-set cards do
+    // saving a phrase card from the chat feeds the add-phrase panel just like example-set cards do,
+    // and - like a normal (built-in) phrase - arrives with a 解説 already filled in: the AI's own
+    // explanatory reply for that phrase, not left blank
     await page.locator('.chat-phrase-card').nth(1).locator('.cp-save').click();
     await expect(page.locator('#addOverlay')).toHaveClass(/open/);
     await expect(page.locator('#addJa')).toHaveValue('おすすめはありますか？');
     await expect(page.locator('#add_en')).toHaveValue('Any recommendations?');
+    await expect(page.locator('#addNote')).toHaveValue('他にもこんな聞き方があります。');
 
     // still exactly one list entry (the follow-up appended to it, it didn't create a second one)
     const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-practice-custom')));

@@ -665,7 +665,7 @@
     </div>
     <div class="field">
       <label>Gemini APIキー（学習ラウンジのAI生成用）</label>
-      <input type="password" id="geminiKeyInput" placeholder="AIza...">
+      <input type="password" id="geminiKeyInput" placeholder="AIza..." autocomplete="off">
       <p class="hint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>でGoogleアカウントのみ・クレジットカード登録不要で無料発行できます（1日あたりの無料利用回数に上限あり）。入力するとこの端末に保存されます。</p>
     </div>
     <p class="hint" style="text-align:center; margin-top:16px;">
@@ -678,7 +678,7 @@
 <div class="overlay" id="addOverlay">
   <div class="panel">
     <h2><span id="addTitle">フレーズを追加</span> <button id="closeAdd" aria-label="閉じる">✕</button></h2>
-    <div class="field"><label>日本語（必須）</label><input type="text" id="addJa" placeholder="例：乾杯"></div>
+    <div class="field"><label>日本語（必須）</label><input type="text" id="addJa" placeholder="例：乾杯" autocomplete="off"></div>
     <div class="field">
       <label>カテゴリ</label>
       <div style="display:flex; gap:8px; align-items:center;">
@@ -690,7 +690,7 @@
     <button class="submitbtn" id="autoTranslate" type="button" style="background:var(--blue); margin:0 0 12px;">🌐 空欄の言語を自動翻訳</button>
     <div class="grid2" id="addFieldsGrid"></div>
     <p class="hint">「自動翻訳」で11言語がまとめて埋まります（Google翻訳・ネット接続が必要）。訳が気に入らなければ手で直してOK。設定画面でGemini APIキーを登録していれば、カナ読みもあわせて自動生成されます（未登録の場合はカナ欄は空のまま手入力）。日本語だけで追加した場合は全言語で表示され、日本語で読み上げます。</p>
-    <div class="field"><label>解説（任意）</label><textarea id="addNote" rows="2" placeholder="例：カジュアルな場でよく使う言い方です"></textarea></div>
+    <div class="field"><label>解説（任意）</label><textarea id="addNote" rows="2" placeholder="例：カジュアルな場でよく使う言い方です" autocomplete="off"></textarea></div>
     <button class="submitbtn" id="submitAdd">保存する</button>
   </div>
 </div>
@@ -1413,8 +1413,8 @@ function populateAddCatSelect(){
 function buildAddFields(){
   const grid = document.getElementById("addFieldsGrid");
   grid.innerHTML = LANGS.map(l=>`
-    <div class="field"><label>${l.label}</label><input type="text" id="add_${l.key}" placeholder=""></div>
-    <div class="field"><label>${l.label}カナ</label><input type="text" id="add_${l.key}_kana" placeholder=""></div>
+    <div class="field"><label>${l.label}</label><input type="text" id="add_${l.key}" placeholder="" autocomplete="off"></div>
+    <div class="field"><label>${l.label}カナ</label><input type="text" id="add_${l.key}_kana" placeholder="" autocomplete="off"></div>
   `).join('');
 }
 
@@ -2311,8 +2311,8 @@ function openPracticeDetail(idx){
     </div>
   `).join('');
   document.getElementById("pdGroups").querySelectorAll('.practice-ex').forEach((row, i)=>{
-    const allExamples = pack.groups.flatMap(g=>g.examples);
-    const ex = allExamples[i];
+    const allExamples = pack.groups.flatMap(g=>g.examples.map(ex=>({ex, g})));
+    const { ex, g } = allExamples[i];
     row.querySelector('.pe-speak').addEventListener('click', (e)=>{
       speakRaw(cleanExampleText(ex.text), meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
     });
@@ -2322,6 +2322,12 @@ function openPracticeDetail(idx){
       document.getElementById("addJa").value = ex.ja || "";
       document.getElementById(`add_${pack.lang}`).value = cleanExampleText(ex.text);
       document.getElementById(`add_${pack.lang}_kana`).value = ex.kana || "";
+      // 通常の(組み込み)フレーズと同じく解説付きで保存されるよう、学習ラウンジ側の
+      // グループの文法解説(g.note)と単語対応(ex.gloss)を解説欄にまとめて引き継ぐ。
+      const noteParts = [];
+      if(g.note) noteParts.push(g.note);
+      if(ex.gloss) noteParts.push('🔤 ' + ex.gloss);
+      document.getElementById("addNote").value = noteParts.join('\n');
     });
   });
 }
@@ -2362,6 +2368,9 @@ function renderChatDetail(idx){
       document.getElementById("addJa").value = ph.ja || "";
       document.getElementById(`add_${pack.lang}`).value = ph.text;
       document.getElementById(`add_${pack.lang}_kana`).value = ph.kana || "";
+      // 通常のフレーズと同じく解説付きで保存されるよう、AIの回答文（このフレーズの説明）を
+      // 解説欄にそのまま引き継ぐ。
+      document.getElementById("addNote").value = aiWithPhrase[i].text || "";
     });
   });
   wrap.scrollTop = wrap.scrollHeight;

@@ -25,7 +25,9 @@
 - **端末間の同期（任意）**: Googleアカウントでログイン（常にポップアップ方式。redirectはサードパーティCookie制限で失敗するため不可）。Firebase Auth + Firestore。`/users/{uid}`単位でデータ分離、他人のデータは見えない。ローカルの保存関数（`saveCustom`/`saveCustomCats`/`savePracticePacks`/`saveLearned`/`savePinned`/`saveSettings`）を`window[fnName]`ごとラップし、呼ばれるたびに`schedulePush()`（1.2秒デバウンス）でクラウドへの反映を予約する仕組み。新しく永続化する状態を追加したら、①`getSyncableState()`/`applyCloudState()`への追加、②この配列への追加、の両方を忘れないこと（後者だけ漏れても、直後に他のラップ済み関数（大抵saveSettings）が呼ばれていれば実害は出にくいが、偶然に依存した壊れやすい状態になる）。**既知の不具合として修正済み**: デバウンス中（変更直後1.2秒以内）にタブを閉じる・アプリをバックグラウンドに回す・画面をロックすると、pushが一度もクラウドに届かないまま消えることがあった（「同期がうまくいかないことがある」という報告の主因と推定）。`visibilitychange`（hidden化）で保留中のpushがあれば即座に確定させることで対処（beforeunload/unloadはiOS Safari・PWAで信頼できないため使わない）。
 - **通貨換算**: open.er-api.com（旧frankfurter.appがリダイレクトするようになったため移行済み）。オフライン時は最後に取得したレートを使用。
 - **全画面提示・聞き流し再生・学習管理（覚えた✓/ピン留め📌）・自分の発音の録音比較・音声入力検索・カスタムフレーズ追加（自動翻訳ボタン付き）**なども実装済み。
-- **カスタムフレーズの解説**（2026-08-13追加）: フレーズ追加パネルに`addNote`（`<textarea>`、任意入力）を追加し、`entry.note`として`customData`に保存する。カード側は元々`d.note || glossText`で📖解説ボタンの表示可否を判定していた（組み込みフレーズの`note`用）ので、レンダリング側の変更は不要だった＝カスタムフレーズに`note`を持たせるだけで、組み込みフレーズと全く同じ📖解説の開閉UIがそのまま動く。空欄なら（既存の挙動通り）解説ボタン自体が出ない。
+- **カスタムフレーズの解説**（2026-08-13追加）: フレーズ追加パネルに`addNote`（`<textarea>`、任意入力）を追加し、`entry.note`として`customData`に保存する。カード側は元々`d.note || glossText`で📖解説ボタンの表示可否を判定していた（組み込みフレーズの`note`用）ので、レンダリング側の変更は不要だった＝カスタムフレーズに`note`を持たせるだけで、組み込みフレーズと全く同じ📖解説の開閉UIがそのまま動く。空欄なら（既存の挙動通り）解説ボタン自体が出ない。既存のフレーズに後から解説を付けたい場合は✎（編集）から同じ欄に入力する。
+  - **学習ラウンジからの★保存時に解説も自動で引き継ぐ**（2026-08-13追加）: 「保存したのに解説が空で、組み込みフレーズと違って見える」という指摘を受けて追加。📝例文セットのpe-save（`renderPracticeList()`→`openPracticeDetail()`内）は`g.note`（グループの文法解説）＋`ex.gloss`（🔤単語対応）を改行区切りで`addNote`に、💬AIに質問のcp-save（`renderChatDetail()`内）はそのフレーズを提案したAIの回答文（`m.text`）をそのまま`addNote`に入れてから追加パネルを開く。
+- **フレーズ追加パネルの`autocomplete="off"`**（2026-08-13追加）: 設定画面の`geminiKeyInput`が`type="password"`のため、他の箇所でテキスト入力→保存を行うとChromeが無関係な入力欄を「ユーザー名」候補と誤認し「パスワードを保存しますか？」ポップアップを出すことがあった。`geminiKeyInput`と、`addJa`/`addNote`/`add_${lang}`/`add_${lang}_kana`（`buildAddFields()`で動的生成）全てに`autocomplete="off"`を付けて抑制。
 - **新機能のお知らせポップアップ**（2026-08-12追加）: `CHANGELOG`配列（`{id, date, title, items}`、idは追加のたびに既存の最大+1を昇順で足す）と`whatsNewSeenId`（localStorage `phrasebook-whatsnew-seen`）を比較し、未読エントリがあれば`init()`の最後で`checkWhatsNew()`が`whatsNewOverlay`をポップアップ表示する。個人利用前提のため「初回起動＝未読扱い」で構わないという判断で、新規ユーザー分岐は作っていない。**機能を追加したらCHANGELOGに1件足すこと。** テストではこのポップアップが毎回開いて他のテストのクリックをブロックしないよう、`playwright.config.js`の`use.storageState`で`phrasebook-whatsnew-seen`を`999999`（＝どんなCHANGELOG idより確実に大きい値、更新のたびにこの値を追従させる必要が無いようにするため）に既定で固定している。ポップアップ自体をテストする`tests/whats-new.spec.js`は`test.use({storageState:{cookies:[],origins:[]}})`でこの既定を打ち消して未読状態を再現している。`browser.newContext()`を自前で呼ぶテスト（`tests/sync.spec.js`のモバイルUAテストなど）は設定ファイルの既定を継承しないので、`context.addInitScript()`で個別に同じ値をセットする必要がある。
 - **日本語を学ぶ（外国人向け、v1実験機能）**: 「知っている言語」を選ぶとその言語のフレーズが表になり、タップで裏の日本語＋ローマ字読み（`jaRomaji`、308件全件に用意。Google翻訳の非公式ローマ字化エンドポイントで機械生成後、漢字の読み違い等をレビュー・修正）が見える、独立オーバーレイ（`learnJaOverlay`）。周辺のツールメニュー・言語名は日本語のままなので「日本語話者が一緒に操作する」前提で、この画面自体のラベルだけ英語。カテゴリ絞り込みは無し（カテゴリ名が日本語のみのため）。組み込み308件のみが対象で`customData`は対象外（`jaRomaji`が無いため）。**日本語再生時は`speakRaw(d.ja, "ja-JP", btn)`のように第5引数(langKeyForVoice)を渡さないこと** — "ja"はLANGSに存在しないキーなので、渡すとフォールバック時に`pickVoice("ja")`内で`meta`がundefinedになりクラッシュする（他のJapanese再生箇所と同じ理由、`tests/learn-japanese.spec.js`に回帰防止テストあり）。
 
@@ -40,12 +42,12 @@
 
 ## ファイル構成
 ```
-index.html          アプリ本体（UI・データ・ロジック全て、単一ファイル、約667KB）
+index.html          アプリ本体（UI・データ・ロジック全て、単一ファイル、約668KB）
 manifest.json        PWAマニフェスト
 sw.js                 Service Worker（オフラインシェルキャッシュのみ、v2）
 firestore.rules       Firestoreセキュリティルール
 tests/                Playwright仕様15本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計226テスト
+playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計228テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 
