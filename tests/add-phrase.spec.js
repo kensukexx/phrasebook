@@ -74,6 +74,63 @@ test.describe('add custom phrase', () => {
     await page.waitForTimeout(200);
     await expect(page.locator('#deck .ticket .ja').first()).toHaveText('テストフレーズ');
   });
+
+  test('a custom phrase with a 解説 shows the same 📖解説 toggle built-in phrases use, and one left blank shows no toggle at all', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('#openAdd');
+    await page.waitForSelector('#addOverlay.open');
+    await page.fill('#addJa', '解説あり');
+    await page.fill('#add_en', 'With a note');
+    await page.fill('#addNote', 'カジュアルな場でよく使う言い方です');
+    await page.click('#submitAdd');
+    await page.waitForTimeout(300);
+
+    await page.click('#openAdd');
+    await page.fill('#addJa', '解説なし');
+    await page.fill('#add_en', 'No note');
+    await page.click('#submitAdd');
+    await page.waitForTimeout(300);
+
+    await page.fill('#search', '解説あり');
+    await page.waitForTimeout(200);
+    const withNote = page.locator('#deck .ticket', { hasText: '解説あり' });
+    await expect(withNote.locator('[data-role="note"]')).toBeVisible();
+    await expect(withNote.locator('.note-text')).not.toHaveClass(/open/);
+    await withNote.locator('[data-role="note"]').click();
+    await expect(withNote.locator('.note-text')).toHaveClass(/open/);
+    await expect(withNote.locator('.note-text')).toHaveText('カジュアルな場でよく使う言い方です');
+
+    await page.fill('#search', '解説なし');
+    await page.waitForTimeout(200);
+    const withoutNote = page.locator('#deck .ticket', { hasText: '解説なし' });
+    await expect(withoutNote.locator('[data-role="note"]')).toHaveCount(0);
+  });
+
+  test('editing a custom phrase loads its existing 解説 into the field, and changes persist', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#openAdd');
+    await page.waitForSelector('#addOverlay.open');
+    await page.fill('#addJa', '編集対象');
+    await page.fill('#add_en', 'Edit target');
+    await page.fill('#addNote', '最初の解説');
+    await page.click('#submitAdd');
+    await page.waitForTimeout(300);
+
+    await page.fill('#search', '編集対象');
+    await page.waitForTimeout(200);
+    await page.locator('#deck .ticket', { hasText: '編集対象' }).locator('[data-role="edit"]').click();
+    await expect(page.locator('#addNote')).toHaveValue('最初の解説');
+
+    await page.fill('#addNote', '直した解説');
+    await page.click('#submitAdd');
+    await page.waitForTimeout(300);
+
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-custom')));
+    expect(stored.find(d => d.ja === '編集対象').note).toBe('直した解説');
+  });
 });
 
 test.describe('custom categories', () => {
