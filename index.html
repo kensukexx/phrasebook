@@ -244,8 +244,8 @@
   .practice-ex .pe-text-wrap{ flex:1; min-width:0; }
   .practice-ex .pe-text{ font-size:14.5px; font-weight:600; }
   .practice-ex .pe-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
-  .practice-ex .pe-gloss{ font-size:12px; color:var(--ink); font-weight:600; margin-top:6px; }
-  .practice-ex .pe-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:2px; }
+  .practice-ex .pe-ja{ font-size:13px; color:var(--ink); margin-top:4px; }
+  .practice-ex .pe-gloss{ font-size:11.5px; color:var(--ink-soft); font-weight:400; margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); }
   .practice-ex .pe-speak{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--red); cursor:pointer; }
   .practice-ex .pe-btns{ flex:0 0 auto; display:flex; gap:6px; }
   .practice-ex .pe-save{ flex:0 0 auto; width:32px; height:32px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--gold); cursor:pointer; }
@@ -2156,6 +2156,14 @@ function renderPracticeList(){
   });
 }
 
+// Geminiが稀に例文の text 自体に "word(意味)" のような注釈を混ぜて返すことがあり
+// （本来そうした注釈はglossだけに入るべき）、そうなると文が読みにくくなるだけでなく、
+// 発音（そのまま読み上げる）やフレーズ帳への保存にも注釈付きの文が使われてしまう。
+// 表示・発音・保存のどこで使う場合も、必ずこの関数を通した文字列を使うこと。
+function cleanExampleText(s){
+  return String(s || "").replace(/\([^()]*\)/g, "").replace(/\s+/g, " ").trim();
+}
+
 function openPracticeDetail(idx){
   const pack = allPracticePacks()[idx];
   if(!pack) return;
@@ -2173,10 +2181,10 @@ function openPracticeDetail(idx){
       ${g.examples.map(ex=>`
         <div class="practice-ex">
           <div class="pe-text-wrap">
-            <div class="pe-text">${esc(ex.text)}</div>
+            <div class="pe-text">${esc(cleanExampleText(ex.text))}</div>
             <div class="pe-kana">${esc(ex.kana || "")}</div>
-            ${ex.gloss ? `<div class="pe-gloss">🔤 ${esc(ex.gloss)}</div>` : ''}
             <div class="pe-ja">${esc(ex.ja || "")}</div>
+            ${ex.gloss ? `<div class="pe-gloss">🔤 ${esc(ex.gloss)}</div>` : ''}
           </div>
           <div class="pe-btns">
             <button class="pe-speak" aria-label="発音を聞く">🔊</button>
@@ -2190,13 +2198,13 @@ function openPracticeDetail(idx){
     const allExamples = pack.groups.flatMap(g=>g.examples);
     const ex = allExamples[i];
     row.querySelector('.pe-speak').addEventListener('click', (e)=>{
-      speakRaw(ex.text, meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
+      speakRaw(cleanExampleText(ex.text), meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
     });
     row.querySelector('.pe-save').addEventListener('click', ()=>{
       document.getElementById("practiceOverlay").classList.remove("open");
       openAddPanel(null);
       document.getElementById("addJa").value = ex.ja || "";
-      document.getElementById(`add_${pack.lang}`).value = ex.text || "";
+      document.getElementById(`add_${pack.lang}`).value = cleanExampleText(ex.text);
       document.getElementById(`add_${pack.lang}_kana`).value = ex.kana || "";
     });
   });
@@ -2297,8 +2305,9 @@ async function generatePracticePack(langKey, word){
 - groups は「基本の例文」から始め、用法パターンごとに2〜4グループに分ける（例：品詞や文型で使い方が変わる場合はパターン別に）
 - 各グループの examples は自然でよく使われる例文を2〜3個
 - 例文には対象言語の文（text）、カタカナでの発音表記（kana）、日本語訳（ja）を必ずつける
-- gloss は、textをどこで区切ってもよいので単語・意味のまとまりごとに分け、各まとまりの直後にそれが日本語で何を意味するかをカッコ書きで添える。
-  例（英語の場合）："Is(です) there(いる) anyone(誰か) you're interested in(気になる人)?"
+- text は括弧や注釈を一切含まない、そのままネイティブが書く自然な文だけにすること（例："Is there anyone you're interested in?"）。単語の意味の説明は次のglossにのみ書き、textには絶対に混ぜないこと
+- gloss は、上のtextと同じ文を単語・意味のまとまりごとに区切り、各まとまりの直後にそれが日本語で何を意味するかをカッコ書きで添えたもの（textとは別の、独立した文字列として作ること）。
+  例（英語の場合、textが"Is there anyone you're interested in?"なら）："Is(です) there(いる) anyone(誰か) you're interested in(気になる人)?"
   対応する日本語（ja）のどの部分に当たるかが一目で分かるようにすること
 - 文法的に重要な注意点があるグループには note を一言で添える（無ければ省略可）
 - 日本語話者が日常会話で実際に使えるレベルの、自然な例文にすること`;

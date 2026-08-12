@@ -66,6 +66,46 @@ test.describe('practice notes (練習ノート)', () => {
     expect(JSON.parse(stored)).toHaveLength(1);
   });
 
+  test('if Gemini mistakenly bakes gloss-style annotations into text itself, the headline, speak button and ★ save all use the clean sentence - only the 🔤 line keeps the annotations', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    // Real bug: Gemini sometimes returns text with the gloss annotations baked in
+    // (e.g. "I(私は) just(ただ) got here.(着いたばかりで)") instead of a plain sentence,
+    // making the card unreadable and, worse, feeding the annotated text straight into
+    // TTS and into the saved custom phrase. cleanExampleText() strips it defensively.
+    const annotatedText = "I(私は) just(ただ) got here.(着いたばかりで) so(だから) I(私は) need(必要とする) to sit down(座る) for a minute.(少しの間)";
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGemini(page, {
+      word: 'just got here', wordKana: 'ジャスト ガット ヒア', meaning: '着いたばかり',
+      groups: [{ title: '応用表現', examples: [{
+        text: annotatedText,
+        kana: 'アイ ジャスト ガット ヒア, ソウ アイ ニード トゥ シット ダウン フォー ア ミニット.',
+        ja: '今来たばかりなので、ちょっと座らせてください。',
+        gloss: annotatedText,
+      }] }],
+    });
+
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.fill('#practiceGenWord', 'just got here');
+    await page.click('#practiceGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+
+    const cleanSentence = "I just got here. so I need to sit down for a minute.";
+    await expect(page.locator('.pe-text')).toHaveText(cleanSentence);
+    // the gloss line is the only place the annotated form should still appear
+    await expect(page.locator('.pe-gloss')).toHaveText('🔤 ' + annotatedText);
+    // display order the user asked for: sentence, kana, meaning, then the detailed
+    // word-by-word breakdown last (not sandwiched in the middle)
+    const order = await page.locator('.pe-text-wrap > div').evaluateAll(els => els.map(e => e.className));
+    expect(order).toEqual(['pe-text', 'pe-kana', 'pe-ja', 'pe-gloss']);
+
+    await page.click('.pe-save');
+    await expect(page.locator('#addJa')).toHaveValue('今来たばかりなので、ちょっと座らせてください。');
+    await expect(page.locator('#add_en')).toHaveValue(cleanSentence);
+  });
+
   test('a blocked response shows a specific message, not a generic failure', async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
     const alerts = [];

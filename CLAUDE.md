@@ -17,7 +17,7 @@
 - **音声**: 3段階フォールバック（①Google翻訳の自然な音声→②Geminiキー設定時はGemini TTS→③端末TTS）。`<audio src>`からの直接リクエストのみを使い、Service Workerは一切介在しない（後述の経緯を参照）。
 - **翻訳**: 2段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini）。
 - **話す（翻訳して発音）**: 日本語入力→選択言語へ翻訳して発音、フレーズ帳への保存も可能。「相手の番」で交互に一往復ずつ翻訳する簡易会話モードとしても使える。
-- **練習ノート**: 単語を入力するとGemini（`gemini-flash-lite-latest`）が意味・例文・カナ・文法解説をオンデマンド生成。各例文には`gloss`（フレーズ一覧のgloss機能と同じ「Word(意味) word(意味)」形式、Geminiに生成させる）を🔤付きで表示し、どの単語がどの日本語に当たるか分かるようにしている（`PRACTICE_PACK_SCHEMA`の`examples`に`gloss`必須フィールドとして追加、無い旧データは表示自体を省略して後方互換）。各例文の★ボタンから、話す機能と同じ「フレーズを追加」パネルを新規追加モードで開き（`openAddPanel(null)`＋日本語欄とその言語の欄だけ手動で値をセット、既存エントリの編集とは違い`editingEntry`は立てない）、カテゴリは空欄のままユーザーに選ばせてフレーズ帳に保存できる。
+- **練習ノート**: 単語を入力するとGemini（`gemini-flash-lite-latest`）が意味・例文・カナ・文法解説をオンデマンド生成。各例文には`gloss`（フレーズ一覧のgloss機能と同じ「Word(意味) word(意味)」形式、Geminiに生成させる）を🔤付きで表示し、どの単語がどの日本語に当たるか分かるようにしている（`PRACTICE_PACK_SCHEMA`の`examples`に`gloss`必須フィールドとして追加、無い旧データは表示自体を省略して後方互換）。表示順は文→カナ→日本語訳→🔤詳細（gloss）の順（詳細な単語対応は最後、という並びをユーザーからの指摘で採用）。**既知の不具合として修正済み**: Geminiが稀に`text`自体に`gloss`と同じ括弧注釈（"word(意味)"）を混ぜて返すことがあり、文が読みにくくなるだけでなく発音・保存にもその注釈付きテキストがそのまま使われてしまっていた。表示・発音・保存のどこでも`ex.text`を直接使わず、必ず`cleanExampleText()`（`(...)`を機械的に除去する防御的処理）を通す。プロンプト側にも「textには括弧注釈を混ぜない」旨を明記して再発防止。各例文の★ボタンから、話す機能と同じ「フレーズを追加」パネルを新規追加モードで開き（`openAddPanel(null)`＋日本語欄とその言語の欄だけ手動で値をセット、既存エントリの編集とは違い`editingEntry`は立てない）、カテゴリは空欄のままユーザーに選ばせてフレーズ帳に保存できる。
 - **メニュー翻訳（写真から）**: レストランのメニューや看板を撮影→Geminiのマルチモーダル入力で読み取り、カタカナ読みと日本語訳の一覧を生成。検出言語は11言語に限らない。当初「歌詞の翻訳一覧」案があったが、歌詞表示は著作権ライセンスが前提で個人開発では非現実的なため、ユーザー自身の写真だけを扱う設計にした。
 - **端末間の同期（任意）**: Googleアカウントでログイン（常にポップアップ方式。redirectはサードパーティCookie制限で失敗するため不可）。Firebase Auth + Firestore。`/users/{uid}`単位でデータ分離、他人のデータは見えない。ローカルの保存関数（`saveCustom`/`saveCustomCats`/`savePracticePacks`/`saveLearned`/`savePinned`/`saveSettings`）を`window[fnName]`ごとラップし、呼ばれるたびに`schedulePush()`（1.2秒デバウンス）でクラウドへの反映を予約する仕組み。新しく永続化する状態を追加したら、①`getSyncableState()`/`applyCloudState()`への追加、②この配列への追加、の両方を忘れないこと（後者だけ漏れても、直後に他のラップ済み関数（大抵saveSettings）が呼ばれていれば実害は出にくいが、偶然に依存した壊れやすい状態になる）。**既知の不具合として修正済み**: デバウンス中（変更直後1.2秒以内）にタブを閉じる・アプリをバックグラウンドに回す・画面をロックすると、pushが一度もクラウドに届かないまま消えることがあった（「同期がうまくいかないことがある」という報告の主因と推定）。`visibilitychange`（hidden化）で保留中のpushがあれば即座に確定させることで対処（beforeunload/unloadはiOS Safari・PWAで信頼できないため使わない）。
 - **通貨換算**: open.er-api.com（旧frankfurter.appがリダイレクトするようになったため移行済み）。オフライン時は最後に取得したレートを使用。
@@ -40,7 +40,7 @@ manifest.json        PWAマニフェスト
 sw.js                 Service Worker（オフラインシェルキャッシュのみ、v2）
 firestore.rules       Firestoreセキュリティルール
 tests/                Playwright仕様14本 + data-integrity.test.js + helpers.js（外部APIのモック）
-playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計198テスト
+playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計202テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 
