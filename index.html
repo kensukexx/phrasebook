@@ -2129,7 +2129,9 @@ function renderPracticeList(){
     wrap.innerHTML = '<p class="practice-empty">まだ練習ノートがありません。<br>上の欄に単語を入れて作ってみましょう。</p>';
     return;
   }
-  wrap.innerHTML = all.map((p,i)=>{
+  // data-idxはallPracticePacks()（生成順=古い順）の中での実際の位置を指す必要があるため、
+  // reverseする前にindexを控えておいてから表示だけ新しい順に並べ替える。
+  wrap.innerHTML = all.map((p,i)=>({p,i})).reverse().map(({p,i})=>{
     const meta = LANGS.find(l=>l.key===p.lang);
     return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
       <button class="practice-card" data-idx="${i}" style="margin-bottom:0;">

@@ -66,6 +66,47 @@ test.describe('practice notes (練習ノート)', () => {
     expect(JSON.parse(stored)).toHaveLength(1);
   });
 
+  test('the most recently generated note is listed first, but its stored position (data-idx) is unchanged', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+
+    await mockGemini(page, {
+      word: 'school', wordKana: 'スクール', meaning: '学校',
+      groups: [{ title: '基本の例文', examples: [{ text: 'I go to school.', kana: 'アイ ゴー トゥー スクール', ja: '学校に行きます。', gloss: 'I(私は) go(行きます) to school(学校に)' }] }],
+    });
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.fill('#practiceGenWord', 'school');
+    await page.click('#practiceGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+    await page.click('#backToPracticeList');
+
+    await mockGemini(page, {
+      word: 'hospital', wordKana: 'ホスピタル', meaning: '病院',
+      groups: [{ title: '基本の例文', examples: [{ text: 'I need a hospital.', kana: 'アイ ニード ア ホスピタル', ja: '病院が必要です。', gloss: 'I need(必要です) a hospital(病院が)' }] }],
+    });
+    await page.fill('#practiceGenWord', 'hospital');
+    await page.click('#practiceGenBtn');
+    await page.waitForSelector('#practiceDetailView', { state: 'visible', timeout: 8000 });
+    await page.click('#backToPracticeList');
+
+    // newest (hospital) first in the visible list...
+    const words = await page.locator('.pc-word').allTextContents();
+    expect(words).toEqual(['hospital', 'school']);
+    // ...but the underlying storage order is still creation order (oldest first),
+    // and each card's data-idx still points at its real position in that array
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-practice-custom')));
+    expect(stored.map(p => p.word)).toEqual(['school', 'hospital']);
+    const idxs = await page.locator('.practice-card').evaluateAll(els => els.map(e => e.dataset.idx));
+    expect(idxs).toEqual(['1', '0']);
+
+    // clicking the first (newest) card opens the right one
+    await page.click('.practice-card >> nth=0');
+    await expect(page.locator('#pdWord')).toHaveText('hospital');
+  });
+
   test('if Gemini mistakenly bakes gloss-style annotations into text itself, the headline, speak button and ★ save all use the clean sentence - only the 🔤 line keeps the annotations', async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
     // Real bug: Gemini sometimes returns text with the gloss annotations baked in
