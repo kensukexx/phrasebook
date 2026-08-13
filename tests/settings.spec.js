@@ -204,6 +204,43 @@ test.describe('settings', () => {
 
     await expect(page.locator('#listenBtn')).toHaveText('■'); // still playing, not interrupted
   });
+
+  test('聞き流し再生では、覚えた✓のフレーズだけ絞り込み内の最後尾に回される（一覧の表示順自体は変わらない）', async ({ page }) => {
+    await installFakeAudio(page);
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    // あいさつ (9 phrases, in this order): こんにちは, ありがとう, すみません, ごめんなさい,
+    // またね, 元気ですか？, 乾杯, 大丈夫です, 気をつけて. Mark the first two - normally first
+    // in the playback queue - as already learned.
+    await page.evaluate(() => {
+      localStorage.setItem('phrasebook-learned', JSON.stringify({ 'こんにちは': true, 'ありがとう': true }));
+    });
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+
+    await page.click('.cat[data-cat="あいさつ"]');
+    await page.waitForTimeout(200);
+
+    // the deck itself keeps its normal order - learned phrases aren't moved or hidden in the list
+    const deckOrder = await page.locator('#deck .ticket .ja').allTextContents();
+    expect(deckOrder.slice(0, 2)).toEqual(['こんにちは', 'ありがとう']);
+
+    await page.click('#listenBtn');
+    await expect(page.locator('#listenBtn')).toHaveText('■');
+
+    const played = [];
+    for (let i = 0; i < 9; i++) {
+      await expect.poll(() => page.evaluate(n => window.__audioInstances.length, i + 1)).toBe(i + 1);
+      const current = await page.locator('.ticket.now-playing .ja').textContent();
+      played.push(current);
+      await page.evaluate(i => window.__audioInstances[i].onended(), i);
+    }
+
+    expect(played).toEqual([
+      'すみません', 'ごめんなさい', 'またね', '元気ですか？', '乾杯', '大丈夫です', '気をつけて',
+      'こんにちは', 'ありがとう',
+    ]);
+  });
 });
 
 async function installFakeAudio(page) {
