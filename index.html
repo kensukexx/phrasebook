@@ -1100,6 +1100,9 @@ const store = (window.storage && typeof window.storage.get === "function")
 
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function keyOf(d){ return d.id || d.ja; }
+// 「覚えた✓」は言語ごとに独立させている（英語で覚えても他言語では未習得のまま、という
+// ユーザーからの指摘で2026-08-14に変更）。ピン留めはこれまで通り言語共通のまま。
+function learnedKey(d){ return keyOf(d) + "::" + currentLang; }
 
 async function loadState(){
   try{ const cc = await store.get('phrasebook-custom-cats'); if(cc && cc.value){ customCats = JSON.parse(cc.value); } }catch(e){}
@@ -1110,6 +1113,19 @@ async function loadState(){
   try{ const pp = await store.get('phrasebook-practice-custom'); if(pp && pp.value){ customPracticePacks = JSON.parse(pp.value); } }catch(e){}
   try{ const l = await store.get('phrasebook-learned'); if(l && l.value){ learned = JSON.parse(l.value); } }catch(e){}
   try{ const p = await store.get('phrasebook-pinned'); if(p && p.value){ pinned = JSON.parse(p.value); } }catch(e){}
+  // 旧形式の「覚えた」は言語を問わない共通フラグだった（キーに"::言語"サフィックスが無い）。
+  // 英語で覚えた単語が他言語でも覚えた扱いになってしまう、という指摘を受けて言語ごとの
+  // 記録に変更したため、旧エントリは当時の既定表示言語だった英語で覚えたものとみなして
+  // 移行する（どの言語で覚えたかは元データから復元しようがないため）。
+  let learnedLangMigrated = false;
+  Object.keys(learned).forEach(k=>{
+    if(!k.includes("::")){
+      learned[k + "::en"] = true;
+      delete learned[k];
+      learnedLangMigrated = true;
+    }
+  });
+  if(learnedLangMigrated){ saveLearned(); }
   try{ const wn = await store.get('phrasebook-whatsnew-seen'); if(wn && wn.value){ whatsNewSeenId = parseInt(wn.value, 10) || 0; } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
   allCats().forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
@@ -1123,9 +1139,12 @@ async function loadState(){
   let migrated = false;
   customData.forEach((d, i)=>{
     if(!d.id){
+      const oldKey = d.ja;
       d.id = "c" + Date.now().toString(36) + "-" + i;
-      if(learned[d.ja]) learned[d.id] = true;
-      if(pinned[d.ja]) pinned[d.id] = true;
+      Object.keys(learned).forEach(k=>{
+        if(k.startsWith(oldKey + "::")){ learned[d.id + k.slice(oldKey.length)] = true; }
+      });
+      if(pinned[oldKey]) pinned[d.id] = true;
       migrated = true;
     }
   });
@@ -1852,7 +1871,7 @@ function computeFiltered(){
     });
   }
   if(showPinnedOnly){ filtered = filtered.filter(d=>pinned[keyOf(d)]); }
-  if(showUnlearnedOnly){ filtered = filtered.filter(d=>!learned[keyOf(d)]); }
+  if(showUnlearnedOnly){ filtered = filtered.filter(d=>!learned[learnedKey(d)]); }
   // pinned-first、次にユーザーが並び替えたphraseOrder順（未登録キーは元の配列順にフォールバック）
   const orderIndex = new Map(phraseOrder.map((k,i)=>[k,i]));
   filtered = filtered.map((d,i)=>({d,i})).sort((a,b)=>{
@@ -1867,7 +1886,7 @@ function computeFiltered(){
 
 function updateProgressLabel(data){
   const total = data.length;
-  const done = data.filter(d=>learned[keyOf(d)]).length;
+  const done = data.filter(d=>learned[learnedKey(d)]).length;
   document.getElementById("progressLabel").textContent = `覚えた ${done} / ${total}`;
 }
 
@@ -1886,7 +1905,7 @@ function renderDeck(){
     const [phrase, kana] = pair || [d.ja, ""];
     const glossText = d.gloss && d.gloss[currentLang] ? d.gloss[currentLang] : "";
     const isCustom = customData.includes(d);
-    const isLearned = !!learned[keyOf(d)];
+    const isLearned = !!learned[learnedKey(d)];
     const isPinned = !!pinned[keyOf(d)];
     const card = document.createElement("div");
     card.className = "ticket" + (isCustom ? " custom" : "") + (isLearned ? " learned" : "");
@@ -1920,7 +1939,7 @@ function renderDeck(){
     attachCardDrag(card, d, jaOnly, phrase);
     card.querySelector('[data-role="learn"]').addEventListener("click", (e)=>{
       e.stopPropagation();
-      const k = keyOf(d);
+      const k = learnedKey(d);
       if(learned[k]) delete learned[k]; else learned[k] = true;
       saveLearned(); renderDeck();
     });
@@ -2015,7 +2034,7 @@ function playStep(){
 // 最後尾へ回す。未習得の復習を優先し、覚えた分は最後に確認できるようにするため。
 function orderForListening(list){
   return list.map((d,i)=>({d,i})).sort((a,b)=>{
-    const la = learned[keyOf(a.d)] ? 1 : 0, lb = learned[keyOf(b.d)] ? 1 : 0;
+    const la = learned[learnedKey(a.d)] ? 1 : 0, lb = learned[learnedKey(b.d)] ? 1 : 0;
     if(la !== lb) return la - lb;
     return a.i - b.i;
   }).map(x=>x.d);
@@ -3746,10 +3765,24 @@ if("serviceWorker" in navigator){
 
     // 自分自身のpushもonSnapshotに返ってくるが、内容は既にローカルと同じなので
     // applyCloudStateは実質的に無害な no-op になる（renderDeck等が余分に走る程度）。
+    //
+    // 【重要・修正済みの不具合】pushTimerが立っている（＝ローカルの変更をまだ一度も
+    // クラウドへ送っていない）タイミングで別端末からのリモート更新が届くと、そのまま
+    // applyCloudStateしてしまうと未送信のローカル変更がメモリ上でまるごと上書きされ、
+    // 一度もクラウドに届かないまま消えてしまう（両端末とも「同期済み」表示なのに中身が
+    // 食い違う、という報告の主因と推定）。この場合は先にpushNow()でローカルの変更を
+    // 確定させてから戻り、届いたリモート更新自体はこの一手だけ無視する
+    // （こちらのpushが完了すればonSnapshotが再度発火し、その時点で改めて調停される）。
     function watchRemote(uid){
       if(unsubscribeSnapshot) unsubscribeSnapshot();
       unsubscribeSnapshot = onSnapshot(userDocRef(uid), async (snap)=>{
         if(!snap.exists() || applyingRemote) return;
+        if(pushTimer){
+          clearTimeout(pushTimer);
+          pushTimer = null;
+          await pushNow();
+          return;
+        }
         applyingRemote = true;
         try{ await window.applyCloudState(snap.data()); }
         finally{ applyingRemote = false; }

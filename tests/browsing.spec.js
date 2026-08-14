@@ -83,3 +83,47 @@ test.describe('core browsing', () => {
     expect(overflow).toBeLessThanOrEqual(1);
   });
 });
+
+test.describe('覚えた✓ is per-language', () => {
+  // Regression test: 覚えた used to be a single flag shared across every language for a given
+  // phrase, so marking "Hello" learned while viewing English also showed the same phrase as
+  // learned while browsing French/German/etc. Fixed by keying `learned` on both the phrase and
+  // the currently displayed language (learnedKey() = keyOf(d) + "::" + currentLang).
+  test('marking a phrase learned in one language does not mark it learned in another', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    await page.locator('.ticket', { hasText: 'こんにちは' }).locator('[data-role="learn"]').click();
+    await expect(page.locator('.ticket', { hasText: 'こんにちは' }).locator('[data-role="learn"]')).toHaveClass(/done/);
+
+    await page.click('#langPickerBtn');
+    await page.waitForSelector('#langPickerOverlay.open');
+    await page.click('#langPickList >> text=ドイツ語');
+    await page.waitForTimeout(200);
+
+    await expect(page.locator('.ticket', { hasText: 'こんにちは' }).locator('[data-role="learn"]')).not.toHaveClass(/done/);
+
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-learned')));
+    expect(stored).toEqual({ 'こんにちは::en': true });
+  });
+
+  test('a legacy (pre-per-language) learned entry migrates to English on load, not to every language', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.evaluate(() => {
+      localStorage.setItem('phrasebook-learned', JSON.stringify({ 'こんにちは': true }));
+    });
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+
+    await expect(page.locator('.ticket', { hasText: 'こんにちは' }).locator('[data-role="learn"]')).toHaveClass(/done/);
+    const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-learned')));
+    expect(stored).toEqual({ 'こんにちは::en': true });
+
+    await page.click('#langPickerBtn');
+    await page.waitForSelector('#langPickerOverlay.open');
+    await page.click('#langPickList >> text=韓国語');
+    await page.waitForTimeout(200);
+    await expect(page.locator('.ticket', { hasText: 'こんにちは' }).locator('[data-role="learn"]')).not.toHaveClass(/done/);
+  });
+});
