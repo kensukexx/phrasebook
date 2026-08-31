@@ -78,7 +78,7 @@ test.describe('core browsing', () => {
 
     // scroll far enough that the header banner (not sticky) has scrolled fully out of view,
     // so .cats has reached its stuck position at the very top
-    await page.mouse.wheel(0, 600);
+    await page.evaluate(() => window.scrollBy(0, 600)); // mouse.wheel() isn't supported in mobile WebKit
     await page.waitForTimeout(200);
     const catsStuck = await page.locator('#cats').boundingBox();
     const filterbarStuck = await page.locator('.filterbar').boundingBox();
@@ -87,7 +87,7 @@ test.describe('core browsing', () => {
     expect(filterbarStuck.y).toBe(catsStuck.y + catsStuck.height);
 
     // scrolling further must not move them again - they're pinned, not just coincidentally placed
-    await page.mouse.wheel(0, 400);
+    await page.evaluate(() => window.scrollBy(0, 400));
     await page.waitForTimeout(200);
     const catsAfterMore = await page.locator('#cats').boundingBox();
     const filterbarAfterMore = await page.locator('.filterbar').boundingBox();
