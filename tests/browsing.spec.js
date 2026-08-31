@@ -68,6 +68,33 @@ test.describe('core browsing', () => {
     expect(errors).toEqual([]);
   });
 
+  test('the category tabs and the play/speed/pin/unlearned filter row stay pinned to the top while scrolling', async ({ page }) => {
+    // Regression test: category tabs (.cats) were already sticky, but the row below them
+    // (.filterbar: ▶ 聞き流し / speed / 📌 / ✓ / progress) scrolled away with the deck. Both
+    // are now wrapped in a single .sticky-controls container so they move as one unit.
+    await page.setViewportSize({ width: 390, height: 700 });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    // scroll far enough that the header banner (not sticky) has scrolled fully out of view,
+    // so .cats has reached its stuck position at the very top
+    await page.mouse.wheel(0, 600);
+    await page.waitForTimeout(200);
+    const catsStuck = await page.locator('#cats').boundingBox();
+    const filterbarStuck = await page.locator('.filterbar').boundingBox();
+    expect(catsStuck.y).toBe(0);
+    // filterbar sits directly below cats with no gap or overlap
+    expect(filterbarStuck.y).toBe(catsStuck.y + catsStuck.height);
+
+    // scrolling further must not move them again - they're pinned, not just coincidentally placed
+    await page.mouse.wheel(0, 400);
+    await page.waitForTimeout(200);
+    const catsAfterMore = await page.locator('#cats').boundingBox();
+    const filterbarAfterMore = await page.locator('.filterbar').boundingBox();
+    expect(catsAfterMore.y).toBe(catsStuck.y);
+    expect(filterbarAfterMore.y).toBe(filterbarStuck.y);
+  });
+
   test('no horizontal overflow on a narrow viewport', async ({ page }) => {
     // Reported: on a real phone (WebKit-based Chrome/Safari on iOS), the whole page rendered
     // visibly shrunk with a gray gap down the right edge. Root cause: .searchwrap input had

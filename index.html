@@ -60,9 +60,9 @@
   .lang-row .lp-label{ flex:1; font-size:15px; color:var(--ink); }
   .lang-row .lp-check{ color:var(--red); font-weight:700; width:20px; text-align:center; flex:0 0 auto; }
 
-  .cats{ position:sticky; top:0; z-index:30; display:flex; gap:8px; padding:12px 14px 10px; overflow-x:auto;
-    -webkit-overflow-scrolling:touch; background:var(--paper); scrollbar-width:none;
-    box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
+  .sticky-controls{ position:sticky; top:0; z-index:30; background:var(--paper); }
+  .cats{ display:flex; gap:8px; padding:12px 14px 10px; overflow-x:auto;
+    -webkit-overflow-scrolling:touch; background:var(--paper); scrollbar-width:none; }
   .cats::-webkit-scrollbar{ display:none; }
   /* 折り返し表示：無制限に折り返すと縦に伸びすぎてスマホの画面を圧迫するため、
      常に2行に収め、収まりきらない分は（1行表示の時と同じく）横スクロールで見せる。 */
@@ -290,7 +290,8 @@
   .lj-speak{ flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--red); cursor:pointer; }
   .lj-speak.playing{ background:var(--red); color:#fff; border-color:var(--red); }
   .lj-hint{ font-size:11px; color:var(--ink-faint); margin-top:2px; }
-  .filterbar{ display:flex; align-items:center; gap:8px; padding:10px 16px 0; flex-wrap:wrap; }
+  .filterbar{ display:flex; align-items:center; gap:8px; padding:10px 16px 10px; flex-wrap:wrap; background:var(--paper);
+    box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
   .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:12px; border:none; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(47,53,66,0.08); }
   .rate-quick{ flex:0 0 auto; width:auto; padding:0 10px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:12.5px; }
   .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
@@ -577,7 +578,16 @@
   <label>言語</label>
   <button class="langselect" id="langPickerBtn" type="button">英語 ▾</button>
 </div>
-<div class="cats" id="cats"></div>
+<div class="sticky-controls">
+  <div class="cats" id="cats"></div>
+  <div class="filterbar">
+    <button class="filter-icon" id="listenBtn" aria-label="聞き流し再生" title="聞き流し再生" style="width:44px;">▶</button>
+    <button class="filter-icon rate-quick" id="rateQuickBtn" aria-label="現地語スピード" title="タップで速度を切り替え">1.0x</button>
+    <button class="filter-icon" id="pinnedToggle" aria-label="ピン留めのみ" title="📌のみ">📌</button>
+    <button class="filter-icon" id="unlearnedToggle" aria-label="未習得のみ" title="未習得のみ">✓</button>
+    <span class="progress-label" id="progressLabel" style="margin-left:auto;"></span>
+  </div>
+</div>
 
 <div class="overlay" id="langPickerOverlay">
   <div class="panel">
@@ -585,14 +595,6 @@
     <p class="hint">タップで選択。ハンドル「⠿」を長押ししたままドラッグすると並び替えできます。</p>
     <div id="langPickList"></div>
   </div>
-</div>
-
-<div class="filterbar">
-  <button class="filter-icon" id="listenBtn" aria-label="聞き流し再生" title="聞き流し再生" style="width:44px;">▶</button>
-  <button class="filter-icon rate-quick" id="rateQuickBtn" aria-label="現地語スピード" title="タップで速度を切り替え">1.0x</button>
-  <button class="filter-icon" id="pinnedToggle" aria-label="ピン留めのみ" title="📌のみ">📌</button>
-  <button class="filter-icon" id="unlearnedToggle" aria-label="未習得のみ" title="未習得のみ">✓</button>
-  <span class="progress-label" id="progressLabel" style="margin-left:auto;"></span>
 </div>
 
 <div class="toggle-wrap pattern-mode-row" id="patternModeRow">
