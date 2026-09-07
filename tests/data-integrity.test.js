@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const LANGS = ['en', 'ko', 'de', 'ro', 'es', 'fr', 'vi', 'zh', 'pt', 'ru', 'hi', 'th'];
+const LANGS = ['en', 'ko', 'de', 'ro', 'es', 'fr', 'vi', 'zh', 'pt', 'ru', 'hi', 'th', 'ind'];
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
 function extractArray(varName) {
