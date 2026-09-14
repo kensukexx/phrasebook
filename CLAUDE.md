@@ -34,7 +34,8 @@
   - **学習ラウンジからの★保存時に解説も自動で引き継ぐ**（2026-08-13追加）: 「保存したのに解説が空で、組み込みフレーズと違って見える」という指摘を受けて追加。📝例文セットのpe-save（`renderPracticeList()`→`openPracticeDetail()`内）は`g.note`（グループの文法解説）＋`ex.gloss`（🔤単語対応）を改行区切りで`addNote`に、💬AIに質問のcp-save（`renderChatDetail()`内）はそのフレーズを提案したAIの回答文（`m.text`）をそのまま`addNote`に入れてから追加パネルを開く。
 - **フレーズ追加パネルの`autocomplete="off"`**（2026-08-13追加）: 設定画面の`geminiKeyInput`が`type="password"`のため、他の箇所でテキスト入力→保存を行うとChromeが無関係な入力欄を「ユーザー名」候補と誤認し「パスワードを保存しますか？」ポップアップを出すことがあった。`geminiKeyInput`と、`addJa`/`addNote`/`add_${lang}`/`add_${lang}_kana`（`buildAddFields()`で動的生成）全てに`autocomplete="off"`を付けて抑制。
 - **新機能のお知らせポップアップ**（2026-08-12追加）: `CHANGELOG`配列（`{id, date, title, items}`、idは追加のたびに既存の最大+1を昇順で足す）と`whatsNewSeenId`（localStorage `phrasebook-whatsnew-seen`）を比較し、未読エントリがあれば`init()`の最後で`checkWhatsNew()`が`whatsNewOverlay`をポップアップ表示する。個人利用前提のため「初回起動＝未読扱い」で構わないという判断で、新規ユーザー分岐は作っていない。**機能を追加したらCHANGELOGに1件足すこと。** テストではこのポップアップが毎回開いて他のテストのクリックをブロックしないよう、`playwright.config.js`の`use.storageState`で`phrasebook-whatsnew-seen`を`999999`（＝どんなCHANGELOG idより確実に大きい値、更新のたびにこの値を追従させる必要が無いようにするため）に既定で固定している。ポップアップ自体をテストする`tests/whats-new.spec.js`は`test.use({storageState:{cookies:[],origins:[]}})`でこの既定を打ち消して未読状態を再現している。`browser.newContext()`を自前で呼ぶテスト（`tests/sync.spec.js`のモバイルUAテストなど）は設定ファイルの既定を継承しないので、`context.addInitScript()`で個別に同じ値をセットする必要がある。
-- **日本語を学ぶ（外国人向け、v1実験機能）**: 「知っている言語」を選ぶとその言語のフレーズが表になり、タップで裏の日本語＋ローマ字読み（`jaRomaji`、308件全件に用意。Google翻訳の非公式ローマ字化エンドポイントで機械生成後、漢字の読み違い等をレビュー・修正）が見える、独立オーバーレイ（`learnJaOverlay`）。周辺のツールメニュー・言語名は日本語のままなので「日本語話者が一緒に操作する」前提で、この画面自体のラベルだけ英語。カテゴリ絞り込みは無し（カテゴリ名が日本語のみのため）。組み込み308件のみが対象で`customData`は対象外（`jaRomaji`が無いため）。**日本語再生時は`speakRaw(d.ja, "ja-JP", btn)`のように第5引数(langKeyForVoice)を渡さないこと** — "ja"はLANGSに存在しないキーなので、渡すとフォールバック時に`pickVoice("ja")`内で`meta`がundefinedになりクラッシュする（他のJapanese再生箇所と同じ理由、`tests/learn-japanese.spec.js`に回帰防止テストあり）。
+- **日本語を学ぶ（外国人向け、v1実験機能）**: 「知っている言語」を選ぶとその言語のフレーズが表になり、タップで裏の日本語＋ローマ字読み（`jaRomaji`、309件全件に用意。Google翻訳の非公式ローマ字化エンドポイントで機械生成後、漢字の読み違い等をレビュー・修正）が見える、独立オーバーレイ（`learnJaOverlay`）。周辺のツールメニュー・言語名は日本語のままなので「日本語話者が一緒に操作する」前提で、この画面自体のラベルだけ英語。カテゴリ絞り込みは無し（カテゴリ名が日本語のみのため）。組み込み309件のみが対象で`customData`は対象外（`jaRomaji`が無いため）。**日本語再生時は`speakRaw(d.ja, "ja-JP", btn)`のように第5引数(langKeyForVoice)を渡さないこと** — "ja"はLANGSに存在しないキーなので、渡すとフォールバック時に`pickVoice("ja")`内で`meta`がundefinedになりクラッシュする（他のJapanese再生箇所と同じ理由、`tests/learn-japanese.spec.js`に回帰防止テストあり）。
+- **英単語3000（2026-09-14追加、独立モード）**: フレーズ帳（`BUILTIN`、309件・12/13言語対応）とは完全に別データの`WORDS3000`配列（`{rank, word, pos, kana, ja, ex:{en,kana,ja}}`）を使う、頻出英単語を頻度順(rank)に学ぶ機能（`words3000Overlay`）。日常会話の9割をカバーすると言われる3000語のうち、著作権上の理由で特定の市販単語帳（Oxford 3000等）を複製せず、一般的な頻度の知見をもとに独自選定して**2026-09-14に第1弾rank1〜300を収録**（残り2700語は今後のバッチで追加予定、ユーザーへ「まず機能＋300語で完成形を確認」の合意のもと段階導入）。範囲セレクタ（`words3000TierSel`）は500語区切りのティアを`WORDS3000`実際の最大rankから動的に計算する（`words3000TierRanges()`）ので、バッチを追加するだけで新しいティアが自動的に選べるようになりUI側の変更は不要。「覚えた」状態は`wordsLearned`という完全に独立した状態オブジェクト（キーは`w.word`文字列）で、フレーズ側の`learned`/`learnedKey()`とは無関係（`phrasebook-words-learned`に保存、同期対象にも追加済み＝`getSyncableState()`/`applyCloudState()`と、同期モジュールのラップ対象関数リストの両方に`saveWordsLearned`を追加）。**言語データではないため、インドネシア語追加時に発覚した"id"キー衝突のような懸念はここには無い**が、命名の教訓として`wordsLearned`は独自の状態オブジェクトに分離してある。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -47,12 +48,12 @@
 
 ## ファイル構成
 ```
-index.html          アプリ本体（UI・データ・ロジック全て、単一ファイル、約752KB）
+index.html          アプリ本体（UI・データ・ロジック全て、単一ファイル、約826KB）
 manifest.json        PWAマニフェスト
 sw.js                 Service Worker（オフラインシェルキャッシュのみ、v2）
 firestore.rules       Firestoreセキュリティルール
-tests/                Playwright仕様15本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計236テスト
+tests/                Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
+playwright.config.js  chromium・iPhone13(webkit)の2プロジェクト、計248テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 

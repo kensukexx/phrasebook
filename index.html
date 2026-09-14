@@ -290,6 +290,24 @@
   .lj-speak{ flex:0 0 auto; width:34px; height:34px; border-radius:50%; border:1.5px solid var(--line); background:#fff; color:var(--red); cursor:pointer; }
   .lj-speak.playing{ background:var(--red); color:#fff; border-color:var(--red); }
   .lj-hint{ font-size:11px; color:var(--ink-faint); margin-top:2px; }
+  .w3k-card{ border:1.5px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; background:#fff; }
+  .w3k-card.learned{ border-color:var(--green); }
+  .w3k-front{ display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .w3k-rank{ flex:0 0 auto; width:30px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-faint); }
+  .w3k-word-wrap{ flex:1; min-width:0; }
+  .w3k-word{ font-size:17px; font-weight:700; color:var(--ink); }
+  .w3k-pos{ font-size:11px; color:var(--ink-soft); margin-left:6px; }
+  .w3k-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .w3k-btns{ flex:0 0 auto; display:flex; gap:6px; align-items:center; }
+  .w3k-btns .mini-btn.done{ background:var(--green); color:#fff; border-color:var(--green); }
+  .w3k-back{ display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .w3k-card.revealed .w3k-back{ display:block; }
+  .w3k-ja{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:8px; }
+  .w3k-ex{ display:flex; align-items:flex-start; gap:8px; }
+  .w3k-ex-text{ flex:1; min-width:0; }
+  .w3k-ex-en{ font-size:13.5px; color:var(--ink); }
+  .w3k-ex-kana{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .w3k-ex-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:3px; }
   .filterbar{ display:flex; align-items:center; gap:8px; padding:10px 16px 10px; flex-wrap:wrap; background:var(--paper);
     box-shadow:0 6px 12px -8px rgba(47,53,66,0.15); }
   .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:12px; border:none; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(47,53,66,0.08); }
@@ -319,6 +337,7 @@
     <button class="tool-item" id="menuSync"><span>☁️</span><span id="syncMenuLabel">同期（未ログイン）</span></button>
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuPractice"><span>🎓</span>学習ラウンジ</button>
+    <button class="tool-item" id="menuWords3000"><span>📚</span>英単語3000</button>
     <button class="tool-item" id="menuScan"><span>📷</span>メニュー翻訳（写真から）</button>
     <button class="tool-item" id="menuLearnJa"><span>🌏</span>日本語を学ぶ（外国人向け）</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
@@ -462,6 +481,20 @@
   </div>
 </div>
 
+<div class="overlay" id="words3000Overlay">
+  <div class="panel">
+    <h2>英単語3000 <button id="closeWords3000" aria-label="閉じる">✕</button></h2>
+    <p class="hint">日常会話の9割をカバーすると言われる頻出語を、使用頻度順に学べます。タップで意味と例文が見られます。</p>
+    <div class="field">
+      <label>範囲</label>
+      <select id="words3000TierSel" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink);"></select>
+    </div>
+    <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:6px;">
+    <p class="hint" id="words3000Progress" style="margin-bottom:10px;"></p>
+    <div id="words3000List"></div>
+  </div>
+</div>
+
 <div class="overlay" id="currencyOverlay">
   <div class="panel">
     <h2>通貨換算 <button id="closeCurrency" aria-label="閉じる">✕</button></h2>
@@ -508,13 +541,18 @@
     </div>
 
     <div class="manual-section">
+      <h3>📚 英単語3000</h3>
+      <p>日常会話の9割をカバーすると言われる頻出英単語を、使用頻度順に学べる独立モードです。フレーズ帳のカテゴリとは別の、単語だけの学習専用の一覧です。「範囲」で500語ずつの区間を選び、単語カードをタップすると裏に日本語の意味と例文（英語・カナ・和訳）が表示されます（表・裏それぞれに🔊）。✓で覚えた単語に印を付けられ、進捗が「覚えた ◯ / ◯」で表示されます（覚えた状態はフレーズ一覧の✓とは別管理で、端末間同期の対象です）。検索は英単語・日本語の意味どちらでも可能です。2026年9月現在は最重要語300語のみを収録しており、今後のアップデートで3000語まで拡充予定です。</p>
+    </div>
+
+    <div class="manual-section">
       <h3>📷 メニュー翻訳（写真から）</h3>
       <p>レストランのメニューや街の看板を撮影すると、写っている文章をAIが読み取り、フレーズごとの読み方（カタカナ）と意味の一覧を作ります（設定でGeminiキーの登録が必要）。何語で書かれているかも自動で判定します。一覧の各項目は🔊で発音を確認できます。</p>
     </div>
 
     <div class="manual-section">
       <h3>🌏 日本語を学ぶ（外国人向け）</h3>
-      <p>日本語を学びたい外国人の友達と一緒に使う実験的な機能です（v1）。「知っている言語」を選ぶと、その言語のフレーズがカードの表になり、タップすると裏に日本語とローマ字の読み方が出てきます（表・裏それぞれに🔊）。カテゴリ分けは今のところ無く、検索と一覧のみです。画面内の文言は英語表記のみで、メニューなど周辺は今まで通り日本語のままなので、日本語話者が操作をリードする使い方を想定しています。組み込みの308フレーズが対象で、自分で追加したフレーズは対象外です。</p>
+      <p>日本語を学びたい外国人の友達と一緒に使う実験的な機能です（v1）。「知っている言語」を選ぶと、その言語のフレーズがカードの表になり、タップすると裏に日本語とローマ字の読み方が出てきます（表・裏それぞれに🔊）。カテゴリ分けは今のところ無く、検索と一覧のみです。画面内の文言は英語表記のみで、メニューなど周辺は今まで通り日本語のままなので、日本語話者が操作をリードする使い方を想定しています。組み込みの309フレーズが対象で、自分で追加したフレーズは対象外です。</p>
     </div>
 
     <div class="manual-section">
@@ -1058,8 +1096,312 @@ const BUILTIN = [
 {ja:"それができるなら、手伝ってください。",cat:"会話パターン3",gloss:{en:"If(なら) you can do(できる) that(それが), please help(手伝ってください) me(私を)",ko:"그것을(それを) 할 수 있으면(できれば) 도와주세요(手伝ってください)",de:"Wenn(なら) du das tun kannst(それができる), hilf mir(手伝って) bitte(ください)",ro:"Dacă(なら) poți face asta(それができる), ajută-mă(手伝って) te rog(ください)",es:"Si(なら) puedes hacer eso(それができる), ayúdame(手伝って) por favor(ください)",fr:"Si(なら) tu peux faire ça(それができる), aide-moi(手伝って) s'il te plaît(ください)",vi:"Nếu(なら) bạn có thể làm việc đó(それができる), hãy giúp tôi(手伝ってください)",zh:"如果(なら)你能(できる)做那个(それをする)，请帮帮我(手伝ってください)",pt:"Se(なら) você puder fazer isso(それができる), me ajude(手伝って) por favor(ください)",ru:"Если(なら) вы(あなたは) можете(できる) это(それを) сделать(する), помогите(手伝ってください) мне(私を)",hi:"यदि(もし) आप(あなたが) ऐसा(それが) कर सकते हैं(できる) तो(なら) कृपया(どうか) मदद करें(手伝ってください)。",th:"หากคุณสามารถทำได้(それができるなら) โปรดช่วยด้วย(手伝ってください)",ind:"Jika(なら) Anda bisa melakukannya(それができる), mohon bantuannya(手伝ってください)。"},en:["If you can do that, please help me","イフ ユー キャン ドゥー ザット プリーズ ヘルプ ミー"],ko:["그것을 할 수 있으면 도와주세요","クゴスル ハル ス イッスミョン トワジュセヨ"],de:["Wenn du das tun kannst, hilf mir bitte","ヴェン ドゥ ダス トゥーン カンスト ヒルフ ミア ビッテ"],ro:["Dacă poți face asta, ajută-mă te rog","ダカ ポツィ ファチェ アスタ アジュタマ テ ログ"],es:["Si puedes hacer eso, ayúdame por favor","シ プエデス アセール エソ アユダメ ポルファボール"],fr:["Si tu peux faire ça, aide-moi s'il te plaît","シ テュ プ フェール サ エドモワ シルトゥプレ"],vi:["Nếu bạn có thể làm việc đó, hãy giúp tôi","ネウ バン コー テー ラム ヴィエック ドー ハイ ズップ トイ"],zh:["如果你能做那个，请帮帮我","ルーグオニーネンズオナーガ チンバンバンウォ"],pt:["Se você puder fazer isso, me ajude por favor","セ ヴォセ プデール ファゼール イッソ ミ アジュージ ポルファヴォール"],ru:["Если вы можете это сделать, помогите мне","イェスリ ヴィ モージェチェ イェタ ズヂェラチ パマギーチェ ムニェ"],hi:["यदि आप ऐसा कर सकते हैं तो कृपया मदद करें।","ヤディ アープ アイサ カル サクテ ハイン ト クリピャ マダドゥ カレン"],th:["หากคุณสามารถทำได้โปรดช่วยด้วย","ハーク クン サーマート タム ダイ プロート チュアイ ドゥアイ"],ind:["Jika Anda bisa melakukannya, mohon bantuannya.","ジカ アンダ ビサ ムラクカンニャ、モホン バントゥアンニャ"],jaRomaji:"Sore ga dekirunara, tetsudattekudasai.",note:"「〜なら/if」は「もし〜なら」より、日常会話でよく使うくだけた条件表現です。「もし」を省略しても通じます。"}
 ];
 
-// 学習ラウンジ：覚えた単語・表現をもとにした例文集(type未指定)と、AIとのチャット(type:"chat")。
-const PRACTICE_PACKS = [];
+// 英単語3000：日常会話の9割をカバーすると言われる頻出英単語を、使用頻度順（rank）に収録する
+// 独立の語彙学習データ（BUILTINのフレーズ集とは無関係）。1件＝{rank, word, pos, kana, ja, ex:{en,kana,ja}}。
+// 特定の市販単語帳（Oxford 3000等）をそのまま複製すると著作権上の問題があるため、一般的な頻度の
+// 知見をもとに独自に選定している。2026-09-14に第1弾（rank1〜300）を追加、以降のバッチで拡充予定。
+const WORDS3000 = [
+{rank:1,word:"the",pos:"冠詞",kana:"ザ",ja:"その、あの（定冠詞）",ex:{en:"I saw the movie.",kana:"アイ ソウ ザ ムービー",ja:"私はその映画を見た。"}},
+{rank:2,word:"a",pos:"冠詞",kana:"ア",ja:"ある一つの（不定冠詞）",ex:{en:"I have a car.",kana:"アイ ハブ ア カー",ja:"私は車を持っている。"}},
+{rank:3,word:"to",pos:"前置詞",kana:"トゥー",ja:"〜へ、〜に",ex:{en:"I want to go home.",kana:"アイ ウォント トゥ ゴウ ホウム",ja:"私は家に帰りたい。"}},
+{rank:4,word:"of",pos:"前置詞",kana:"オブ",ja:"〜の",ex:{en:"This is a cup of coffee.",kana:"ディス イズ ア カップ オブ コーフィ",ja:"これはコーヒー一杯です。"}},
+{rank:5,word:"and",pos:"接続詞",kana:"アンド",ja:"〜と、そして",ex:{en:"I like tea and coffee.",kana:"アイ ライク ティー アンド コーフィ",ja:"私は紅茶とコーヒーが好きです。"}},
+{rank:6,word:"in",pos:"前置詞",kana:"イン",ja:"〜の中に",ex:{en:"The book is in the bag.",kana:"ザ ブック イズ イン ザ バッグ",ja:"本はカバンの中にあります。"}},
+{rank:7,word:"is",pos:"動詞",kana:"イズ",ja:"〜です",ex:{en:"She is a teacher.",kana:"シー イズ ア ティーチャー",ja:"彼女は先生です。"}},
+{rank:8,word:"it",pos:"代名詞",kana:"イット",ja:"それ",ex:{en:"It is raining today.",kana:"イット イズ レイニング トゥデイ",ja:"今日は雨が降っています。"}},
+{rank:9,word:"you",pos:"代名詞",kana:"ユー",ja:"あなた、あなたたち",ex:{en:"You are very kind.",kana:"ユー アー ベリ カインド",ja:"あなたはとても親切です。"}},
+{rank:10,word:"that",pos:"代名詞",kana:"ザット",ja:"あれ、その",ex:{en:"That is my bag.",kana:"ザット イズ マイ バッグ",ja:"あれは私のカバンです。"}},
+{rank:11,word:"he",pos:"代名詞",kana:"ヒー",ja:"彼は",ex:{en:"He is my brother.",kana:"ヒー イズ マイ ブラザー",ja:"彼は私の兄弟です。"}},
+{rank:12,word:"for",pos:"前置詞",kana:"フォー",ja:"〜のために",ex:{en:"This gift is for you.",kana:"ディス ギフト イズ フォー ユー",ja:"これはあなたへの贈り物です。"}},
+{rank:13,word:"was",pos:"動詞",kana:"ワズ",ja:"〜だった",ex:{en:"The party was fun.",kana:"ザ パーティー ワズ ファン",ja:"パーティーは楽しかったです。"}},
+{rank:14,word:"on",pos:"前置詞",kana:"オン",ja:"〜の上に",ex:{en:"The keys are on the table.",kana:"ザ キーズ アー オン ザ テーブル",ja:"鍵はテーブルの上にあります。"}},
+{rank:15,word:"are",pos:"動詞",kana:"アー",ja:"〜です（複数）",ex:{en:"We are friends.",kana:"ウィー アー フレンズ",ja:"私たちは友達です。"}},
+{rank:16,word:"with",pos:"前置詞",kana:"ウィズ",ja:"〜と一緒に",ex:{en:"I live with my family.",kana:"アイ リブ ウィズ マイ ファミリー",ja:"私は家族と暮らしています。"}},
+{rank:17,word:"his",pos:"代名詞",kana:"ヒズ",ja:"彼の",ex:{en:"This is his car.",kana:"ディス イズ ヒズ カー",ja:"これは彼の車です。"}},
+{rank:18,word:"they",pos:"代名詞",kana:"ゼイ",ja:"彼らは",ex:{en:"They are students.",kana:"ゼイ アー ステューデンツ",ja:"彼らは学生です。"}},
+{rank:19,word:"at",pos:"前置詞",kana:"アット",ja:"〜で（場所・時）",ex:{en:"Let's meet at the station.",kana:"レッツ ミート アット ザ ステイション",ja:"駅で会いましょう。"}},
+{rank:20,word:"be",pos:"動詞",kana:"ビー",ja:"〜である",ex:{en:"I want to be a doctor.",kana:"アイ ウォント トゥ ビー ア ドクター",ja:"私は医者になりたいです。"}},
+{rank:21,word:"this",pos:"代名詞",kana:"ディス",ja:"これ",ex:{en:"This is delicious.",kana:"ディス イズ デリシャス",ja:"これは美味しいです。"}},
+{rank:22,word:"from",pos:"前置詞",kana:"フロム",ja:"〜から",ex:{en:"I'm from Japan.",kana:"アイム フロム ジャパン",ja:"私は日本出身です。"}},
+{rank:23,word:"have",pos:"動詞",kana:"ハブ",ja:"持っている",ex:{en:"I have two sisters.",kana:"アイ ハブ トゥー シスターズ",ja:"私には姉妹が2人います。"}},
+{rank:24,word:"not",pos:"副詞",kana:"ノット",ja:"〜ではない",ex:{en:"This is not mine.",kana:"ディス イズ ノット マイン",ja:"これは私のものではありません。"}},
+{rank:25,word:"or",pos:"接続詞",kana:"オア",ja:"または",ex:{en:"Tea or coffee?",kana:"ティー オア コーフィ",ja:"紅茶かコーヒーはどうですか？"}},
+{rank:26,word:"by",pos:"前置詞",kana:"バイ",ja:"〜によって、〜のそばに",ex:{en:"I go to work by bus.",kana:"アイ ゴウ トゥ ワーク バイ バス",ja:"私はバスで仕事に行きます。"}},
+{rank:27,word:"but",pos:"接続詞",kana:"バット",ja:"しかし",ex:{en:"It's small but nice.",kana:"イッツ スモール バット ナイス",ja:"小さいけれど素敵です。"}},
+{rank:28,word:"we",pos:"代名詞",kana:"ウィー",ja:"私たちは",ex:{en:"We are happy.",kana:"ウィー アー ハッピー",ja:"私たちは幸せです。"}},
+{rank:29,word:"she",pos:"代名詞",kana:"シー",ja:"彼女は",ex:{en:"She likes music.",kana:"シー ライクス ミューズィック",ja:"彼女は音楽が好きです。"}},
+{rank:30,word:"all",pos:"形容詞",kana:"オール",ja:"全ての、全部",ex:{en:"I ate all the food.",kana:"アイ エイト オール ザ フード",ja:"私は食べ物を全部食べました。"}},
+{rank:31,word:"as",pos:"接続詞",kana:"アズ",ja:"〜として、〜のように",ex:{en:"I work as a nurse.",kana:"アイ ワーク アズ ア ナース",ja:"私は看護師として働いています。"}},
+{rank:32,word:"an",pos:"冠詞",kana:"アン",ja:"ある一つの（母音の前）",ex:{en:"I ate an apple.",kana:"アイ エイト アン アップル",ja:"私はリンゴを一つ食べました。"}},
+{rank:33,word:"one",pos:"数詞",kana:"ワン",ja:"1、一つ",ex:{en:"I need one more minute.",kana:"アイ ニード ワン モア ミニット",ja:"もう1分だけ必要です。"}},
+{rank:34,word:"if",pos:"接続詞",kana:"イフ",ja:"もし〜なら",ex:{en:"Call me if you need help.",kana:"コール ミー イフ ユー ニード ヘルプ",ja:"助けが必要なら電話してください。"}},
+{rank:35,word:"would",pos:"助動詞",kana:"ウッド",ja:"〜だろう、〜したいものだ",ex:{en:"I would like some water.",kana:"アイ ウッド ライク サム ウォーター",ja:"お水をいただきたいです。"}},
+{rank:36,word:"what",pos:"疑問詞",kana:"ワット",ja:"何",ex:{en:"What is your name?",kana:"ワット イズ ヨア ネイム",ja:"あなたの名前は何ですか？"}},
+{rank:37,word:"so",pos:"副詞",kana:"ソウ",ja:"とても、だから",ex:{en:"I'm so tired today.",kana:"アイム ソウ タイアード トゥデイ",ja:"今日はとても疲れています。"}},
+{rank:38,word:"up",pos:"副詞",kana:"アップ",ja:"上へ",ex:{en:"Please stand up.",kana:"プリーズ スタンド アップ",ja:"立ち上がってください。"}},
+{rank:39,word:"out",pos:"副詞",kana:"アウト",ja:"外へ",ex:{en:"Let's go out for dinner.",kana:"レッツ ゴウ アウト フォー ディナー",ja:"夕食を食べに外に行きましょう。"}},
+{rank:40,word:"can",pos:"助動詞",kana:"キャン",ja:"〜できる",ex:{en:"I can speak a little Japanese.",kana:"アイ キャン スピーク ア リトル ジャパニーズ",ja:"私は日本語を少し話せます。"}},
+{rank:41,word:"do",pos:"動詞",kana:"ドゥー",ja:"する",ex:{en:"What do you do?",kana:"ワット ドゥー ユー ドゥー",ja:"お仕事は何をされていますか？"}},
+{rank:42,word:"when",pos:"疑問詞",kana:"ウェン",ja:"いつ",ex:{en:"When does the train leave?",kana:"ウェン ダズ ザ トレイン リーブ",ja:"電車はいつ出発しますか？"}},
+{rank:43,word:"who",pos:"疑問詞",kana:"フー",ja:"誰",ex:{en:"Who is that person?",kana:"フー イズ ザット パーソン",ja:"あの人は誰ですか？"}},
+{rank:44,word:"will",pos:"助動詞",kana:"ウィル",ja:"〜するだろう",ex:{en:"It will rain tomorrow.",kana:"イット ウィル レイン トゥモロウ",ja:"明日は雨が降るでしょう。"}},
+{rank:45,word:"no",pos:"副詞",kana:"ノウ",ja:"いいえ、〜がない",ex:{en:"There is no time left.",kana:"ゼア イズ ノウ タイム レフト",ja:"もう時間が残っていません。"}},
+{rank:46,word:"there",pos:"副詞",kana:"ゼア",ja:"そこに",ex:{en:"I put my bag there.",kana:"アイ プット マイ バッグ ゼア",ja:"私はそこにカバンを置きました。"}},
+{rank:47,word:"their",pos:"代名詞",kana:"ゼア",ja:"彼らの",ex:{en:"This is their house.",kana:"ディス イズ ゼア ハウス",ja:"これは彼らの家です。"}},
+{rank:48,word:"some",pos:"形容詞",kana:"サム",ja:"いくつかの",ex:{en:"I need some help.",kana:"アイ ニード サム ヘルプ",ja:"私はいくらか助けが必要です。"}},
+{rank:49,word:"my",pos:"代名詞",kana:"マイ",ja:"私の",ex:{en:"This is my phone.",kana:"ディス イズ マイ フォウン",ja:"これは私の携帯電話です。"}},
+{rank:50,word:"him",pos:"代名詞",kana:"ヒム",ja:"彼を、彼に",ex:{en:"I gave him the ticket.",kana:"アイ ゲイブ ヒム ザ ティケット",ja:"私は彼にチケットを渡しました。"}},
+{rank:51,word:"into",pos:"前置詞",kana:"イントゥー",ja:"〜の中へ",ex:{en:"She walked into the room.",kana:"シー ウォークト イントゥー ザ ルーム",ja:"彼女は部屋の中に歩いて入りました。"}},
+{rank:52,word:"time",pos:"名詞",kana:"タイム",ja:"時間",ex:{en:"I don't have much time.",kana:"アイ ドント ハブ マッチ タイム",ja:"私はあまり時間がありません。"}},
+{rank:53,word:"has",pos:"動詞",kana:"ハズ",ja:"持っている（三人称単数）",ex:{en:"She has a big dog.",kana:"シー ハズ ア ビッグ ドッグ",ja:"彼女は大きな犬を飼っています。"}},
+{rank:54,word:"could",pos:"助動詞",kana:"クッド",ja:"〜できた、〜かもしれない",ex:{en:"Could you help me, please?",kana:"クッド ユー ヘルプ ミー プリーズ",ja:"手伝っていただけますか？"}},
+{rank:55,word:"than",pos:"接続詞",kana:"ザン",ja:"〜よりも",ex:{en:"This one is cheaper than that one.",kana:"ディス ワン イズ チーパー ザン ザット ワン",ja:"こちらはあちらより安いです。"}},
+{rank:56,word:"then",pos:"副詞",kana:"ゼン",ja:"それから",ex:{en:"First eat, then rest.",kana:"ファースト イート ゼン レスト",ja:"まず食べて、それから休んでください。"}},
+{rank:57,word:"now",pos:"副詞",kana:"ナウ",ja:"今",ex:{en:"I'm busy right now.",kana:"アイム ビズィ ライト ナウ",ja:"私は今忙しいです。"}},
+{rank:58,word:"look",pos:"動詞",kana:"ルック",ja:"見る",ex:{en:"Look at this picture.",kana:"ルック アット ディス ピクチャー",ja:"この写真を見てください。"}},
+{rank:59,word:"only",pos:"副詞",kana:"オウンリー",ja:"〜だけ",ex:{en:"I have only ten dollars.",kana:"アイ ハブ オウンリー テン ダラーズ",ja:"私は10ドルしか持っていません。"}},
+{rank:60,word:"come",pos:"動詞",kana:"カム",ja:"来る",ex:{en:"Please come with me.",kana:"プリーズ カム ウィズ ミー",ja:"私と一緒に来てください。"}},
+{rank:61,word:"its",pos:"代名詞",kana:"イッツ",ja:"それの",ex:{en:"The cat licked its paw.",kana:"ザ キャット リックト イッツ ポー",ja:"猫は自分の前足を舐めました。"}},
+{rank:62,word:"over",pos:"前置詞",kana:"オウバー",ja:"〜の上に、〜を超えて",ex:{en:"The plane flew over the city.",kana:"ザ プレイン フルー オウバー ザ シティ",ja:"飛行機は街の上空を飛びました。"}},
+{rank:63,word:"think",pos:"動詞",kana:"シンク",ja:"思う",ex:{en:"I think it's a good idea.",kana:"アイ シンク イッツ ア グッド アイディア",ja:"それは良い考えだと思います。"}},
+{rank:64,word:"also",pos:"副詞",kana:"オールソウ",ja:"〜もまた",ex:{en:"I also like sushi.",kana:"アイ オールソウ ライク スシ",ja:"私も寿司が好きです。"}},
+{rank:65,word:"back",pos:"副詞",kana:"バック",ja:"戻って、後ろへ",ex:{en:"I'll be back in five minutes.",kana:"アイル ビー バック イン ファイブ ミニッツ",ja:"5分で戻ります。"}},
+{rank:66,word:"after",pos:"前置詞",kana:"アフター",ja:"〜の後に",ex:{en:"Let's talk after lunch.",kana:"レッツ トーク アフター ランチ",ja:"昼食の後で話しましょう。"}},
+{rank:67,word:"use",pos:"動詞",kana:"ユーズ",ja:"使う",ex:{en:"May I use your phone?",kana:"メイ アイ ユーズ ヨア フォウン",ja:"あなたの電話を使ってもいいですか？"}},
+{rank:68,word:"two",pos:"数詞",kana:"トゥー",ja:"2",ex:{en:"I'd like two tickets, please.",kana:"アイド ライク トゥー ティケッツ プリーズ",ja:"チケットを2枚お願いします。"}},
+{rank:69,word:"how",pos:"疑問詞",kana:"ハウ",ja:"どのように",ex:{en:"How do I get to the station?",kana:"ハウ ドゥー アイ ゲット トゥ ザ ステイション",ja:"駅へはどう行けばいいですか？"}},
+{rank:70,word:"our",pos:"代名詞",kana:"アワー",ja:"私たちの",ex:{en:"This is our first trip together.",kana:"ディス イズ アワー ファースト トリップ トゥゲザー",ja:"これは私たちの初めての一緒の旅行です。"}},
+{rank:71,word:"work",pos:"動詞",kana:"ワーク",ja:"働く、仕事",ex:{en:"I work at a hospital.",kana:"アイ ワーク アット ア ホスピトル",ja:"私は病院で働いています。"}},
+{rank:72,word:"first",pos:"形容詞",kana:"ファースト",ja:"最初の",ex:{en:"This is my first time here.",kana:"ディス イズ マイ ファースト タイム ヒア",ja:"ここに来るのは初めてです。"}},
+{rank:73,word:"well",pos:"副詞",kana:"ウェル",ja:"よく、上手に",ex:{en:"You speak English very well.",kana:"ユー スピーク イングリッシュ ベリ ウェル",ja:"あなたは英語をとても上手に話します。"}},
+{rank:74,word:"way",pos:"名詞",kana:"ウェイ",ja:"方法、道",ex:{en:"This is the best way to the airport.",kana:"ディス イズ ザ ベスト ウェイ トゥ ジ エアポート",ja:"これが空港への一番良い道です。"}},
+{rank:75,word:"even",pos:"副詞",kana:"イーブン",ja:"〜でさえ",ex:{en:"Even children can do this.",kana:"イーブン チルドレン キャン ドゥー ディス",ja:"子供でさえこれができます。"}},
+{rank:76,word:"new",pos:"形容詞",kana:"ニュー",ja:"新しい",ex:{en:"I bought a new bag.",kana:"アイ ボート ア ニュー バッグ",ja:"私は新しいカバンを買いました。"}},
+{rank:77,word:"want",pos:"動詞",kana:"ウォント",ja:"欲しい、〜したい",ex:{en:"I want to see the ocean.",kana:"アイ ウォント トゥ スィー ジ オウシャン",ja:"私は海を見たいです。"}},
+{rank:78,word:"because",pos:"接続詞",kana:"ビコーズ",ja:"なぜなら",ex:{en:"I'm happy because you're here.",kana:"アイム ハッピー ビコーズ ユア ヒア",ja:"あなたがここにいるので嬉しいです。"}},
+{rank:79,word:"any",pos:"形容詞",kana:"エニー",ja:"どんな〜でも",ex:{en:"Do you have any questions?",kana:"ドゥー ユー ハブ エニー クウェスチョンズ",ja:"何か質問はありますか？"}},
+{rank:80,word:"these",pos:"代名詞",kana:"ズィーズ",ja:"これら",ex:{en:"These shoes are very comfortable.",kana:"ズィーズ シューズ アー ベリ カンファタブル",ja:"この靴はとても履き心地がいいです。"}},
+{rank:81,word:"give",pos:"動詞",kana:"ギブ",ja:"与える",ex:{en:"Can you give me a hand?",kana:"キャン ユー ギブ ミー ア ハンド",ja:"手伝ってもらえますか？"}},
+{rank:82,word:"day",pos:"名詞",kana:"デイ",ja:"日",ex:{en:"Have a nice day!",kana:"ハブ ア ナイス デイ",ja:"良い一日を！"}},
+{rank:83,word:"most",pos:"形容詞",kana:"モウスト",ja:"最も、ほとんどの",ex:{en:"Most people like this cafe.",kana:"モウスト ピープル ライク ディス キャフェイ",ja:"ほとんどの人がこのカフェを気に入っています。"}},
+{rank:84,word:"us",pos:"代名詞",kana:"アス",ja:"私たちを",ex:{en:"Please join us for dinner.",kana:"プリーズ ジョイン アス フォー ディナー",ja:"夕食に一緒に来てください。"}},
+{rank:85,word:"know",pos:"動詞",kana:"ノウ",ja:"知っている",ex:{en:"Do you know this song?",kana:"ドゥー ユー ノウ ディス ソング",ja:"この歌を知っていますか？"}},
+{rank:86,word:"take",pos:"動詞",kana:"テイク",ja:"取る、連れて行く",ex:{en:"Can you take a picture of us?",kana:"キャン ユー テイク ア ピクチャー オブ アス",ja:"私たちの写真を撮ってもらえますか？"}},
+{rank:87,word:"people",pos:"名詞",kana:"ピープル",ja:"人々",ex:{en:"Many people visit this temple.",kana:"メニー ピープル ヴィズィット ディス テンプル",ja:"多くの人がこの寺を訪れます。"}},
+{rank:88,word:"year",pos:"名詞",kana:"イヤー",ja:"年",ex:{en:"I moved here last year.",kana:"アイ ムーブド ヒア ラスト イヤー",ja:"私は去年ここに引っ越しました。"}},
+{rank:89,word:"your",pos:"代名詞",kana:"ヨア",ja:"あなたの",ex:{en:"What's your favorite food?",kana:"ワッツ ヨア フェイバリット フード",ja:"あなたの好きな食べ物は何ですか？"}},
+{rank:90,word:"good",pos:"形容詞",kana:"グッド",ja:"良い",ex:{en:"This restaurant is really good.",kana:"ディス レストラント イズ リアリー グッド",ja:"このレストランは本当に良いです。"}},
+{rank:91,word:"see",pos:"動詞",kana:"スィー",ja:"見る、分かる",ex:{en:"I can see the mountain from here.",kana:"アイ キャン スィー ザ マウンテン フロム ヒア",ja:"ここから山が見えます。"}},
+{rank:92,word:"other",pos:"形容詞",kana:"アザー",ja:"他の",ex:{en:"Do you have any other colors?",kana:"ドゥー ユー ハブ エニー アザー カラーズ",ja:"他の色はありますか？"}},
+{rank:93,word:"water",pos:"名詞",kana:"ウォーター",ja:"水",ex:{en:"Can I have some water, please?",kana:"キャン アイ ハブ サム ウォーター プリーズ",ja:"お水をいただけますか？"}},
+{rank:94,word:"long",pos:"形容詞",kana:"ロング",ja:"長い",ex:{en:"It's a long way to the hotel.",kana:"イッツ ア ロング ウェイ トゥ ザ ホウテル",ja:"ホテルまで長い道のりです。"}},
+{rank:95,word:"little",pos:"形容詞",kana:"リトル",ja:"小さい、少し",ex:{en:"I speak a little French.",kana:"アイ スピーク ア リトル フレンチ",ja:"私はフランス語を少し話します。"}},
+{rank:96,word:"very",pos:"副詞",kana:"ベリー",ja:"とても",ex:{en:"This soup is very hot.",kana:"ディス スープ イズ ベリー ハット",ja:"このスープはとても熱いです。"}},
+{rank:97,word:"still",pos:"副詞",kana:"スティル",ja:"まだ",ex:{en:"Are you still hungry?",kana:"アー ユー スティル ハングリー",ja:"まだお腹すいていますか？"}},
+{rank:98,word:"through",pos:"前置詞",kana:"スルー",ja:"〜を通って",ex:{en:"We walked through the park.",kana:"ウィー ウォークト スルー ザ パーク",ja:"私たちは公園を通り抜けました。"}},
+{rank:99,word:"before",pos:"前置詞",kana:"ビフォー",ja:"〜の前に",ex:{en:"Please arrive before nine.",kana:"プリーズ アライブ ビフォー ナイン",ja:"9時前に到着してください。"}},
+{rank:100,word:"right",pos:"形容詞",kana:"ライト",ja:"正しい、右",ex:{en:"Turn right at the corner.",kana:"ターン ライト アット ザ コーナー",ja:"角を右に曲がってください。"}},
+{rank:101,word:"too",pos:"副詞",kana:"トゥー",ja:"〜もまた、〜すぎる",ex:{en:"This shirt is too big for me.",kana:"ディス シャート イズ トゥー ビッグ フォー ミー",ja:"このシャツは私には大きすぎます。"}},
+{rank:102,word:"mean",pos:"動詞",kana:"ミーン",ja:"意味する",ex:{en:"What does this word mean?",kana:"ワット ダズ ディス ワード ミーン",ja:"この単語はどういう意味ですか？"}},
+{rank:103,word:"old",pos:"形容詞",kana:"オウルド",ja:"古い、年をとった",ex:{en:"This is a very old temple.",kana:"ディス イズ ア ベリー オウルド テンプル",ja:"これはとても古いお寺です。"}},
+{rank:104,word:"same",pos:"形容詞",kana:"セイム",ja:"同じ",ex:{en:"We have the same shoes.",kana:"ウィー ハブ ザ セイム シューズ",ja:"私たちは同じ靴を持っています。"}},
+{rank:105,word:"tell",pos:"動詞",kana:"テル",ja:"話す、伝える",ex:{en:"Please tell me the way to the museum.",kana:"プリーズ テル ミー ザ ウェイ トゥ ザ ミュズィーアム",ja:"美術館への道を教えてください。"}},
+{rank:106,word:"does",pos:"動詞",kana:"ダズ",ja:"する（三人称単数）",ex:{en:"Does this bus go to the airport?",kana:"ダズ ディス バス ゴウ トゥ ジ エアポート",ja:"このバスは空港に行きますか？"}},
+{rank:107,word:"set",pos:"動詞",kana:"セット",ja:"設定する、置く",ex:{en:"I set my alarm for seven.",kana:"アイ セット マイ アラーム フォー セブン",ja:"私は7時にアラームをセットしました。"}},
+{rank:108,word:"three",pos:"数詞",kana:"スリー",ja:"3",ex:{en:"We are a party of three.",kana:"ウィー アー ア パーティー オブ スリー",ja:"私たちは3人組です。"}},
+{rank:109,word:"air",pos:"名詞",kana:"エア",ja:"空気",ex:{en:"The mountain air feels fresh.",kana:"ザ マウンテン エア フィールズ フレッシュ",ja:"山の空気が新鮮に感じます。"}},
+{rank:110,word:"down",pos:"副詞",kana:"ダウン",ja:"下へ",ex:{en:"Please sit down here.",kana:"プリーズ スィット ダウン ヒア",ja:"こちらにお座りください。"}},
+{rank:111,word:"side",pos:"名詞",kana:"サイド",ja:"側、面",ex:{en:"The station is on the other side.",kana:"ザ ステイション イズ オン ジ アザー サイド",ja:"駅は反対側にあります。"}},
+{rank:112,word:"much",pos:"形容詞",kana:"マッチ",ja:"たくさんの",ex:{en:"I don't have much money.",kana:"アイ ドント ハブ マッチ マニー",ja:"私はあまりお金を持っていません。"}},
+{rank:113,word:"here",pos:"副詞",kana:"ヒア",ja:"ここに",ex:{en:"Please wait here for a moment.",kana:"プリーズ ウェイト ヒア フォー ア モウメント",ja:"少しの間ここでお待ちください。"}},
+{rank:114,word:"big",pos:"形容詞",kana:"ビッグ",ja:"大きい",ex:{en:"That's a big suitcase.",kana:"ザッツ ア ビッグ スーツケイス",ja:"それは大きなスーツケースですね。"}},
+{rank:115,word:"high",pos:"形容詞",kana:"ハイ",ja:"高い",ex:{en:"The tower is very high.",kana:"ザ タワー イズ ベリー ハイ",ja:"その塔はとても高いです。"}},
+{rank:116,word:"every",pos:"形容詞",kana:"エブリー",ja:"すべての",ex:{en:"I go for a walk every morning.",kana:"アイ ゴウ フォー ア ウォーク エブリー モーニング",ja:"私は毎朝散歩に行きます。"}},
+{rank:117,word:"need",pos:"動詞",kana:"ニード",ja:"必要とする",ex:{en:"I need a taxi, please.",kana:"アイ ニード ア タクシー プリーズ",ja:"タクシーが必要です。"}},
+{rank:118,word:"feel",pos:"動詞",kana:"フィール",ja:"感じる",ex:{en:"I feel much better now.",kana:"アイ フィール マッチ ベター ナウ",ja:"今はだいぶ良くなった気がします。"}},
+{rank:119,word:"seem",pos:"動詞",kana:"スィーム",ja:"〜のように見える",ex:{en:"You seem happy today.",kana:"ユー スィーム ハッピー トゥデイ",ja:"今日は嬉しそうですね。"}},
+{rank:120,word:"next",pos:"形容詞",kana:"ネクスト",ja:"次の",ex:{en:"When is the next train?",kana:"ウェン イズ ザ ネクスト トレイン",ja:"次の電車はいつですか？"}},
+{rank:121,word:"house",pos:"名詞",kana:"ハウス",ja:"家",ex:{en:"Their house is near the beach.",kana:"ゼア ハウス イズ ニア ザ ビーチ",ja:"彼らの家はビーチの近くです。"}},
+{rank:122,word:"life",pos:"名詞",kana:"ライフ",ja:"人生、生活",ex:{en:"I love life in this city.",kana:"アイ ラブ ライフ イン ディス シティ",ja:"私はこの街での生活が大好きです。"}},
+{rank:123,word:"man",pos:"名詞",kana:"マン",ja:"男性",ex:{en:"That man is our guide.",kana:"ザット マン イズ アワー ガイド",ja:"あの男性が私たちのガイドです。"}},
+{rank:124,word:"thing",pos:"名詞",kana:"シング",ja:"もの、こと",ex:{en:"I forgot one thing.",kana:"アイ フォーガット ワン シング",ja:"一つ忘れ物をしました。"}},
+{rank:125,word:"eye",pos:"名詞",kana:"アイ",ja:"目",ex:{en:"She has beautiful eyes.",kana:"シー ハズ ビューティフル アイズ",ja:"彼女は美しい目をしています。"}},
+{rank:126,word:"woman",pos:"名詞",kana:"ウーマン",ja:"女性",ex:{en:"The woman at the desk was kind.",kana:"ザ ウーマン アット ザ デスク ワズ カインド",ja:"受付の女性は親切でした。"}},
+{rank:127,word:"hand",pos:"名詞",kana:"ハンド",ja:"手",ex:{en:"Please raise your hand.",kana:"プリーズ レイズ ヨア ハンド",ja:"手を挙げてください。"}},
+{rank:128,word:"part",pos:"名詞",kana:"パート",ja:"部分",ex:{en:"This is my favorite part of the trip.",kana:"ディス イズ マイ フェイバリット パート オブ ザ トリップ",ja:"ここが旅行で一番好きな部分です。"}},
+{rank:129,word:"place",pos:"名詞",kana:"プレイス",ja:"場所",ex:{en:"This is a nice place to relax.",kana:"ディス イズ ア ナイス プレイス トゥ リラックス",ja:"ここはくつろぐのに良い場所です。"}},
+{rank:130,word:"week",pos:"名詞",kana:"ウィーク",ja:"週",ex:{en:"I'll be here for one week.",kana:"アイル ビー ヒア フォー ワン ウィーク",ja:"私は1週間ここに滞在します。"}},
+{rank:131,word:"point",pos:"名詞",kana:"ポイント",ja:"点、要点",ex:{en:"That's a good point.",kana:"ザッツ ア グッド ポイント",ja:"それは良い指摘ですね。"}},
+{rank:132,word:"number",pos:"名詞",kana:"ナンバー",ja:"番号、数",ex:{en:"Can I have your phone number?",kana:"キャン アイ ハブ ヨア フォウン ナンバー",ja:"電話番号を教えてもらえますか？"}},
+{rank:133,word:"group",pos:"名詞",kana:"グループ",ja:"グループ",ex:{en:"We are traveling in a group.",kana:"ウィー アー トラベリング イン ア グループ",ja:"私たちはグループで旅行しています。"}},
+{rank:134,word:"problem",pos:"名詞",kana:"プロブレム",ja:"問題",ex:{en:"No problem at all.",kana:"ノウ プロブレム アット オール",ja:"全く問題ありません。"}},
+{rank:135,word:"fact",pos:"名詞",kana:"ファクト",ja:"事実",ex:{en:"In fact, I've been here before.",kana:"イン ファクト アイブ ビン ヒア ビフォー",ja:"実は、私は前にここに来たことがあります。"}},
+{rank:136,word:"lot",pos:"名詞",kana:"ロット",ja:"たくさん",ex:{en:"Thanks a lot for your help.",kana:"サンクス ア ロット フォー ヨア ヘルプ",ja:"助けてくれて本当にありがとう。"}},
+{rank:137,word:"study",pos:"動詞",kana:"スタディ",ja:"勉強する",ex:{en:"I'm studying English now.",kana:"アイム スタディーイング イングリッシュ ナウ",ja:"私は今英語を勉強しています。"}},
+{rank:138,word:"book",pos:"名詞",kana:"ブック",ja:"本",ex:{en:"I'm reading a good book.",kana:"アイム リーディング ア グッド ブック",ja:"私は面白い本を読んでいます。"}},
+{rank:139,word:"job",pos:"名詞",kana:"ジョブ",ja:"仕事",ex:{en:"What's your job?",kana:"ワッツ ヨア ジョブ",ja:"お仕事は何ですか？"}},
+{rank:140,word:"word",pos:"名詞",kana:"ワード",ja:"単語",ex:{en:"I don't know this word.",kana:"アイ ドント ノウ ディス ワード",ja:"この単語は知りません。"}},
+{rank:141,word:"kind",pos:"名詞",kana:"カインド",ja:"種類、親切な",ex:{en:"What kind of food do you like?",kana:"ワット カインド オブ フード ドゥー ユー ライク",ja:"どんな種類の食べ物が好きですか？"}},
+{rank:142,word:"head",pos:"名詞",kana:"ヘッド",ja:"頭",ex:{en:"My head hurts a little.",kana:"マイ ヘッド ハーツ ア リトル",ja:"少し頭が痛いです。"}},
+{rank:143,word:"service",pos:"名詞",kana:"サービス",ja:"サービス",ex:{en:"The service here is excellent.",kana:"ザ サービス ヒア イズ エクセレント",ja:"ここのサービスは素晴らしいです。"}},
+{rank:144,word:"friend",pos:"名詞",kana:"フレンド",ja:"友達",ex:{en:"I made a new friend today.",kana:"アイ メイド ア ニュー フレンド トゥデイ",ja:"今日新しい友達ができました。"}},
+{rank:145,word:"father",pos:"名詞",kana:"ファーザー",ja:"父",ex:{en:"My father loves to travel.",kana:"マイ ファーザー ラブズ トゥ トラベル",ja:"私の父は旅行が大好きです。"}},
+{rank:146,word:"hour",pos:"名詞",kana:"アワー",ja:"時間（1時間）",ex:{en:"It takes about an hour by car.",kana:"イット テイクス アバウト アン アワー バイ カー",ja:"車で約1時間かかります。"}},
+{rank:147,word:"game",pos:"名詞",kana:"ゲイム",ja:"ゲーム、試合",ex:{en:"Let's watch the baseball game.",kana:"レッツ ウォッチ ザ ベイスボール ゲイム",ja:"野球の試合を見ましょう。"}},
+{rank:148,word:"line",pos:"名詞",kana:"ライン",ja:"線、列",ex:{en:"We had to wait in a long line.",kana:"ウィー ハド トゥ ウェイト イン ア ロング ライン",ja:"私たちは長い列に並んで待ちました。"}},
+{rank:149,word:"end",pos:"名詞",kana:"エンド",ja:"終わり",ex:{en:"The shop is at the end of this street.",kana:"ザ ショップ イズ アット ジ エンド オブ ディス ストリート",ja:"その店はこの通りの端にあります。"}},
+{rank:150,word:"night",pos:"名詞",kana:"ナイト",ja:"夜",ex:{en:"The city looks beautiful at night.",kana:"ザ シティ ルックス ビューティフル アット ナイト",ja:"夜のその街はとても美しいです。"}},
+{rank:151,word:"mother",pos:"名詞",kana:"マザー",ja:"母",ex:{en:"My mother made this bag for me.",kana:"マイ マザー メイド ディス バッグ フォー ミー",ja:"私の母がこのカバンを作ってくれました。"}},
+{rank:152,word:"money",pos:"名詞",kana:"マニー",ja:"お金",ex:{en:"I don't have enough money.",kana:"アイ ドント ハブ イナフ マニー",ja:"私は十分なお金を持っていません。"}},
+{rank:153,word:"story",pos:"名詞",kana:"ストーリー",ja:"物語",ex:{en:"Tell me the story of this town.",kana:"テル ミー ザ ストーリー オブ ディス タウン",ja:"この町の物語を教えてください。"}},
+{rank:154,word:"world",pos:"名詞",kana:"ワールド",ja:"世界",ex:{en:"I want to see the whole world.",kana:"アイ ウォント トゥ スィー ザ ホウル ワールド",ja:"私は世界中を見てみたいです。"}},
+{rank:155,word:"school",pos:"名詞",kana:"スクール",ja:"学校",ex:{en:"My children go to school near here.",kana:"マイ チルドレン ゴウ トゥ スクール ニア ヒア",ja:"私の子供たちはこの近くの学校に通っています。"}},
+{rank:156,word:"food",pos:"名詞",kana:"フード",ja:"食べ物",ex:{en:"The food here is amazing.",kana:"ザ フード ヒア イズ アメイジング",ja:"ここの食べ物は素晴らしいです。"}},
+{rank:157,word:"family",pos:"名詞",kana:"ファミリー",ja:"家族",ex:{en:"I'm traveling with my family.",kana:"アイム トラベリング ウィズ マイ ファミリー",ja:"私は家族と旅行しています。"}},
+{rank:158,word:"car",pos:"名詞",kana:"カー",ja:"車",ex:{en:"We rented a car for the trip.",kana:"ウィー レンティド ア カー フォー ザ トリップ",ja:"私たちは旅行のために車を借りました。"}},
+{rank:159,word:"body",pos:"名詞",kana:"ボディ",ja:"体",ex:{en:"Take care of your body while traveling.",kana:"テイク ケア オブ ヨア ボディ ワイル トラベリング",ja:"旅行中は体を大切にしてください。"}},
+{rank:160,word:"music",pos:"名詞",kana:"ミューズィック",ja:"音楽",ex:{en:"I love the music in this cafe.",kana:"アイ ラブ ザ ミューズィック イン ディス キャフェイ",ja:"このカフェの音楽が大好きです。"}},
+{rank:161,word:"color",pos:"名詞",kana:"カラー",ja:"色",ex:{en:"What color do you like best?",kana:"ワット カラー ドゥー ユー ライク ベスト",ja:"どの色が一番好きですか？"}},
+{rank:162,word:"name",pos:"名詞",kana:"ネイム",ja:"名前",ex:{en:"May I have your name, please?",kana:"メイ アイ ハブ ヨア ネイム プリーズ",ja:"お名前を伺ってもよろしいですか？"}},
+{rank:163,word:"area",pos:"名詞",kana:"エリア",ja:"地域",ex:{en:"Is this area safe at night?",kana:"イズ ディス エリア セイフ アット ナイト",ja:"この地域は夜も安全ですか？"}},
+{rank:164,word:"morning",pos:"名詞",kana:"モーニング",ja:"朝",ex:{en:"Good morning! Did you sleep well?",kana:"グッド モーニング ディド ユー スリープ ウェル",ja:"おはようございます！よく眠れましたか？"}},
+{rank:165,word:"face",pos:"名詞",kana:"フェイス",ja:"顔",ex:{en:"She has a friendly face.",kana:"シー ハズ ア フレンドリー フェイス",ja:"彼女は親しみやすい顔をしています。"}},
+{rank:166,word:"question",pos:"名詞",kana:"クウェスチョン",ja:"質問",ex:{en:"Can I ask you a question?",kana:"キャン アイ アスク ユー ア クウェスチョン",ja:"一つ質問してもいいですか？"}},
+{rank:167,word:"city",pos:"名詞",kana:"シティ",ja:"都市",ex:{en:"This city has a lot of history.",kana:"ディス シティ ハズ ア ロット オブ ヒストリー",ja:"この都市には多くの歴史があります。"}},
+{rank:168,word:"town",pos:"名詞",kana:"タウン",ja:"町",ex:{en:"It's a small but lovely town.",kana:"イッツ ア スモール バット ラブリー タウン",ja:"小さいけれど素敵な町です。"}},
+{rank:169,word:"street",pos:"名詞",kana:"ストリート",ja:"通り",ex:{en:"The hotel is just down this street.",kana:"ザ ホウテル イズ ジャスト ダウン ディス ストリート",ja:"ホテルはこの通りを下ったところです。"}},
+{rank:170,word:"shop",pos:"名詞",kana:"ショップ",ja:"店",ex:{en:"Is there a gift shop nearby?",kana:"イズ ゼア ア ギフト ショップ ニアバイ",ja:"近くにお土産店はありますか？"}},
+{rank:171,word:"price",pos:"名詞",kana:"プライス",ja:"値段",ex:{en:"The price includes breakfast.",kana:"ザ プライス インクルーズ ブレックファスト",ja:"この価格には朝食が含まれています。"}},
+{rank:172,word:"door",pos:"名詞",kana:"ドア",ja:"ドア",ex:{en:"Please close the door quietly.",kana:"プリーズ クロウズ ザ ドア クワイエトリー",ja:"静かにドアを閉めてください。"}},
+{rank:173,word:"room",pos:"名詞",kana:"ルーム",ja:"部屋",ex:{en:"Our room has a nice view.",kana:"アワー ルーム ハズ ア ナイス ヴュー",ja:"私たちの部屋は良い眺めです。"}},
+{rank:174,word:"table",pos:"名詞",kana:"テーブル",ja:"テーブル",ex:{en:"A table for two, please.",kana:"ア テーブル フォー トゥー プリーズ",ja:"2名分のテーブルをお願いします。"}},
+{rank:175,word:"bed",pos:"名詞",kana:"ベッド",ja:"ベッド",ex:{en:"The bed here is so comfortable.",kana:"ザ ベッド ヒア イズ ソウ カンファタブル",ja:"ここのベッドはとても快適です。"}},
+{rank:176,word:"window",pos:"名詞",kana:"ウィンドウ",ja:"窓",ex:{en:"Could I have a seat by the window?",kana:"クッド アイ ハブ ア スィート バイ ザ ウィンドウ",ja:"窓側の席をいただけますか？"}},
+{rank:177,word:"phone",pos:"名詞",kana:"フォウン",ja:"電話",ex:{en:"I lost my phone somewhere.",kana:"アイ ロスト マイ フォウン サムウェア",ja:"どこかで電話をなくしました。"}},
+{rank:178,word:"picture",pos:"名詞",kana:"ピクチャー",ja:"写真",ex:{en:"Could you take our picture?",kana:"クッド ユー テイク アワー ピクチャー",ja:"私たちの写真を撮っていただけますか？"}},
+{rank:179,word:"train",pos:"名詞",kana:"トレイン",ja:"電車",ex:{en:"Which platform does the train leave from?",kana:"ウィッチ プラットフォーム ダズ ザ トレイン リーブ フロム",ja:"電車はどのホームから出発しますか？"}},
+{rank:180,word:"bus",pos:"名詞",kana:"バス",ja:"バス",ex:{en:"Does this bus stop near the museum?",kana:"ダズ ディス バス ストップ ニア ザ ミュズィーアム",ja:"このバスは美術館の近くに停まりますか？"}},
+{rank:181,word:"eat",pos:"動詞",kana:"イート",ja:"食べる",ex:{en:"Where should we eat tonight?",kana:"ウェア シュッド ウィー イート トゥナイト",ja:"今夜はどこで食べましょうか？"}},
+{rank:182,word:"drink",pos:"動詞",kana:"ドリンク",ja:"飲む",ex:{en:"What would you like to drink?",kana:"ワット ウッド ユー ライク トゥ ドリンク",ja:"何を飲みますか？"}},
+{rank:183,word:"sleep",pos:"動詞",kana:"スリープ",ja:"眠る",ex:{en:"I couldn't sleep well last night.",kana:"アイ クドゥント スリープ ウェル ラスト ナイト",ja:"昨晩はよく眠れませんでした。"}},
+{rank:184,word:"walk",pos:"動詞",kana:"ウォーク",ja:"歩く",ex:{en:"Let's walk to the beach.",kana:"レッツ ウォーク トゥ ザ ビーチ",ja:"ビーチまで歩きましょう。"}},
+{rank:185,word:"run",pos:"動詞",kana:"ラン",ja:"走る",ex:{en:"I run every morning here.",kana:"アイ ラン エブリー モーニング ヒア",ja:"私はここで毎朝走っています。"}},
+{rank:186,word:"read",pos:"動詞",kana:"リード",ja:"読む",ex:{en:"Can you read this sign for me?",kana:"キャン ユー リード ディス サイン フォー ミー",ja:"この看板を読んでもらえますか？"}},
+{rank:187,word:"write",pos:"動詞",kana:"ライト",ja:"書く",ex:{en:"Could you write down the address?",kana:"クッド ユー ライト ダウン ジ アドレス",ja:"住所を書いていただけますか？"}},
+{rank:188,word:"speak",pos:"動詞",kana:"スピーク",ja:"話す",ex:{en:"Could you speak more slowly, please?",kana:"クッド ユー スピーク モア スロウリー プリーズ",ja:"もう少しゆっくり話していただけますか？"}},
+{rank:189,word:"listen",pos:"動詞",kana:"リッスン",ja:"聞く",ex:{en:"I like to listen to local music.",kana:"アイ ライク トゥ リッスン トゥ ロウカル ミューズィック",ja:"私は地元の音楽を聴くのが好きです。"}},
+{rank:190,word:"watch",pos:"動詞",kana:"ウォッチ",ja:"見る",ex:{en:"Let's watch the sunset together.",kana:"レッツ ウォッチ ザ サンセット トゥゲザー",ja:"一緒に夕日を見ましょう。"}},
+{rank:191,word:"buy",pos:"動詞",kana:"バイ",ja:"買う",ex:{en:"I want to buy a souvenir.",kana:"アイ ウォント トゥ バイ ア スーベニア",ja:"お土産を買いたいです。"}},
+{rank:192,word:"sell",pos:"動詞",kana:"セル",ja:"売る",ex:{en:"Do you sell postcards here?",kana:"ドゥー ユー セル ポウストカーズ ヒア",ja:"ここでは絵葉書を売っていますか？"}},
+{rank:193,word:"pay",pos:"動詞",kana:"ペイ",ja:"払う",ex:{en:"Can I pay by credit card?",kana:"キャン アイ ペイ バイ クレディット カード",ja:"クレジットカードで払えますか？"}},
+{rank:194,word:"open",pos:"動詞",kana:"オウプン",ja:"開ける",ex:{en:"What time do you open?",kana:"ワット タイム ドゥー ユー オウプン",ja:"何時に開店しますか？"}},
+{rank:195,word:"close",pos:"動詞",kana:"クロウズ",ja:"閉める",ex:{en:"The museum closes at five.",kana:"ザ ミュズィーアム クロウジズ アット ファイブ",ja:"美術館は5時に閉まります。"}},
+{rank:196,word:"start",pos:"動詞",kana:"スタート",ja:"始める",ex:{en:"The tour starts at ten.",kana:"ザ トゥア スターツ アット テン",ja:"ツアーは10時に始まります。"}},
+{rank:197,word:"stop",pos:"動詞",kana:"ストップ",ja:"止める、止まる",ex:{en:"Please stop here.",kana:"プリーズ ストップ ヒア",ja:"ここで止まってください。"}},
+{rank:198,word:"help",pos:"動詞",kana:"ヘルプ",ja:"助ける",ex:{en:"Excuse me, can you help me?",kana:"イクスキューズ ミー キャン ユー ヘルプ ミー",ja:"すみません、助けていただけますか？"}},
+{rank:199,word:"try",pos:"動詞",kana:"トライ",ja:"試す",ex:{en:"I'd like to try the local dish.",kana:"アイド ライク トゥ トライ ザ ロウカル ディッシュ",ja:"地元の料理を試してみたいです。"}},
+{rank:200,word:"wait",pos:"動詞",kana:"ウェイト",ja:"待つ",ex:{en:"Please wait a moment.",kana:"プリーズ ウェイト ア モウメント",ja:"少々お待ちください。"}},
+{rank:201,word:"meet",pos:"動詞",kana:"ミート",ja:"会う",ex:{en:"Nice to meet you.",kana:"ナイス トゥ ミート ユー",ja:"お会いできて嬉しいです。"}},
+{rank:202,word:"call",pos:"動詞",kana:"コール",ja:"呼ぶ、電話する",ex:{en:"Please call a taxi for me.",kana:"プリーズ コール ア タクシー フォー ミー",ja:"タクシーを呼んでください。"}},
+{rank:203,word:"ask",pos:"動詞",kana:"アスク",ja:"尋ねる",ex:{en:"May I ask where the restroom is?",kana:"メイ アイ アスク ウェア ザ レストルーム イズ",ja:"お手洗いはどこか聞いてもいいですか？"}},
+{rank:204,word:"answer",pos:"動詞",kana:"アンサー",ja:"答える",ex:{en:"She kindly answered my question.",kana:"シー カインドリー アンサード マイ クウェスチョン",ja:"彼女は親切に私の質問に答えてくれました。"}},
+{rank:205,word:"find",pos:"動詞",kana:"ファインド",ja:"見つける",ex:{en:"I can't find my hotel key.",kana:"アイ キャント ファインド マイ ホウテル キー",ja:"ホテルの鍵が見つかりません。"}},
+{rank:206,word:"lose",pos:"動詞",kana:"ルーズ",ja:"失う、なくす",ex:{en:"Don't lose your passport.",kana:"ドント ルーズ ヨア パスポート",ja:"パスポートをなくさないでください。"}},
+{rank:207,word:"leave",pos:"動詞",kana:"リーブ",ja:"出発する、去る",ex:{en:"What time does the flight leave?",kana:"ワット タイム ダズ ザ フライト リーブ",ja:"飛行機は何時に出発しますか？"}},
+{rank:208,word:"arrive",pos:"動詞",kana:"アライブ",ja:"到着する",ex:{en:"We will arrive in Kyoto soon.",kana:"ウィー ウィル アライブ イン キョウト スーン",ja:"私たちはもうすぐ京都に到着します。"}},
+{rank:209,word:"stay",pos:"動詞",kana:"ステイ",ja:"滞在する",ex:{en:"How long are you staying?",kana:"ハウ ロング アー ユー ステイーイング",ja:"どのくらい滞在しますか？"}},
+{rank:210,word:"visit",pos:"動詞",kana:"ヴィズィット",ja:"訪れる",ex:{en:"I want to visit that castle.",kana:"アイ ウォント トゥ ヴィズィット ザット キャスル",ja:"私はあのお城を訪れたいです。"}},
+{rank:211,word:"happy",pos:"形容詞",kana:"ハッピー",ja:"幸せな",ex:{en:"I'm so happy to be here.",kana:"アイム ソウ ハッピー トゥ ビー ヒア",ja:"ここに来られてとても幸せです。"}},
+{rank:212,word:"sad",pos:"形容詞",kana:"サッド",ja:"悲しい",ex:{en:"I felt sad to leave this town.",kana:"アイ フェルト サッド トゥ リーブ ディス タウン",ja:"この町を去るのが悲しかったです。"}},
+{rank:213,word:"angry",pos:"形容詞",kana:"アングリー",ja:"怒った",ex:{en:"He wasn't angry, just surprised.",kana:"ヒー ワズント アングリー ジャスト サープライズド",ja:"彼は怒っていたのではなく、驚いていただけでした。"}},
+{rank:214,word:"tired",pos:"形容詞",kana:"タイアード",ja:"疲れた",ex:{en:"I'm a bit tired from the flight.",kana:"アイム ア ビット タイアード フロム ザ フライト",ja:"フライトで少し疲れています。"}},
+{rank:215,word:"hungry",pos:"形容詞",kana:"ハングリー",ja:"お腹が空いた",ex:{en:"I'm hungry. Let's find a restaurant.",kana:"アイム ハングリー レッツ ファインド ア レストラント",ja:"お腹が空きました。レストランを探しましょう。"}},
+{rank:216,word:"thirsty",pos:"形容詞",kana:"サースティ",ja:"喉が渇いた",ex:{en:"I'm thirsty after that long walk.",kana:"アイム サースティ アフター ザット ロング ウォーク",ja:"長く歩いたので喉が渇きました。"}},
+{rank:217,word:"busy",pos:"形容詞",kana:"ビズィ",ja:"忙しい",ex:{en:"This street is always busy.",kana:"ディス ストリート イズ オールウェイズ ビズィ",ja:"この通りはいつも賑わっています。"}},
+{rank:218,word:"free",pos:"形容詞",kana:"フリー",ja:"暇な、無料の",ex:{en:"Is this museum free today?",kana:"イズ ディス ミュズィーアム フリー トゥデイ",ja:"この美術館は今日は無料ですか？"}},
+{rank:219,word:"easy",pos:"形容詞",kana:"イーズィ",ja:"簡単な",ex:{en:"This app is very easy to use.",kana:"ディス アップ イズ ベリー イーズィ トゥ ユーズ",ja:"このアプリはとても使いやすいです。"}},
+{rank:220,word:"difficult",pos:"形容詞",kana:"ディフィカルト",ja:"難しい",ex:{en:"This word is difficult for me.",kana:"ディス ワード イズ ディフィカルト フォー ミー",ja:"この単語は私には難しいです。"}},
+{rank:221,word:"beautiful",pos:"形容詞",kana:"ビューティフル",ja:"美しい",ex:{en:"What a beautiful view!",kana:"ワット ア ビューティフル ヴュー",ja:"なんて美しい景色でしょう！"}},
+{rank:222,word:"cheap",pos:"形容詞",kana:"チープ",ja:"安い",ex:{en:"This restaurant is cheap and good.",kana:"ディス レストラント イズ チープ アンド グッド",ja:"このレストランは安くて美味しいです。"}},
+{rank:223,word:"expensive",pos:"形容詞",kana:"イクスペンスィブ",ja:"高価な",ex:{en:"That hotel looks a bit expensive.",kana:"ザット ホウテル ルックス ア ビット イクスペンスィブ",ja:"あのホテルは少し高そうです。"}},
+{rank:224,word:"hot",pos:"形容詞",kana:"ハット",ja:"暑い、熱い",ex:{en:"It's really hot outside today.",kana:"イッツ リアリー ハット アウトサイド トゥデイ",ja:"今日は外がとても暑いです。"}},
+{rank:225,word:"cold",pos:"形容詞",kana:"コウルド",ja:"寒い、冷たい",ex:{en:"The water in the lake is cold.",kana:"ザ ウォーター イン ザ レイク イズ コウルド",ja:"湖の水は冷たいです。"}},
+{rank:226,word:"warm",pos:"形容詞",kana:"ウォーム",ja:"暖かい",ex:{en:"Everyone here was so warm and kind.",kana:"エブリワン ヒア ワズ ソウ ウォーム アンド カインド",ja:"ここの人たちはみんなとても温かく親切でした。"}},
+{rank:227,word:"cool",pos:"形容詞",kana:"クール",ja:"涼しい",ex:{en:"It gets cool in the evening.",kana:"イット ゲッツ クール イン ジ イブニング",ja:"夕方は涼しくなります。"}},
+{rank:228,word:"fast",pos:"形容詞",kana:"ファスト",ja:"速い",ex:{en:"This train is very fast.",kana:"ディス トレイン イズ ベリー ファスト",ja:"この電車はとても速いです。"}},
+{rank:229,word:"slow",pos:"形容詞",kana:"スロウ",ja:"遅い",ex:{en:"The internet here is a bit slow.",kana:"ジ インターネット ヒア イズ ア ビット スロウ",ja:"ここのインターネットは少し遅いです。"}},
+{rank:230,word:"near",pos:"形容詞",kana:"ニア",ja:"近い",ex:{en:"Is there a bank near here?",kana:"イズ ゼア ア バンク ニア ヒア",ja:"この近くに銀行はありますか？"}},
+{rank:231,word:"far",pos:"形容詞",kana:"ファー",ja:"遠い",ex:{en:"Is it far from here?",kana:"イズ イット ファー フロム ヒア",ja:"ここから遠いですか？"}},
+{rank:232,word:"early",pos:"形容詞",kana:"アーリー",ja:"早い",ex:{en:"We got up early to watch the sunrise.",kana:"ウィー ガット アップ アーリー トゥ ウォッチ ザ サンライズ",ja:"日の出を見るために早起きしました。"}},
+{rank:233,word:"late",pos:"形容詞",kana:"レイト",ja:"遅い（時間）",ex:{en:"Sorry, I'm a little late.",kana:"ソーリー アイム ア リトル レイト",ja:"すみません、少し遅れました。"}},
+{rank:234,word:"young",pos:"形容詞",kana:"ヤング",ja:"若い",ex:{en:"The staff here are all young and friendly.",kana:"ザ スタッフ ヒア アー オール ヤング アンド フレンドリー",ja:"ここのスタッフはみんな若くて親しみやすいです。"}},
+{rank:235,word:"strong",pos:"形容詞",kana:"ストロング",ja:"強い",ex:{en:"This coffee is quite strong.",kana:"ディス コーフィ イズ クワイト ストロング",ja:"このコーヒーはかなり濃いです。"}},
+{rank:236,word:"weak",pos:"形容詞",kana:"ウィーク",ja:"弱い",ex:{en:"The Wi-Fi signal is weak here.",kana:"ザ ワイファイ スィグナル イズ ウィーク ヒア",ja:"ここはWi-Fiの電波が弱いです。"}},
+{rank:237,word:"clean",pos:"形容詞",kana:"クリーン",ja:"きれいな",ex:{en:"The room was very clean.",kana:"ザ ルーム ワズ ベリー クリーン",ja:"部屋はとてもきれいでした。"}},
+{rank:238,word:"dirty",pos:"形容詞",kana:"ダーティ",ja:"汚い",ex:{en:"My shoes got dirty from the rain.",kana:"マイ シューズ ガット ダーティ フロム ザ レイン",ja:"雨で靴が汚れました。"}},
+{rank:239,word:"safe",pos:"形容詞",kana:"セイフ",ja:"安全な",ex:{en:"Is it safe to walk here at night?",kana:"イズ イット セイフ トゥ ウォーク ヒア アット ナイト",ja:"夜ここを歩いても安全ですか？"}},
+{rank:240,word:"dangerous",pos:"形容詞",kana:"デインジャラス",ja:"危険な",ex:{en:"This road can be dangerous at night.",kana:"ディス ロウド キャン ビー デインジャラス アット ナイト",ja:"この道は夜は危険な場合があります。"}},
+{rank:241,word:"red",pos:"名詞",kana:"レッド",ja:"赤",ex:{en:"I'll take the red one.",kana:"アイル テイク ザ レッド ワン",ja:"赤いものをいただきます。"}},
+{rank:242,word:"blue",pos:"名詞",kana:"ブルー",ja:"青",ex:{en:"The sky is so blue today.",kana:"ザ スカイ イズ ソウ ブルー トゥデイ",ja:"今日は空がとても青いです。"}},
+{rank:243,word:"green",pos:"名詞",kana:"グリーン",ja:"緑",ex:{en:"The hills turn green in spring.",kana:"ザ ヒルズ ターン グリーン イン スプリング",ja:"春には丘が緑になります。"}},
+{rank:244,word:"yellow",pos:"名詞",kana:"イエロウ",ja:"黄色",ex:{en:"That yellow building is the post office.",kana:"ザット イエロウ ビルディング イズ ザ ポウスト オーフィス",ja:"あの黄色い建物が郵便局です。"}},
+{rank:245,word:"black",pos:"名詞",kana:"ブラック",ja:"黒",ex:{en:"I'd like my coffee black, please.",kana:"アイド ライク マイ コーフィ ブラック プリーズ",ja:"コーヒーはブラックでお願いします。"}},
+{rank:246,word:"white",pos:"名詞",kana:"ホワイト",ja:"白",ex:{en:"The mountain top was covered in white snow.",kana:"ザ マウンテン トップ ワズ カバード イン ホワイト スノウ",ja:"山頂は白い雪で覆われていました。"}},
+{rank:247,word:"today",pos:"副詞",kana:"トゥデイ",ja:"今日",ex:{en:"What are you doing today?",kana:"ワット アー ユー ドゥーイング トゥデイ",ja:"今日は何をしますか？"}},
+{rank:248,word:"tomorrow",pos:"副詞",kana:"トゥモロウ",ja:"明日",ex:{en:"Let's meet again tomorrow.",kana:"レッツ ミート アゲイン トゥモロウ",ja:"明日また会いましょう。"}},
+{rank:249,word:"yesterday",pos:"副詞",kana:"イエスタデイ",ja:"昨日",ex:{en:"We visited the temple yesterday.",kana:"ウィー ヴィズィティド ザ テンプル イエスタデイ",ja:"私たちは昨日お寺を訪れました。"}},
+{rank:250,word:"weekend",pos:"名詞",kana:"ウィーケンド",ja:"週末",ex:{en:"Are you free this weekend?",kana:"アー ユー フリー ディス ウィーケンド",ja:"今週末は空いていますか？"}},
+{rank:251,word:"month",pos:"名詞",kana:"マンス",ja:"月（暦の）",ex:{en:"I'll be traveling for a month.",kana:"アイル ビー トラベリング フォー ア マンス",ja:"私は1ヶ月間旅行する予定です。"}},
+{rank:252,word:"minute",pos:"名詞",kana:"ミニット",ja:"分",ex:{en:"Just give me a minute, please.",kana:"ジャスト ギブ ミー ア ミニット プリーズ",ja:"少しだけ時間をください。"}},
+{rank:253,word:"second",pos:"名詞",kana:"セカンド",ja:"秒、2番目",ex:{en:"Wait a second, I'll get my bag.",kana:"ウェイト ア セカンド アイル ゲット マイ バッグ",ja:"ちょっと待って、カバンを取ってきます。"}},
+{rank:254,word:"moment",pos:"名詞",kana:"モウメント",ja:"瞬間",ex:{en:"This was the best moment of the trip.",kana:"ディス ワズ ザ ベスト モウメント オブ ザ トリップ",ja:"これが旅行で一番良い瞬間でした。"}},
+{rank:255,word:"always",pos:"副詞",kana:"オールウェイズ",ja:"いつも",ex:{en:"I always wanted to visit Kyoto.",kana:"アイ オールウェイズ ウォンティド トゥ ヴィズィット キョウト",ja:"私はいつも京都を訪れたいと思っていました。"}},
+{rank:256,word:"sometimes",pos:"副詞",kana:"サムタイムズ",ja:"時々",ex:{en:"I sometimes get lost in this city.",kana:"アイ サムタイムズ ゲット ロスト イン ディス シティ",ja:"私はこの街で時々道に迷います。"}},
+{rank:257,word:"never",pos:"副詞",kana:"ネバー",ja:"決して〜ない",ex:{en:"I've never seen such a beautiful sunset.",kana:"アイブ ネバー スィーン サッチ ア ビューティフル サンセット",ja:"こんなに美しい夕日は見たことがありません。"}},
+{rank:258,word:"often",pos:"副詞",kana:"オーフン",ja:"よく、頻繁に",ex:{en:"Do you often travel abroad?",kana:"ドゥー ユー オーフン トラベル アブロード",ja:"よく海外旅行をしますか？"}},
+{rank:259,word:"usually",pos:"副詞",kana:"ユージュアリー",ja:"普段は",ex:{en:"I usually wake up early.",kana:"アイ ユージュアリー ウェイク アップ アーリー",ja:"私は普段早起きします。"}},
+{rank:260,word:"again",pos:"副詞",kana:"アゲイン",ja:"また",ex:{en:"I hope to come back here again.",kana:"アイ ホウプ トゥ カム バック ヒア アゲイン",ja:"またここに来たいと思います。"}},
+{rank:261,word:"together",pos:"副詞",kana:"トゥゲザー",ja:"一緒に",ex:{en:"Let's take a photo together.",kana:"レッツ テイク ア フォウトウ トゥゲザー",ja:"一緒に写真を撮りましょう。"}},
+{rank:262,word:"alone",pos:"副詞",kana:"アロウン",ja:"一人で",ex:{en:"I like traveling alone sometimes.",kana:"アイ ライク トラベリング アロウン サムタイムズ",ja:"私は時々一人旅をするのが好きです。"}},
+{rank:263,word:"maybe",pos:"副詞",kana:"メイビー",ja:"たぶん",ex:{en:"Maybe we should ask someone.",kana:"メイビー ウィー シュッド アスク サムワン",ja:"たぶん誰かに聞いた方がいいですね。"}},
+{rank:264,word:"sure",pos:"形容詞",kana:"シュア",ja:"確かな",ex:{en:"Sure, I can help you with that.",kana:"シュア アイ キャン ヘルプ ユー ウィズ ザット",ja:"もちろん、それはお手伝いできます。"}},
+{rank:265,word:"important",pos:"形容詞",kana:"インポータント",ja:"重要な",ex:{en:"It's important to book in advance.",kana:"イッツ インポータント トゥ ブック イン アドヴァンス",ja:"事前に予約するのが重要です。"}},
+{rank:266,word:"different",pos:"形容詞",kana:"ディファレント",ja:"違う",ex:{en:"Every town here feels different.",kana:"エブリー タウン ヒア フィールズ ディファレント",ja:"ここの町はそれぞれ違う雰囲気です。"}},
+{rank:267,word:"special",pos:"形容詞",kana:"スペシャル",ja:"特別な",ex:{en:"This place is really special to me.",kana:"ディス プレイス イズ リアリー スペシャル トゥ ミー",ja:"この場所は私にとって本当に特別です。"}},
+{rank:268,word:"favorite",pos:"形容詞",kana:"フェイバリット",ja:"お気に入りの",ex:{en:"This is my favorite restaurant here.",kana:"ディス イズ マイ フェイバリット レストラント ヒア",ja:"ここが私のお気に入りのレストランです。"}},
+{rank:269,word:"interesting",pos:"形容詞",kana:"インタレスティング",ja:"面白い",ex:{en:"That's a really interesting story.",kana:"ザッツ ア リアリー インタレスティング ストーリー",ja:"それは本当に面白い話ですね。"}},
+{rank:270,word:"amazing",pos:"形容詞",kana:"アメイジング",ja:"素晴らしい",ex:{en:"The view from here is amazing.",kana:"ザ ヴュー フロム ヒア イズ アメイジング",ja:"ここからの眺めは素晴らしいです。"}},
+{rank:271,word:"breakfast",pos:"名詞",kana:"ブレックファスト",ja:"朝食",ex:{en:"What time is breakfast served?",kana:"ワット タイム イズ ブレックファスト サーブド",ja:"朝食は何時から出ますか？"}},
+{rank:272,word:"lunch",pos:"名詞",kana:"ランチ",ja:"昼食",ex:{en:"Let's have lunch around noon.",kana:"レッツ ハブ ランチ アラウンド ヌーン",ja:"正午ごろにお昼を食べましょう。"}},
+{rank:273,word:"dinner",pos:"名詞",kana:"ディナー",ja:"夕食",ex:{en:"Do you have a table for dinner tonight?",kana:"ドゥー ユー ハブ ア テーブル フォー ディナー トゥナイト",ja:"今夜の夕食の席はありますか？"}},
+{rank:274,word:"restaurant",pos:"名詞",kana:"レストラント",ja:"レストラン",ex:{en:"Can you recommend a good restaurant?",kana:"キャン ユー レコメンド ア グッド レストラント",ja:"良いレストランを教えてもらえますか？"}},
+{rank:275,word:"hotel",pos:"名詞",kana:"ホウテル",ja:"ホテル",ex:{en:"Could you call a taxi to the hotel?",kana:"クッド ユー コール ア タクシー トゥ ザ ホウテル",ja:"ホテルまでタクシーを呼んでもらえますか？"}},
+{rank:276,word:"airport",pos:"名詞",kana:"エアポート",ja:"空港",ex:{en:"How far is the airport from here?",kana:"ハウ ファー イズ ジ エアポート フロム ヒア",ja:"ここから空港までどのくらいですか？"}},
+{rank:277,word:"ticket",pos:"名詞",kana:"ティケット",ja:"チケット",ex:{en:"Where can I buy a ticket?",kana:"ウェア キャン アイ バイ ア ティケット",ja:"チケットはどこで買えますか？"}},
+{rank:278,word:"passport",pos:"名詞",kana:"パスポート",ja:"パスポート",ex:{en:"Please show me your passport.",kana:"プリーズ ショウ ミー ヨア パスポート",ja:"パスポートを見せてください。"}},
+{rank:279,word:"luggage",pos:"名詞",kana:"ラゲッジ",ja:"荷物",ex:{en:"Can I leave my luggage here?",kana:"キャン アイ リーブ マイ ラゲッジ ヒア",ja:"荷物をここに預けてもいいですか？"}},
+{rank:280,word:"map",pos:"名詞",kana:"マップ",ja:"地図",ex:{en:"Do you have a map of this area?",kana:"ドゥー ユー ハブ ア マップ オブ ディス エリア",ja:"この地域の地図はありますか？"}},
+{rank:281,word:"weather",pos:"名詞",kana:"ウェザー",ja:"天気",ex:{en:"How's the weather tomorrow?",kana:"ハウズ ザ ウェザー トゥモロウ",ja:"明日の天気はどうですか？"}},
+{rank:282,word:"rain",pos:"名詞",kana:"レイン",ja:"雨",ex:{en:"I hope it doesn't rain tomorrow.",kana:"アイ ホウプ イット ダズント レイン トゥモロウ",ja:"明日雨が降らないといいですね。"}},
+{rank:283,word:"sun",pos:"名詞",kana:"サン",ja:"太陽",ex:{en:"The sun is really strong today.",kana:"ザ サン イズ リアリー ストロング トゥデイ",ja:"今日は日差しがとても強いです。"}},
+{rank:284,word:"sky",pos:"名詞",kana:"スカイ",ja:"空",ex:{en:"Look at that clear blue sky.",kana:"ルック アット ザット クリア ブルー スカイ",ja:"あの澄んだ青い空を見てください。"}},
+{rank:285,word:"beach",pos:"名詞",kana:"ビーチ",ja:"ビーチ",ex:{en:"Is the beach within walking distance?",kana:"イズ ザ ビーチ ウィズイン ウォーキング ディスタンス",ja:"ビーチは歩いて行ける距離ですか？"}},
+{rank:286,word:"mountain",pos:"名詞",kana:"マウンテン",ja:"山",ex:{en:"You can see the mountain from the window.",kana:"ユー キャン スィー ザ マウンテン フロム ザ ウィンドウ",ja:"窓から山が見えます。"}},
+{rank:287,word:"river",pos:"名詞",kana:"リバー",ja:"川",ex:{en:"There's a nice cafe by the river.",kana:"ゼアズ ア ナイス キャフェイ バイ ザ リバー",ja:"川沿いに素敵なカフェがあります。"}},
+{rank:288,word:"sea",pos:"名詞",kana:"スィー",ja:"海",ex:{en:"Our room looks out over the sea.",kana:"アワー ルーム ルックス アウト オウバー ザ スィー",ja:"私たちの部屋は海を見渡せます。"}},
+{rank:289,word:"park",pos:"名詞",kana:"パーク",ja:"公園",ex:{en:"Is there a park nearby for a walk?",kana:"イズ ゼア ア パーク ニアバイ フォー ア ウォーク",ja:"散歩できる公園が近くにありますか？"}},
+{rank:290,word:"bridge",pos:"名詞",kana:"ブリッジ",ja:"橋",ex:{en:"The old bridge is a famous spot here.",kana:"ジ オウルド ブリッジ イズ ア フェイマス スポット ヒア",ja:"その古い橋はここの有名なスポットです。"}},
+{rank:291,word:"building",pos:"名詞",kana:"ビルディング",ja:"建物",ex:{en:"That's the tallest building in the city.",kana:"ザッツ ザ トーレスト ビルディング イン ザ シティ",ja:"あれがこの街で一番高い建物です。"}},
+{rank:292,word:"temple",pos:"名詞",kana:"テンプル",ja:"お寺",ex:{en:"This temple is over 500 years old.",kana:"ディス テンプル イズ オウバー ファイブ ハンドレッド イヤーズ オウルド",ja:"このお寺は500年以上前からあります。"}},
+{rank:293,word:"museum",pos:"名詞",kana:"ミュズィーアム",ja:"美術館、博物館",ex:{en:"The museum is closed on Mondays.",kana:"ザ ミュズィーアム イズ クロウズド オン マンデイズ",ja:"美術館は月曜日休館です。"}},
+{rank:294,word:"market",pos:"名詞",kana:"マーケット",ja:"市場",ex:{en:"The morning market opens at six.",kana:"ザ モーニング マーケット オウプンズ アット スィックス",ja:"朝市は6時に開きます。"}},
+{rank:295,word:"station",pos:"名詞",kana:"ステイション",ja:"駅",ex:{en:"Excuse me, where is the nearest station?",kana:"イクスキューズ ミー ウェア イズ ザ ニアリスト ステイション",ja:"すみません、一番近い駅はどこですか？"}},
+{rank:296,word:"left",pos:"名詞",kana:"レフト",ja:"左",ex:{en:"The entrance is on your left.",kana:"ジ エントランス イズ オン ヨア レフト",ja:"入口はあなたの左手にあります。"}},
+{rank:297,word:"straight",pos:"副詞",kana:"ストレイト",ja:"まっすぐ",ex:{en:"Go straight for two blocks.",kana:"ゴウ ストレイト フォー トゥー ブロックス",ja:"2ブロックまっすぐ進んでください。"}},
+{rank:298,word:"sign",pos:"名詞",kana:"サイン",ja:"標識、看板",ex:{en:"Follow the signs to the exit.",kana:"フォロウ ザ サインズ トゥ ジ エグジット",ja:"出口までの標識に従ってください。"}},
+{rank:299,word:"wallet",pos:"名詞",kana:"ウォレット",ja:"財布",ex:{en:"I think I dropped my wallet somewhere.",kana:"アイ シンク アイ ドロップト マイ ウォレット サムウェア",ja:"どこかで財布を落としたようです。"}},
+{rank:300,word:"camera",pos:"名詞",kana:"キャメラ",ja:"カメラ",ex:{en:"Don't forget your camera today.",kana:"ドント フォーゲット ヨア キャメラ トゥデイ",ja:"今日はカメラを忘れないでくださいね。"}},
+];
 
 let customData = [];
 let customPracticePacks = [];
@@ -1073,6 +1415,10 @@ let patternMode = false; // ON: 会話パターン系カテゴリのみ表示、
 let catBarWrap = false; // ON: カテゴリバーを複数行に折り返し表示、OFF(既定): 1行の横スクロール
 let practiceListLimit = 20; // 学習ラウンジ一覧に表示する件数（新しい方から）。設定画面で変更可能
 let whatsNewSeenId = 0; // 「新機能のお知らせ」ポップアップで既読済みのCHANGELOGエントリid（未読分だけ起動時に表示）
+// 英単語3000（頻出英単語を頻度順に学ぶ独立モード）の「覚えた」状態。フレーズ側のlearned/keyOf()とは
+// 完全に別管理（w.wordをキーにする）。"id"を言語キーに使って既存の.idプロパティと衝突した教訓から、
+// 万一の衝突を避けるため独自の状態オブジェクトとして分離している。
+let wordsLearned = {};
 let rate = 1.0;
 let jaRate = 1.25;
 let fsScale = 1.0;
@@ -1131,6 +1477,7 @@ async function loadState(){
   });
   if(learnedLangMigrated){ saveLearned(); }
   try{ const wn = await store.get('phrasebook-whatsnew-seen'); if(wn && wn.value){ whatsNewSeenId = parseInt(wn.value, 10) || 0; } }catch(e){}
+  try{ const wl = await store.get('phrasebook-words-learned'); if(wl && wl.value){ wordsLearned = JSON.parse(wl.value); } }catch(e){}
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
   allCats().forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
   // 保存されていたcurrentCatが読み込んだpatternModeの状態と矛盾する場合（例：以前OFFのまま
@@ -1171,13 +1518,14 @@ async function saveCustomCats(){ await safeSet('phrasebook-custom-cats', JSON.st
 async function savePracticePacks(){ await safeSet('phrasebook-practice-custom', JSON.stringify(customPracticePacks)); }
 async function saveLearned(){ await safeSet('phrasebook-learned', JSON.stringify(learned)); }
 async function savePinned(){ await safeSet('phrasebook-pinned', JSON.stringify(pinned)); }
+async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
 
 // --- 端末間同期（Firebase）から使う橋渡し関数 ---
-// 同期対象：カスタムフレーズ・学習ラウンジ・覚えた/ピン留め・カテゴリ/言語/フレーズカードの並び順。
+// 同期対象：カスタムフレーズ・学習ラウンジ・覚えた/ピン留め・英単語3000の覚えた状態・カテゴリ/言語/フレーズカードの並び順。
 // それ以外の設定（読み上げ速度など）は端末ごとのローカル保存のまま同期しない。
 // let宣言の変数はwindowに乗らないため、再代入が必要なapplyCloudStateはここ（クラシックスクリプト側）に置く。
 function getSyncableState(){
-  return { customData, customCats, customPracticePacks, learned, pinned, catOrder, langOrder, phraseOrder };
+  return { customData, customCats, customPracticePacks, learned, pinned, wordsLearned, catOrder, langOrder, phraseOrder };
 }
 async function applyCloudState(state){
   if(!state) return;
@@ -1186,13 +1534,14 @@ async function applyCloudState(state){
   if(Array.isArray(state.customPracticePacks)) customPracticePacks = state.customPracticePacks;
   if(state.learned && typeof state.learned === "object") learned = state.learned;
   if(state.pinned && typeof state.pinned === "object") pinned = state.pinned;
+  if(state.wordsLearned && typeof state.wordsLearned === "object") wordsLearned = state.wordsLearned;
   if(Array.isArray(state.catOrder) && state.catOrder.length) catOrder = state.catOrder;
   if(Array.isArray(state.langOrder) && state.langOrder.length) langOrder = state.langOrder;
   if(Array.isArray(state.phraseOrder) && state.phraseOrder.length) phraseOrder = state.phraseOrder;
   allCats().forEach(c=>{ if(!catOrder.includes(c)) catOrder.push(c); });
   LANGS.forEach(l=>{ if(!langOrder.includes(l.key)) langOrder.push(l.key); });
   allData().forEach(d=>{ const k = keyOf(d); if(!phraseOrder.includes(k)) phraseOrder.push(k); });
-  await saveCustom(); await saveCustomCats(); await savePracticePacks(); await saveLearned(); await savePinned(); await saveSettings();
+  await saveCustom(); await saveCustomCats(); await savePracticePacks(); await saveLearned(); await savePinned(); await saveWordsLearned(); await saveSettings();
   populateAddCatSelect();
   renderCats();
   renderDeck();
@@ -2120,7 +2469,7 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
-  ["speakOverlay","practiceOverlay","menuScanOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay","learnJaOverlay"].forEach(id=>{
+  ["speakOverlay","practiceOverlay","menuScanOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay","learnJaOverlay","words3000Overlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
 }
@@ -2248,6 +2597,96 @@ document.getElementById("menuLearnJa").addEventListener("click", ()=>{
 document.getElementById("closeLearnJa").addEventListener("click", ()=> document.getElementById("learnJaOverlay").classList.remove("open"));
 document.getElementById("learnJaLangSel").addEventListener("change", renderLearnJaList);
 document.getElementById("learnJaSearch").addEventListener("input", renderLearnJaList);
+
+// --- 英単語3000（独立の頻出英単語学習モード） ---
+// 500語ずつのティアに分けて表示する。まだ全ティア分のデータが無くても、WORDS3000の実際の
+// 最大rankから動的にティア数を計算するので、バッチを追加していくたびにUI側の変更は不要。
+function words3000TierRanges(){
+  const maxRank = WORDS3000.reduce((m,w)=>Math.max(m,w.rank), 0);
+  const tierSize = 500;
+  const tierCount = Math.max(1, Math.ceil(maxRank / tierSize));
+  return Array.from({length:tierCount}, (_,i)=>({from:i*tierSize+1, to:(i+1)*tierSize}));
+}
+function populateWords3000TierSelect(){
+  const sel = document.getElementById("words3000TierSel");
+  const prev = sel.value;
+  sel.innerHTML = words3000TierRanges().map(r=>`<option value="${r.from}">${r.from}〜${r.to}語</option>`).join('');
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+function renderWords3000List(){
+  const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
+  const tierTo = tierFrom + 499;
+  const q = document.getElementById("words3000Search").value.trim().toLowerCase();
+  const wrap = document.getElementById("words3000List");
+  let items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+  if(q){
+    items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
+  }
+  const doneCount = items.filter(w=>wordsLearned[w.word]).length;
+  document.getElementById("words3000Progress").textContent = `覚えた ${doneCount} / ${items.length}`;
+  if(items.length === 0){ wrap.innerHTML = '<p class="hint">該当する単語がありません。</p>'; return; }
+  wrap.innerHTML = items.map(w=>{
+    const isLearned = !!wordsLearned[w.word];
+    return `<div class="w3k-card ${isLearned?'learned':''}" data-word="${esc(w.word)}">
+      <div class="w3k-front">
+        <span class="w3k-rank">${w.rank}</span>
+        <span class="w3k-word-wrap">
+          <span class="w3k-word">${esc(w.word)}</span><span class="w3k-pos">${esc(w.pos||"")}</span>
+          <div class="w3k-kana">${esc(w.kana)}</div>
+        </span>
+        <span class="w3k-btns">
+          <button class="mini-btn ${isLearned?'done':''}" aria-label="覚えた" data-role="learn">✓</button>
+          <button class="mini-btn" aria-label="発音を聞く" data-role="speak-word">🔊</button>
+        </span>
+      </div>
+      <div class="w3k-back">
+        <div class="w3k-ja">${esc(w.ja)}</div>
+        <div class="w3k-ex">
+          <div class="w3k-ex-text">
+            <div class="w3k-ex-en">${esc(w.ex.en)}</div>
+            <div class="w3k-ex-kana">${esc(w.ex.kana)}</div>
+            <div class="w3k-ex-ja">${esc(w.ex.ja)}</div>
+          </div>
+          <button class="mini-btn" aria-label="例文の発音を聞く" data-role="speak-ex">🔊</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.w3k-card').forEach(card=>{
+    const w = WORDS3000.find(x=>x.word===card.dataset.word);
+    card.querySelector('.w3k-front').addEventListener('click', (e)=>{
+      if(e.target.closest('[data-role]')) return;
+      card.classList.toggle('revealed');
+    });
+    card.querySelector('[data-role="speak-word"]').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      speakRaw(w.word, "en-US", e.currentTarget, null, "en");
+    });
+    card.querySelector('[data-role="speak-ex"]').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      speakRaw(w.ex.en, "en-US", e.currentTarget, null, "en");
+    });
+    card.querySelector('[data-role="learn"]').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(wordsLearned[w.word]) delete wordsLearned[w.word]; else wordsLearned[w.word] = true;
+      saveWordsLearned();
+      renderWords3000List();
+    });
+  });
+}
+document.getElementById("menuWords3000").addEventListener("click", ()=>{
+  closeAllOverlays();
+  populateWords3000TierSelect();
+  document.getElementById("words3000Search").value = "";
+  renderWords3000List();
+  document.getElementById("words3000Overlay").classList.add("open");
+});
+document.getElementById("closeWords3000").addEventListener("click", ()=>{
+  stopAllAudio();
+  document.getElementById("words3000Overlay").classList.remove("open");
+});
+document.getElementById("words3000TierSel").addEventListener("change", renderWords3000List);
+document.getElementById("words3000Search").addEventListener("input", renderWords3000List);
 
 // --- 学習ラウンジ（📝例文セット + 💬AIチャット） ---
 function allPracticePacks(){ return PRACTICE_PACKS.concat(customPracticePacks); }
@@ -3866,7 +4305,7 @@ if("serviceWorker" in navigator){
     // saveSettingsは他の端末固有設定（読み上げ速度等）も含む1つの塊で保存されるため、
     // 頻繁な操作（スライダー等）でも呼ばれるが、schedulePushの1.2秒デバウンスで実害はない。
     // 実際にクラウドへ送る内容はgetSyncableState()が選んだフィールド（catOrder/langOrder等）のみ。
-    ["saveCustom", "saveCustomCats", "savePracticePacks", "saveLearned", "savePinned", "saveSettings"].forEach(fnName=>{
+    ["saveCustom", "saveCustomCats", "savePracticePacks", "saveLearned", "savePinned", "saveWordsLearned", "saveSettings"].forEach(fnName=>{
       const orig = window[fnName];
       window[fnName] = async function(...args){
         const result = await orig.apply(this, args);
