@@ -32,7 +32,8 @@ test.describe('core browsing', () => {
 
   test('tapping a card speak button plays via Google TTS', async ({ page }) => {
     await mockGoogleTTS(page);
-    const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 5000 });
+    // generous budget: this waits from before goto, so it also has to cover initial page load
+    const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 15000 });
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.locator('.ticket .speak').first().click();
@@ -44,7 +45,8 @@ test.describe('core browsing', () => {
     // ~"), but some TTS engines audibly read the symbol aloud (reported as a stray "テーダ"-like
     // sound at the end of playback). speakRaw() now strips it before synthesis.
     await mockGoogleTTS(page);
-    const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 5000 });
+    // generous budget: this waits from before goto, so it also has to cover initial page load
+    const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 15000 });
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('#patternModeToggle');
