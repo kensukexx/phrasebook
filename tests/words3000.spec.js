@@ -34,7 +34,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
     await expect(card).not.toHaveClass(/revealed/);
   });
 
-  test('the tier selector is computed from the data (five 500-word tiers for the current 2400-word total)', async ({ page }) => {
+  test('the tier selector is computed from the data (six 500-word tiers for the current 2700-word total)', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('#toolsBtn');
@@ -42,7 +42,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
     await page.waitForSelector('#words3000Overlay.open');
 
     const options = await page.locator('#words3000TierSel option').allTextContents();
-    expect(options).toEqual(['1〜500語', '501〜1000語', '1001〜1500語', '1501〜2000語', '2001〜2500語']);
+    expect(options).toEqual(['1〜500語', '501〜1000語', '1001〜1500語', '1501〜2000語', '2001〜2500語', '2501〜3000語']);
     await expect(page.locator('.w3k-card')).toHaveCount(500);
     await page.selectOption('#words3000TierSel', '501');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
@@ -51,7 +51,9 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
     await page.selectOption('#words3000TierSel', '1501');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
     await page.selectOption('#words3000TierSel', '2001');
-    await expect(page.locator('.w3k-card')).toHaveCount(400);
+    await expect(page.locator('.w3k-card')).toHaveCount(500);
+    await page.selectOption('#words3000TierSel', '2501');
+    await expect(page.locator('.w3k-card')).toHaveCount(200);
   });
 
   test('search filters by English word or Japanese meaning, and updates the progress count', async ({ page }) => {
