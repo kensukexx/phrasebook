@@ -469,17 +469,27 @@ function speakRaw(text, speechLang, btn, onDone, rateOverride){
 }
 
 // --- 範囲（ティア）：WORDS3000の実際の最大rankから動的に500語ずつのティア数を計算するため、
-// バッチを追加していってもUI側の変更は不要。 ---
+// バッチを追加していってもUI側の変更は不要。500語区切りに加え、末尾に「全◯語」を通しで
+// 選べる選択肢も足す（区切りが複数ある時だけ＝1ティアしか無いなら同じ内容になるので不要）。
+// 選択肢のvalueは"from-to"形式の文字列にして、全語オプションのような+499で機械的に
+// 求まらない範囲も表現できるようにしている。
 function words3000TierRanges(){
   const maxRank = WORDS3000.reduce((m,w)=>Math.max(m,w.rank), 0);
   const tierSize = 500;
   const tierCount = Math.max(1, Math.ceil(maxRank / tierSize));
-  return Array.from({length:tierCount}, (_,i)=>({from:i*tierSize+1, to:(i+1)*tierSize}));
+  const ranges = Array.from({length:tierCount}, (_,i)=>({from:i*tierSize+1, to:Math.min((i+1)*tierSize, maxRank)}));
+  if(tierCount > 1){
+    ranges.push({from:1, to:maxRank, all:true});
+  }
+  return ranges;
 }
 function populateWords3000TierSelect(){
   const sel = document.getElementById("words3000TierSel");
   const prev = sel.value;
-  sel.innerHTML = words3000TierRanges().map(r=>`<option value="${r.from}">${r.from}〜${r.to}語</option>`).join('');
+  sel.innerHTML = words3000TierRanges().map(r=>{
+    const label = r.all ? `全${r.to}語（1〜${r.to}語）` : `${r.from}〜${r.to}語`;
+    return `<option value="${r.from}-${r.to}">${label}</option>`;
+  }).join('');
   if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
 }
 
@@ -498,8 +508,9 @@ function populateWords3000PosSelect(initialValue){
 // 範囲・品詞・検索・未習得のみ、すべての絞り込みを1箇所にまとめる。一覧表示・自動再生・
 // テストモードの対象リストは、すべてこの関数の結果をそのまま使う。
 function words3000FilteredList(){
-  const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
-  const tierTo = tierFrom + 499;
+  const [tierFromStr, tierToStr] = document.getElementById("words3000TierSel").value.split('-');
+  const tierFrom = parseInt(tierFromStr, 10) || 1;
+  const tierTo = parseInt(tierToStr, 10) || (tierFrom + 499);
   const q = document.getElementById("words3000Search").value.trim().toLowerCase();
   const pos = document.getElementById("words3000PosSel").value;
   let items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);

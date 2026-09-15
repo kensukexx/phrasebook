@@ -51,23 +51,28 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     expect(new URL(req.url()).searchParams.get('q')).toBe('the');
   });
 
-  test('the tier selector is computed from the data (six 500-word tiers for the complete 3000-word set)', async ({ page }) => {
+  test('the tier selector is computed from the data (six 500-word tiers, plus a whole-3000 option, for the complete set)', async ({ page }) => {
     await page.goto('/words3000.html');
     await page.waitForSelector('.w3k-card');
 
     const options = await page.locator('#words3000TierSel option').allTextContents();
-    expect(options).toEqual(['1〜500語', '501〜1000語', '1001〜1500語', '1501〜2000語', '2001〜2500語', '2501〜3000語']);
+    expect(options).toEqual([
+      '1〜500語', '501〜1000語', '1001〜1500語', '1501〜2000語', '2001〜2500語', '2501〜3000語',
+      '全3000語（1〜3000語）',
+    ]);
     await expect(page.locator('.w3k-card')).toHaveCount(500);
-    await page.selectOption('#words3000TierSel', '501');
+    await page.selectOption('#words3000TierSel', '501-1000');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
-    await page.selectOption('#words3000TierSel', '1001');
+    await page.selectOption('#words3000TierSel', '1001-1500');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
-    await page.selectOption('#words3000TierSel', '1501');
+    await page.selectOption('#words3000TierSel', '1501-2000');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
-    await page.selectOption('#words3000TierSel', '2001');
+    await page.selectOption('#words3000TierSel', '2001-2500');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
-    await page.selectOption('#words3000TierSel', '2501');
+    await page.selectOption('#words3000TierSel', '2501-3000');
     await expect(page.locator('.w3k-card')).toHaveCount(500);
+    await page.selectOption('#words3000TierSel', '1-3000');
+    await expect(page.locator('.w3k-card')).toHaveCount(3000);
   });
 
   test('search filters by English word or Japanese meaning, and updates the progress count', async ({ page }) => {
