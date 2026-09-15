@@ -12,7 +12,9 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
     const card = page.locator('.w3k-card').first();
     await expect(card).toBeVisible();
     await expect(card.locator('.w3k-word')).toHaveText('the');
-    // no meaning/example leaks before the card is tapped
+    // the Japanese meaning is visible on the front at a glance, without tapping
+    await expect(card.locator('.w3k-ja-front')).toHaveText('その、あの（定冠詞）');
+    // the example sentence stays hidden until the card is tapped
     await expect(card).not.toHaveClass(/revealed/);
     await expect(card.locator('.w3k-back')).toBeHidden();
   });

@@ -299,6 +299,7 @@
   .w3k-word{ font-size:17px; font-weight:700; color:var(--ink); }
   .w3k-pos{ font-size:11px; color:var(--ink-soft); margin-left:6px; }
   .w3k-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .w3k-ja-front{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; color:var(--ink); margin-top:3px; }
   .w3k-btns{ flex:0 0 auto; display:flex; gap:6px; align-items:center; }
   .w3k-btns .mini-btn.done{ background:var(--green); color:#fff; border-color:var(--green); }
   .w3k-back{ display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
@@ -5343,6 +5344,7 @@ function renderWords3000List(){
         <span class="w3k-word-wrap">
           <span class="w3k-word">${esc(w.word)}</span><span class="w3k-pos">${esc(w.pos||"")}</span>
           <div class="w3k-kana">${esc(w.kana)}</div>
+          <div class="w3k-ja-front">${esc(w.ja)}</div>
         </span>
         <span class="w3k-btns">
           <button class="mini-btn ${isLearned?'done':''}" aria-label="覚えた" data-role="learn">✓</button>
