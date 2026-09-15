@@ -292,6 +292,7 @@
   .lj-hint{ font-size:11px; color:var(--ink-faint); margin-top:2px; }
   .w3k-card{ border:1.5px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; background:#fff; }
   .w3k-card.learned{ border-color:var(--green); }
+  .w3k-card.now-playing{ box-shadow:0 0 0 3px rgba(255,107,107,0.5), 0 4px 16px rgba(47,53,66,0.12); }
   .w3k-front{ display:flex; align-items:center; gap:10px; cursor:pointer; }
   .w3k-rank{ flex:0 0 auto; width:30px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-faint); }
   .w3k-word-wrap{ flex:1; min-width:0; }
@@ -488,6 +489,11 @@
     <div class="field">
       <label>範囲</label>
       <select id="words3000TierSel" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink);"></select>
+    </div>
+    <div class="w3k-playbar" style="display:flex; align-items:center; gap:8px; padding:0 0 10px;">
+      <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
+      <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
+      <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
     </div>
     <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); margin-bottom:6px;">
     <p class="hint" id="words3000Progress" style="margin-bottom:10px;"></p>
@@ -5172,6 +5178,7 @@ document.getElementById("search").addEventListener("input", ()=>{ stopListening(
 
 // --- Tools menu ---
 function closeAllOverlays(){
+  stopWords3000Listening();
   ["speakOverlay","practiceOverlay","menuScanOverlay","syncOverlay","currencyOverlay","settingsOverlay","toolsOverlay","helpOverlay","learnJaOverlay","words3000Overlay"].forEach(id=>{
     document.getElementById(id).classList.remove("open");
   });
@@ -5360,6 +5367,8 @@ function renderWords3000List(){
     card.querySelector('.w3k-front').addEventListener('click', (e)=>{
       if(e.target.closest('[data-role]')) return;
       card.classList.toggle('revealed');
+      // タップした瞬間にその単語の発音がすぐ聞けるように、詳細の開閉と同時に発音も鳴らす。
+      speakRaw(w.word, "en-US", card.querySelector('[data-role="speak-word"]'), null, "en");
     });
     card.querySelector('[data-role="speak-word"]').addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -5377,19 +5386,103 @@ function renderWords3000List(){
     });
   });
 }
+
+// 英単語3000の聞き流し再生：フレーズ帳の聞き流し（listenState/playStep/orderForListening）と
+// 同じ操作感を再現する独立版。速度(rate)・フレーズ間隔(listenGap)・ループ(listenLoop)・
+// 日本語読み上げ挟み込み(listenJaMode)は同じ設定を共有し、対象は現在の範囲・検索絞り込みのみ。
+let words3000ListenState = { active:false, list:[], index:0 };
+function updateWords3000ListenButton(){
+  const btn = document.getElementById("words3000ListenBtn");
+  if(words3000ListenState.active){
+    btn.textContent = "■";
+    btn.title = `再生中 ${words3000ListenState.index+1}/${words3000ListenState.list.length}`;
+    btn.classList.add("listen-on");
+  }else{
+    btn.textContent = "▶";
+    btn.title = "この範囲を自動再生";
+    btn.classList.remove("listen-on");
+  }
+}
+function highlightWords3000Playing(word){
+  document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
+  const el = document.querySelector(`.w3k-card[data-word="${CSS.escape(word)}"]`);
+  if(el){ el.classList.add("now-playing"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
+}
+function playWords3000Step(){
+  if(!words3000ListenState.active) return;
+  if(words3000ListenState.index >= words3000ListenState.list.length){
+    if(listenLoop){ words3000ListenState.index = 0; } else { stopWords3000Listening(); return; }
+  }
+  const w = words3000ListenState.list[words3000ListenState.index];
+  highlightWords3000Playing(w.word);
+  updateWords3000ListenButton();
+  const goNext = ()=>{
+    if(!words3000ListenState.active) return;
+    setTimeout(()=>{
+      words3000ListenState.index++;
+      playWords3000Step();
+    }, listenGap);
+  };
+  const afterMain = ()=>{
+    if(!words3000ListenState.active) return;
+    if(listenJaMode){
+      // フレーズ帳の聞き流しと同じく、単語→（短い間）→日本語の意味→（設定した間隔）→次の単語。
+      setTimeout(()=>{
+        if(!words3000ListenState.active) return;
+        speakRaw(w.ja, "ja-JP", null, goNext);
+      }, Math.min(listenGap, 350));
+    } else {
+      goNext();
+    }
+  };
+  speakRaw(w.word, "en-US", null, afterMain, "en");
+}
+function startWords3000Listening(){
+  const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
+  const tierTo = tierFrom + 499;
+  const q = document.getElementById("words3000Search").value.trim().toLowerCase();
+  let list = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+  if(q){ list = list.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q)); }
+  if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認してください）"); return; }
+  words3000ListenState = { active:true, list, index:0 };
+  playWords3000Step();
+}
+function stopWords3000Listening(){
+  if(!words3000ListenState.active) return;
+  words3000ListenState.active = false;
+  stopAllAudio();
+  document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
+  updateWords3000ListenButton();
+}
 document.getElementById("menuWords3000").addEventListener("click", ()=>{
+  stopListening();
   closeAllOverlays();
   populateWords3000TierSelect();
   document.getElementById("words3000Search").value = "";
   renderWords3000List();
+  document.getElementById("words3000RateBtn").textContent = document.getElementById("rateQuickBtn").textContent;
+  document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
+  updateWords3000ListenButton();
   document.getElementById("words3000Overlay").classList.add("open");
 });
 document.getElementById("closeWords3000").addEventListener("click", ()=>{
-  stopAllAudio();
+  stopWords3000Listening();
   document.getElementById("words3000Overlay").classList.remove("open");
 });
-document.getElementById("words3000TierSel").addEventListener("change", renderWords3000List);
-document.getElementById("words3000Search").addEventListener("input", renderWords3000List);
+document.getElementById("words3000TierSel").addEventListener("change", ()=>{ stopWords3000Listening(); renderWords3000List(); });
+document.getElementById("words3000Search").addEventListener("input", ()=>{ stopWords3000Listening(); renderWords3000List(); });
+document.getElementById("words3000ListenBtn").addEventListener("click", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); else startWords3000Listening(); });
+document.getElementById("words3000RateBtn").addEventListener("click", ()=>{
+  const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
+  setForeignRate(next);
+  saveSettings();
+});
+document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
+  listenLoop = !listenLoop;
+  e.currentTarget.classList.toggle("on", listenLoop);
+  document.getElementById("loopToggle").classList.toggle("on", listenLoop);
+  saveSettings();
+});
 
 // --- 学習ラウンジ（📝例文セット + 💬AIチャット） ---
 function allPracticePacks(){ return PRACTICE_PACKS.concat(customPracticePacks); }
@@ -6154,6 +6247,7 @@ function setForeignRate(newRate){
   document.getElementById("rateLabel").textContent = label;
   document.getElementById("rateSlider").value = rate;
   document.getElementById("rateQuickBtn").textContent = label;
+  document.getElementById("words3000RateBtn").textContent = label;
   // 再生中の現地語音声にもその場で反映する（端末TTSはWeb Speech APIの仕様上、話し始めた後の
   // 速度変更が効かないため、Google/Gemini経由の<audio>再生の時だけ即座に反映できる）
   if(currentTTSRateKind === "foreign" && currentTTSAudio) currentTTSAudio.playbackRate = rate;

@@ -18,6 +18,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
   });
 
   test('tapping a card reveals the meaning and example sentence, tapping again hides it', async ({ page }) => {
+    await mockGoogleTTS(page);
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('#toolsBtn');
@@ -32,6 +33,20 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
 
     await card.locator('.w3k-front').click();
     await expect(card).not.toHaveClass(/revealed/);
+  });
+
+  test('tapping a card immediately plays its pronunciation, not just on the dedicated 🔊 button', async ({ page }) => {
+    await mockGoogleTTS(page);
+    const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 15000 });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuWords3000');
+    await page.waitForSelector('#words3000Overlay.open');
+
+    await page.locator('.w3k-card').first().locator('.w3k-front').click();
+    const req = await ttsRequest;
+    expect(new URL(req.url()).searchParams.get('q')).toBe('the');
   });
 
   test('the tier selector is computed from the data (six 500-word tiers for the complete 3000-word set)', async ({ page }) => {
@@ -119,5 +134,112 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立モー�
     await card.locator('[data-role="speak-ex"]').click();
     await page.waitForTimeout(300);
     expect(errors).toEqual([]);
+  });
+
+  test.describe('自動再生（フレーズ帳の聞き流しと同じ操作感を再現した独立版）', () => {
+    test('the listen button plays through the current range in rank order and highlights the playing card', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#toolsBtn');
+      await page.click('#menuWords3000');
+      await page.waitForSelector('#words3000Overlay.open');
+
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
+      const firstReq = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 15000 });
+      await page.click('#words3000ListenBtn');
+      expect(new URL((await firstReq).url()).searchParams.get('q')).toBe('the');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('■');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'the');
+
+      await page.click('#words3000ListenBtn'); // stop
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveCount(0);
+    });
+
+    test('loop playback wraps back to the first word of the filtered list when the loop toggle is on', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#toolsBtn');
+      await page.click('#menuWords3000');
+      await page.waitForSelector('#words3000Overlay.open');
+
+      // "can" matches exactly two words in tier 1 (rank order: can, then cancel)
+      await page.fill('#words3000Search', 'can');
+      await expect(page.locator('.w3k-card')).toHaveCount(2);
+
+      await page.click('#words3000LoopBtn');
+      await expect(page.locator('#words3000LoopBtn')).toHaveClass(/on/);
+      // the loop toggle is a shared setting with the main phrase deck's 聞き流し
+      await expect(page.locator('#loopToggle')).toHaveClass(/on/);
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'can');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'cancel', { timeout: 10000 });
+      // with loop on, after the last word it wraps back to the first instead of stopping
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'can', { timeout: 10000 });
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('■');
+
+      await page.click('#words3000ListenBtn'); // stop before the test ends
+    });
+
+    test('without loop, playback stops automatically after the last word in the filtered list', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#toolsBtn');
+      await page.click('#menuWords3000');
+      await page.waitForSelector('#words3000Overlay.open');
+
+      await page.fill('#words3000Search', 'water'); // exactly one match
+      await expect(page.locator('.w3k-card')).toHaveCount(1);
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'water');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶', { timeout: 10000 });
+      await expect(page.locator('.w3k-card.now-playing')).toHaveCount(0);
+    });
+
+    test('the speed button cycles through presets and stays in sync with the main deck\'s speed button', async ({ page }) => {
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#toolsBtn');
+      await page.click('#menuWords3000');
+      await page.waitForSelector('#words3000Overlay.open');
+
+      await expect(page.locator('#words3000RateBtn')).toHaveText('1.0x');
+      await page.click('#words3000RateBtn');
+      await expect(page.locator('#words3000RateBtn')).toHaveText('1.25x');
+      await expect(page.locator('#rateQuickBtn')).toHaveText('1.25x');
+    });
+
+    test('changing the tier or the search filter while playing stops playback', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#toolsBtn');
+      await page.click('#menuWords3000');
+      await page.waitForSelector('#words3000Overlay.open');
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('■');
+      await page.fill('#words3000Search', 'water');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveCount(0);
+    });
+
+    test('opening 英単語3000 stops the phrase deck\'s own 聞き流し playback to avoid overlapping audio', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#listenBtn');
+      await expect(page.locator('#listenBtn')).toHaveText('■');
+
+      await page.click('#toolsBtn');
+      await page.click('#menuWords3000');
+      await page.waitForSelector('#words3000Overlay.open');
+      await expect(page.locator('#listenBtn')).toHaveText('▶');
+    });
   });
 });
