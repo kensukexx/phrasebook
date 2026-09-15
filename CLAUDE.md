@@ -42,6 +42,11 @@
   - **TTSエンジンの簡易版を独自に保持**: `words3000.html`は英語(en-US)と日本語(ja-JP、聞き流し中の意味読み上げ用)の2言語しか扱わないため、`index.html`のLANGS/voiceMap/pickVoice(langKey)による多言語ボイス選択の仕組みは持ち込まず、`pickVoiceByPrefix(prefix)`だけを使う簡略版のフォールバックチェーン（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）を独自にページ内に持つ。ロジック自体（`playGoogleTTS`/`playGeminiTTS`/`stopAllAudio`等）は`index.html`からほぼそのまま移植。
   - 範囲セレクタ（`words3000TierSel`）は500語区切りのティアを`WORDS3000`実際の最大rankから動的に計算する（`words3000TierRanges()`）ため、3000語（6ティア）まで自動的に対応しておりUI側の変更は不要だった。
   - `sw.js`のシェルファイル一覧（`SHELL_FILES`）に`words3000.html`・`words3000-data.js`を追加し、`CACHE_NAME`を`phrasebook-shell-v3`に更新（オフラインでもこのページを開けるようにするため）。
+  - **品詞フィルタ・未習得のみ・ランダム再生・テストモード（2026-09-16追加）**: 独立ページ化した直後、ユーザーから「単語帳をさらによくするアイディアある？」と聞かれて提案し、4つとも実装した。
+    - **品詞フィルタ**（`words3000PosSel`）: 各単語データに元からある`pos`フィールドをそのまま使う。表示順は`POS_ORDER`（名詞・動詞・形容詞...の固定配列）で、データに存在する品詞だけを抽出して並べる（未知の品詞が増えても取りこぼさないよう、`POS_ORDER`に無いものは末尾に追加）。
+    - **未習得のみ**（`words3000UnlearnedBtn`）・**ランダム再生**（`words3000ShuffleBtn`、自動再生とテストモード両方の出題順に効く）: どちらもフレーズ帳側が関知しない、このページ専用の表示設定のため、共有の`phrasebook-settings`ではなく専用の`phrasebook-words3000-prefs`キー（品詞フィルタの選択値も含む）に保存している。**理由**: `phrasebook-settings`に混ぜると、`index.html`の`saveSettings()`が自分の知らないフィールドごと新しいオブジェクトで上書きして消してしまう（`saveSettings()`は既存値を読み込まず、自分のローカル変数だけから新しいオブジェクトを組み立てて書き込むため）。
+    - **範囲・品詞・検索・未習得のみの絞り込みを`words3000FilteredList()`に一本化**し、一覧表示・自動再生・テストモードの対象は必ずこの関数の結果を使う（絞り込みロジックの重複を避けるため）。
+    - **テストモード**（`words3000TestModeBtn`）: 意味を隠したフラッシュカードを1問ずつ出題し、「こたえを見る」→「✓わかった／❌もう一度」で自己採点する能動的な復習モード。「❌もう一度」は（既に✓が付いていても）`wordsLearned`から明示的に削除してから次へ進む。一覧用の`#words3000List`はテストモード中`hidden`にするだけでなく**中身も空にする**必要がある（`hidden`はDOM上に残るため、そのままだと同じ単語のカードが一覧側とテスト側の両方に存在してしまい、`.w3k-ja`等のクラスセレクタで2件ヒットする——Playwrightのstrict modeで実際に検出したバグ）。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -61,7 +66,7 @@ manifest.json          PWAマニフェスト
 sw.js                   Service Worker（オフラインシェルキャッシュのみ、v3）
 firestore.rules         Firestoreセキュリティルール
 tests/                  Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計264テスト
+playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計278テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 

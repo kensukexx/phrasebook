@@ -57,6 +57,11 @@
   .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .w3k-playbar{ display:flex; align-items:center; gap:8px; padding:0 0 10px; }
 
+  .w3k-optionrow{ display:flex; gap:8px; margin-bottom:14px; }
+  .chip-toggle{ flex:1; padding:9px 10px; border:1.5px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft);
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .chip-toggle.on{ background:var(--green); border-color:var(--green); color:#fff; }
+
   .searchwrap{ margin-bottom:6px; }
   .searchwrap input{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
 
@@ -85,6 +90,23 @@
   .w3k-ex-en{ font-size:13.5px; color:var(--ink); }
   .w3k-ex-kana{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
   .w3k-ex-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:3px; }
+
+  .w3k-testcard{ border:1.5px solid var(--line); border-radius:16px; padding:28px 20px; margin-bottom:14px; background:#fff; text-align:center; }
+  .w3k-testrank{ font-size:11px; color:var(--ink-soft); margin-bottom:6px; }
+  .w3k-testword{ font-size:28px; font-weight:900; color:var(--ink); }
+  .w3k-testpos{ font-size:12px; color:var(--ink-soft); margin-top:4px; }
+  .w3k-testkana{ font-size:14px; color:var(--ink-soft); margin-top:4px; }
+  .w3k-testcard .mini-btn{ margin:14px auto 0; width:36px; height:36px; font-size:16px; }
+  .w3k-testanswer{ margin-top:18px; padding-top:18px; border-top:1px dashed var(--line); text-align:left; }
+  .w3k-testbtns{ display:flex; gap:10px; margin-bottom:10px; }
+  .w3k-testbtns button{ flex:1; padding:13px; border:none; border-radius:12px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
+  #testShowBtn{ background:var(--ink); color:#fff; }
+  #testWrongBtn{ background:#fff; border:1.5px solid var(--red); color:var(--red); }
+  #testRightBtn{ background:var(--green); color:#fff; }
+  .w3k-testnav{ display:flex; gap:10px; justify-content:space-between; }
+  .w3k-testnav button{ flex:0 0 auto; padding:8px 14px; border:1.5px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; cursor:pointer; }
+  .w3k-testnav button:disabled{ opacity:0.4; cursor:default; }
+  .w3k-test-done{ text-align:center; padding:30px 10px; color:var(--ink-soft); }
 </style>
 </head>
 <body>
@@ -102,16 +124,26 @@
     <label>範囲</label>
     <select id="words3000TierSel"></select>
   </div>
+  <div class="field">
+    <label>品詞</label>
+    <select id="words3000PosSel"></select>
+  </div>
   <div class="w3k-playbar">
     <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
     <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
     <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
+    <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
+  </div>
+  <div class="w3k-optionrow">
+    <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
+    <button class="chip-toggle" id="words3000TestModeBtn" aria-label="テストモード">📝 テストモード</button>
   </div>
   <div class="searchwrap">
     <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索">
   </div>
   <p class="hint" id="words3000Progress" style="margin-bottom:10px;"></p>
   <div id="words3000List"></div>
+  <div id="words3000TestArea" hidden></div>
 </main>
 
 <script src="./words3000-data.js"></script>
@@ -170,6 +202,28 @@ async function saveSharedSetting(fields){
   await safeSet('phrasebook-settings', JSON.stringify({ ...current, ...fields }));
 }
 async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
+
+// --- このページ独自の表示設定（品詞フィルタ・未習得のみ・ランダム再生）。フレーズ帳本体は
+// 関知しない項目のため、共有のphrasebook-settingsとは別の専用キーに保存する（settings側に
+// 混ぜると、index.htmlのsaveSettings()が自分の知らないフィールドごと書き換えて消してしまう）。
+// テストモードかどうかは永続化しない（開くたびに一覧モードから始まる方がわかりやすいため）。 ---
+let unlearnedOnly = false;
+let shuffleListen = false;
+let testMode = false;
+async function loadW3kPrefs(){
+  let saved = {};
+  try{
+    const p = await store.get('phrasebook-words3000-prefs');
+    if(p && p.value) saved = JSON.parse(p.value);
+  }catch(e){}
+  unlearnedOnly = !!saved.unlearnedOnly;
+  shuffleListen = !!saved.shuffleListen;
+  return saved.posFilter || "";
+}
+async function saveW3kPrefs(){
+  const posFilter = document.getElementById("words3000PosSel").value;
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen }));
+}
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
 // このページでは英語(en-US)と日本語(ja-JP、聞き流し中の意味読み上げ用)の2言語しか
@@ -427,15 +481,42 @@ function populateWords3000TierSelect(){
   if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
 }
 
-function renderWords3000List(){
+// 品詞の並び順は、学習上よく目にする順（名詞・動詞・形容詞・副詞...）を優先。データに
+// 無い品詞は自動的に除外し、逆にこの並びに無い未知の品詞が将来増えても取りこぼさない。
+const POS_ORDER = ["名詞","動詞","形容詞","副詞","代名詞","前置詞","接続詞","数詞","助動詞","疑問詞","冠詞"];
+function populateWords3000PosSelect(initialValue){
+  const sel = document.getElementById("words3000PosSel");
+  const present = new Set(WORDS3000.map(w=>w.pos).filter(Boolean));
+  const ordered = POS_ORDER.filter(p=>present.has(p));
+  present.forEach(p=>{ if(!ordered.includes(p)) ordered.push(p); });
+  sel.innerHTML = '<option value="">すべての品詞</option>' + ordered.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  if(initialValue && ordered.includes(initialValue)) sel.value = initialValue;
+}
+
+// 範囲・品詞・検索・未習得のみ、すべての絞り込みを1箇所にまとめる。一覧表示・自動再生・
+// テストモードの対象リストは、すべてこの関数の結果をそのまま使う。
+function words3000FilteredList(){
   const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
   const tierTo = tierFrom + 499;
   const q = document.getElementById("words3000Search").value.trim().toLowerCase();
-  const wrap = document.getElementById("words3000List");
+  const pos = document.getElementById("words3000PosSel").value;
   let items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
-  if(q){
-    items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
+  if(pos) items = items.filter(w=>w.pos===pos);
+  if(q) items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
+  if(unlearnedOnly) items = items.filter(w=>!wordsLearned[w.word]);
+  return items;
+}
+function shuffleArray(arr){
+  for(let i=arr.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
   }
+  return arr;
+}
+
+function renderWords3000List(){
+  const wrap = document.getElementById("words3000List");
+  const items = words3000FilteredList();
   const doneCount = items.filter(w=>wordsLearned[w.word]).length;
   document.getElementById("words3000Progress").textContent = `覚えた ${doneCount} / ${items.length}`;
   if(items.length === 0){ wrap.innerHTML = '<p class="hint">該当する単語がありません。</p>'; return; }
@@ -493,7 +574,8 @@ function renderWords3000List(){
 
 // --- 自動再生（聞き流し）：フレーズ帳本体の聞き流しと同じ操作感を再現する独立版。
 // 速度(rate)・フレーズ間隔(listenGap)・ループ(listenLoop)・日本語読み上げ挟み込み(listenJaMode)は
-// `phrasebook-settings`を通じて同じ設定を共有し、対象は現在の範囲・検索絞り込みのみ。 ---
+// `phrasebook-settings`を通じて同じ設定を共有し、対象は現在の範囲・品詞・検索・未習得のみの
+// 絞り込み（words3000FilteredList()）。shuffleListenがONなら再生順もランダムにする。 ---
 let words3000ListenState = { active:false, list:[], index:0 };
 function updateWords3000ListenButton(){
   const btn = document.getElementById("words3000ListenBtn");
@@ -541,12 +623,9 @@ function playWords3000Step(){
   speakRaw(w.word, "en-US", null, afterMain);
 }
 function startWords3000Listening(){
-  const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
-  const tierTo = tierFrom + 499;
-  const q = document.getElementById("words3000Search").value.trim().toLowerCase();
-  let list = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
-  if(q){ list = list.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q)); }
+  let list = words3000FilteredList();
   if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認してください）"); return; }
+  if(shuffleListen) list = shuffleArray(list.slice());
   words3000ListenState = { active:true, list, index:0 };
   playWords3000Step();
 }
@@ -558,8 +637,131 @@ function stopWords3000Listening(){
   updateWords3000ListenButton();
 }
 
-document.getElementById("words3000TierSel").addEventListener("change", ()=>{ stopWords3000Listening(); renderWords3000List(); });
-document.getElementById("words3000Search").addEventListener("input", ()=>{ stopWords3000Listening(); renderWords3000List(); });
+// --- テストモード：意味を隠したフラッシュカードを1問ずつ出題し、タップで答え合わせをする
+// 能動的な復習モード。「✓ わかった」は覚えた扱いに、「❌ もう一度」は未習得のまま
+// （既に覚えた✓が付いていても外す）にしてから次の問題に進む。対象は一覧と同じ絞り込み結果。 ---
+let testState = { list:[], index:0, revealed:false };
+function setWords3000Mode(mode){
+  testMode = (mode === 'test');
+  document.getElementById("words3000TestModeBtn").classList.toggle("on", testMode);
+  document.getElementById("words3000List").hidden = testMode;
+  document.getElementById("words3000Progress").hidden = testMode;
+  document.getElementById("words3000TestArea").hidden = !testMode;
+  if(testMode){
+    // hidden属性は視覚的に隠すだけでDOMには残るため、そのままだと一覧側の.w3k-ja等が
+    // テストモード側の同名クラスと衝突する（同じ単語なら文面まで一致し得るため見た目では
+    // 気づきにくい）。テスト対象に入る前に空にしておく。
+    document.getElementById("words3000List").innerHTML = "";
+    startTestMode();
+  } else {
+    stopWords3000Listening();
+    renderWords3000List();
+  }
+}
+function startTestMode(){
+  stopWords3000Listening();
+  let list = words3000FilteredList();
+  if(shuffleListen) list = shuffleArray(list.slice());
+  testState = { list, index:0, revealed:false };
+  renderTestCard(true);
+}
+function renderTestCard(autoSpeak){
+  const area = document.getElementById("words3000TestArea");
+  if(testState.list.length === 0){
+    area.innerHTML = '<p class="hint w3k-test-done">該当する単語がありません（範囲・検索・品詞の条件を確認してください）。</p>';
+    return;
+  }
+  if(testState.index >= testState.list.length){
+    area.innerHTML = `<div class="w3k-test-done">🎉 このセット（${testState.list.length}語）のテストが終わりました。
+      <div class="w3k-testnav" style="justify-content:center; margin-top:14px;">
+        <button id="testRestartBtn">もう一度</button>
+      </div>
+    </div>`;
+    document.getElementById("testRestartBtn").addEventListener("click", ()=>{ testState.index = 0; renderTestCard(true); });
+    return;
+  }
+  const w = testState.list[testState.index];
+  const isLearned = !!wordsLearned[w.word];
+  area.innerHTML = `
+    <p class="hint">${testState.index+1} / ${testState.list.length}</p>
+    <div class="w3k-testcard">
+      <div class="w3k-testrank">rank ${w.rank}</div>
+      <div class="w3k-testword">${esc(w.word)}</div>
+      <div class="w3k-testpos">${esc(w.pos||"")}</div>
+      <div class="w3k-testkana">${esc(w.kana)}</div>
+      <button class="mini-btn ${isLearned?'done':''}" id="testSpeakBtn" aria-label="発音を聞く">🔊</button>
+      ${testState.revealed ? `
+      <div class="w3k-testanswer">
+        <div class="w3k-ja">${esc(w.ja)}</div>
+        <div class="w3k-ex">
+          <div class="w3k-ex-text">
+            <div class="w3k-ex-en">${esc(w.ex.en)}</div>
+            <div class="w3k-ex-kana">${esc(w.ex.kana)}</div>
+            <div class="w3k-ex-ja">${esc(w.ex.ja)}</div>
+          </div>
+        </div>
+      </div>` : ''}
+    </div>
+    <div class="w3k-testbtns">
+      ${testState.revealed
+        ? '<button id="testWrongBtn">❌ もう一度</button><button id="testRightBtn">✓ わかった</button>'
+        : '<button id="testShowBtn">こたえを見る</button>'}
+    </div>
+    <div class="w3k-testnav">
+      <button id="testPrevBtn" ${testState.index===0 ? 'disabled' : ''}>← 前へ</button>
+      <button id="testNextBtn">スキップ →</button>
+    </div>
+  `;
+  document.getElementById("testSpeakBtn").addEventListener("click", (e)=> speakRaw(w.word, "en-US", e.currentTarget, null));
+  if(testState.revealed){
+    document.getElementById("testWrongBtn").addEventListener("click", ()=>{
+      delete wordsLearned[w.word];
+      saveWordsLearned();
+      testState.index++; testState.revealed = false;
+      renderTestCard(true);
+    });
+    document.getElementById("testRightBtn").addEventListener("click", ()=>{
+      wordsLearned[w.word] = true;
+      saveWordsLearned();
+      testState.index++; testState.revealed = false;
+      renderTestCard(true);
+    });
+  } else {
+    document.getElementById("testShowBtn").addEventListener("click", ()=>{
+      testState.revealed = true;
+      renderTestCard(false);
+    });
+  }
+  document.getElementById("testPrevBtn").addEventListener("click", ()=>{
+    if(testState.index > 0){ testState.index--; testState.revealed = false; renderTestCard(true); }
+  });
+  document.getElementById("testNextBtn").addEventListener("click", ()=>{
+    testState.index++; testState.revealed = false; renderTestCard(true);
+  });
+  if(autoSpeak){ speakRaw(w.word, "en-US", document.getElementById("testSpeakBtn"), null); }
+}
+
+function onWords3000FiltersChanged(){
+  if(testMode){ startTestMode(); } else { stopWords3000Listening(); renderWords3000List(); }
+}
+
+document.getElementById("words3000TierSel").addEventListener("change", onWords3000FiltersChanged);
+document.getElementById("words3000Search").addEventListener("input", onWords3000FiltersChanged);
+document.getElementById("words3000PosSel").addEventListener("change", ()=>{ saveW3kPrefs(); onWords3000FiltersChanged(); });
+document.getElementById("words3000UnlearnedBtn").addEventListener("click", (e)=>{
+  unlearnedOnly = !unlearnedOnly;
+  e.currentTarget.classList.toggle("on", unlearnedOnly);
+  saveW3kPrefs();
+  onWords3000FiltersChanged();
+});
+document.getElementById("words3000ShuffleBtn").addEventListener("click", (e)=>{
+  shuffleListen = !shuffleListen;
+  e.currentTarget.classList.toggle("on", shuffleListen);
+  saveW3kPrefs();
+});
+document.getElementById("words3000TestModeBtn").addEventListener("click", ()=>{
+  setWords3000Mode(testMode ? 'list' : 'test');
+});
 document.getElementById("words3000ListenBtn").addEventListener("click", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); else startWords3000Listening(); });
 document.getElementById("words3000RateBtn").addEventListener("click", ()=>{
   const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
@@ -577,9 +779,13 @@ document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
 
 (async function init(){
   await loadState();
+  const savedPos = await loadW3kPrefs();
   document.getElementById("words3000RateBtn").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
   document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
+  document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
+  document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
   populateWords3000TierSelect();
+  populateWords3000PosSelect(savedPos);
   renderWords3000List();
   updateWords3000ListenButton();
 
