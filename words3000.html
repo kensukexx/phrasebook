@@ -1,0 +1,592 @@
+<!--
+  ツウジル (Tsujiru) - 英単語3000
+  Copyright (c) 2026 kensukexx. All rights reserved.
+
+  無断複製・転載・改変配布を禁じます。
+  本ソースコードおよび収録データ（単語・例文等）の著作権は作者に帰属します。
+  個人利用目的での本サイト（https://kensukexx.github.io/phrasebook/）上での使用のみ許可します。
+
+  Unauthorized copying, modification, or redistribution of this source code
+  or its data is strictly prohibited. See LICENSE for details.
+-->
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#FF6B6B">
+<meta name="referrer" content="no-referrer">
+<title>英単語3000 — ツウジル</title>
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="英単語3000">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #FFF9F2; --ink: #2F3542; --ink-soft: #8395A7; --red: #FF6B6B; --blue: #4D96FF; --gold: #FFA502; --green: #20BF6B; --line: rgba(47,53,66,0.12);
+  }
+  *{box-sizing:border-box;}
+  html{ background:#EAE3D8; }
+  body{ margin:0 auto; max-width:640px; background: var(--paper);
+    background-image: radial-gradient(rgba(255,107,107,0.07) 1.5px, transparent 1.5px);
+    background-size: 22px 22px;
+    color:var(--ink); font-family:"Zen Maru Gothic","Noto Sans JP", sans-serif; min-height:100vh; padding-bottom:40px;
+    box-shadow: 0 0 40px rgba(0,0,0,0.08); }
+  header{ position:relative; background: linear-gradient(135deg, #FF6B6B 0%, #FF9F43 70%, #FEC84D 100%); color:#fff; padding:18px 20px 22px; overflow:hidden; }
+  header::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:7px;
+    background: linear-gradient(90deg, #FF6B6B, #F7B731, #20BF6B, #0FB9B1, #4D96FF, #A55EEA, #FF6FA5); }
+  .headtop{ display:flex; align-items:center; gap:12px; }
+  .icon-btn{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:none;
+    background:rgba(255,255,255,0.25); color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; text-decoration:none; }
+  .icon-btn:active{ transform:scale(0.94); }
+  h1{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:900; font-size:clamp(20px,6vw,26px); margin:0; letter-spacing:.02em; text-shadow:0 2px 0 rgba(0,0,0,0.08); }
+  header p.sub{ margin:6px 0 0 52px; font-size:12.5px; color:rgba(255,255,255,0.92); }
+
+  main{ padding:16px 16px 28px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
+  .field select{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
+  .hint{ font-size:12px; color:var(--ink-soft); margin-top:4px; line-height:1.5; }
+
+  .filter-icon{ flex:0 0 auto; width:38px; height:34px; border-radius:12px; border:none; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer; box-shadow:0 2px 8px rgba(47,53,66,0.08); }
+  .rate-quick{ flex:0 0 auto; width:auto; padding:0 10px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:12.5px; }
+  .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
+  .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
+  .w3k-playbar{ display:flex; align-items:center; gap:8px; padding:0 0 10px; }
+
+  .searchwrap{ margin-bottom:6px; }
+  .searchwrap input{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
+
+  .mini-btn{ width:24px; height:24px; border-radius:50%; border:1.5px solid var(--line); background:transparent; color:var(--ink-soft);
+    font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+  .mini-btn.done{ background:var(--green); border-color:var(--green); color:var(--paper); }
+  .mini-btn.playing{ background:var(--red); border-color:var(--red); color:var(--paper); }
+
+  .w3k-card{ border:1.5px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; background:#fff; }
+  .w3k-card.learned{ border-color:var(--green); }
+  .w3k-card.now-playing{ box-shadow:0 0 0 3px rgba(255,107,107,0.5), 0 4px 16px rgba(47,53,66,0.12); }
+  .w3k-front{ display:flex; align-items:center; gap:10px; cursor:pointer; }
+  .w3k-rank{ flex:0 0 auto; width:30px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-soft); }
+  .w3k-word-wrap{ flex:1; min-width:0; }
+  .w3k-word{ font-size:17px; font-weight:700; color:var(--ink); }
+  .w3k-pos{ font-size:11px; color:var(--ink-soft); margin-left:6px; }
+  .w3k-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
+  .w3k-ja-front{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; color:var(--ink); margin-top:3px; }
+  .w3k-btns{ flex:0 0 auto; display:flex; gap:6px; align-items:center; }
+  .w3k-btns .mini-btn.done{ background:var(--green); color:#fff; border-color:var(--green); }
+  .w3k-back{ display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .w3k-card.revealed .w3k-back{ display:block; }
+  .w3k-ja{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:15px; color:var(--ink); margin-bottom:8px; }
+  .w3k-ex{ display:flex; align-items:flex-start; gap:8px; }
+  .w3k-ex-text{ flex:1; min-width:0; }
+  .w3k-ex-en{ font-size:13.5px; color:var(--ink); }
+  .w3k-ex-kana{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .w3k-ex-ja{ font-size:12.5px; color:var(--ink-soft); margin-top:3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headtop">
+    <a class="icon-btn" href="./index.html" aria-label="フレーズ帳に戻る">←</a>
+    <h1>📚 英単語3000</h1>
+  </div>
+  <p class="sub">日常会話の9割をカバーすると言われる頻出語を、使用頻度順に学べます。</p>
+</header>
+
+<main>
+  <div class="field">
+    <label>範囲</label>
+    <select id="words3000TierSel"></select>
+  </div>
+  <div class="w3k-playbar">
+    <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
+    <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
+    <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
+  </div>
+  <div class="searchwrap">
+    <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索">
+  </div>
+  <p class="hint" id="words3000Progress" style="margin-bottom:10px;"></p>
+  <div id="words3000List"></div>
+</main>
+
+<script src="./words3000-data.js"></script>
+<script>
+// --- localStorageの薄いラッパー。index.html（フレーズ帳本体）と同一オリジン・同一キーを
+// 直接読み書きすることで、Firebase同期を含む状態をこのページ単独でも共有する。 ---
+const store = {
+  async get(key){ const v = localStorage.getItem(key); return v===null ? null : { value:v }; },
+  async set(key, value){ localStorage.setItem(key, value); }
+};
+async function safeSet(key, value){
+  for(let attempt=0; attempt<2; attempt++){
+    try{ await store.set(key, value); return; }
+    catch(e){
+      if(attempt===0){ await new Promise(r=>setTimeout(r,300)); }
+      else{ console.error("storage save failed after retry:", key, e); }
+    }
+  }
+}
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+
+// --- 設定：フレーズ帳本体と同じ`phrasebook-settings`を共有する。このページが使うのは
+// rate/listenLoop/listenJaMode/listenGapのみだが、書き込み時は他のフィールド（fsScale等、
+// フレーズ帳側が使う設定）を壊さないよう、必ず読み込み→該当フィールドだけ上書き→書き込む。 ---
+let rate = 1.0;
+let listenLoop = false;
+let listenJaMode = false;
+let listenGap = 450;
+let geminiApiKey = "";
+let wordsLearned = {};
+const RATE_QUICK_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+
+async function loadState(){
+  try{
+    const s = await store.get('phrasebook-settings');
+    if(s && s.value){
+      const p = JSON.parse(s.value);
+      rate = p.rate || 1.0;
+      listenLoop = !!p.listenLoop;
+      listenJaMode = !!p.listenJaMode;
+      listenGap = (p.listenGap !== undefined) ? p.listenGap : 450;
+      geminiApiKey = p.geminiApiKey || "";
+    }
+  }catch(e){}
+  try{
+    const wl = await store.get('phrasebook-words-learned');
+    if(wl && wl.value){ wordsLearned = JSON.parse(wl.value); }
+  }catch(e){}
+}
+async function saveSharedSetting(fields){
+  let current = {};
+  try{
+    const s = await store.get('phrasebook-settings');
+    if(s && s.value) current = JSON.parse(s.value);
+  }catch(e){}
+  await safeSet('phrasebook-settings', JSON.stringify({ ...current, ...fields }));
+}
+async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
+
+// --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
+// このページでは英語(en-US)と日本語(ja-JP、聞き流し中の意味読み上げ用)の2言語しか
+// 使わないため、フレーズ帳本体のLANGS/voiceMap/pickVoice(langKey)による多言語対応は
+// 持ち込まず、pickVoiceByPrefixだけを使う簡略版にしている。 ---
+let synth = window.speechSynthesis;
+let availableVoices = [];
+function refreshVoices(){ availableVoices = synth ? synth.getVoices() : []; }
+if(synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; }
+
+let currentUtter = null;
+let currentTTSAudio = null;
+let currentPlayingBtn = null;
+
+function voiceQualityScore(v){
+  const n = v.name.toLowerCase();
+  let s = 0;
+  if(n.includes("natural")) s += 5;
+  if(n.includes("neural")) s += 5;
+  if(n.includes("online")) s += 4;
+  if(n.includes("premium")) s += 4;
+  if(n.includes("enhanced")) s += 3;
+  if(n.includes("google")) s += 2;
+  if(n.includes("compact")) s -= 3;
+  if(n.includes("microsoft") && n.includes("desktop")) s -= 1;
+  return s;
+}
+function pickVoiceByPrefix(prefix){
+  const candidates = availableVoices.filter(v=>v.lang && v.lang.toLowerCase().startsWith(prefix));
+  if(candidates.length===0) return null;
+  return candidates.slice().sort((a,b)=>voiceQualityScore(b)-voiceQualityScore(a))[0];
+}
+
+function splitForTTS(text, maxLen){
+  if(text.length <= maxLen) return [text];
+  const parts = [];
+  let remaining = text.trim();
+  while(remaining.length > maxLen){
+    let cut = remaining.lastIndexOf(' ', maxLen);
+    if(cut <= 0) cut = maxLen;
+    parts.push(remaining.slice(0, cut));
+    remaining = remaining.slice(cut).trim();
+  }
+  if(remaining) parts.push(remaining);
+  return parts;
+}
+
+const GOOGLE_TTS_URL_BUILDERS = [
+  (q, tl) => "https://translate.google.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(tl) + "&client=tw-ob&q=" + encodeURIComponent(q),
+  (q, tl) => "https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=" + encodeURIComponent(tl) + "&client=gtx&q=" + encodeURIComponent(q),
+];
+
+function playGoogleTTS(text, ttsLang, rateVal){
+  return new Promise((resolve, reject)=>{
+    const chunks = splitForTTS(text, 180);
+    const audio = new Audio();
+    currentTTSAudio = audio;
+    let idx = 0;
+    let hostIdx = 0;
+    let settled = false;
+    let hangTimer = null;
+    const clearHangTimer = ()=>{ if(hangTimer){ clearTimeout(hangTimer); hangTimer = null; } };
+    const fail = ()=>{
+      clearHangTimer();
+      const err = new Error("google tts playback failed");
+      err.remainingText = chunks.slice(Math.max(idx - 1, 0)).join(" ");
+      releaseAudioResources(audio);
+      reject(err);
+    };
+    const loadChunk = ()=>{
+      settled = false;
+      const url = GOOGLE_TTS_URL_BUILDERS[hostIdx](chunks[idx - 1], ttsLang);
+      audio.src = url;
+      audio.playbackRate = rateVal || 1;
+      audio.play().catch(onChunkError);
+      clearHangTimer();
+      hangTimer = setTimeout(()=>{ if(!settled) onChunkError(); }, 8000);
+    };
+    const onChunkError = ()=>{
+      if(settled) return;
+      settled = true;
+      clearHangTimer();
+      if(hostIdx + 1 < GOOGLE_TTS_URL_BUILDERS.length){
+        hostIdx++;
+        setTimeout(()=>{
+          if(currentTTSAudio !== audio) return;
+          loadChunk();
+        }, 400);
+      } else {
+        fail();
+      }
+    };
+    const playNext = ()=>{
+      settled = true;
+      clearHangTimer();
+      if(idx >= chunks.length){ releaseAudioResources(audio); resolve(); return; }
+      idx++;
+      hostIdx = 0;
+      loadChunk();
+    };
+    audio.onended = playNext;
+    audio.onerror = onChunkError;
+    playNext();
+  });
+}
+
+function releaseAudioResources(audio){
+  audio.removeAttribute("src");
+  audio.load();
+}
+
+function pcm16ToWavBlob(base64Pcm, sampleRate, numChannels){
+  const binary = atob(base64Pcm);
+  const pcmBytes = new Uint8Array(binary.length);
+  for(let i=0; i<binary.length; i++) pcmBytes[i] = binary.charCodeAt(i);
+  const bytesPerSample = 2;
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const dataSize = pcmBytes.length;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str)=>{ for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); };
+  writeStr(0, "RIFF"); view.setUint32(4, 36 + dataSize, true); writeStr(8, "WAVE");
+  writeStr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true); view.setUint16(32, blockAlign, true); view.setUint16(34, 16, true);
+  writeStr(36, "data"); view.setUint32(40, dataSize, true);
+  new Uint8Array(buffer, 44).set(pcmBytes);
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+async function playGeminiTTS(text, rateVal){
+  const chunks = splitForTTS(text, 400);
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=" + encodeURIComponent(geminiApiKey);
+  const audio = new Audio();
+  currentTTSAudio = audio;
+  for(let i=0; i<chunks.length; i++){
+    const chunk = chunks[i];
+    try {
+      const abortController = new AbortController();
+      const abortTimer = setTimeout(()=> abortController.abort(), 8000);
+      let res;
+      try {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: chunk }] }],
+            generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } },
+          }),
+          signal: abortController.signal,
+        });
+      } finally {
+        clearTimeout(abortTimer);
+      }
+      if(!res.ok) throw new Error("gemini tts failed: " + res.status);
+      const data = await res.json();
+      const part = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0];
+      const b64 = part && part.inlineData && part.inlineData.data;
+      if(!b64) throw new Error("gemini tts: no audio data in response");
+      const blob = pcm16ToWavBlob(b64, 24000, 1);
+      const blobUrl = URL.createObjectURL(blob);
+      await new Promise((resolve, reject)=>{
+        audio.src = blobUrl;
+        audio.playbackRate = rateVal || 1;
+        audio.onended = ()=>{ URL.revokeObjectURL(blobUrl); resolve(); };
+        audio.onerror = ()=>{ URL.revokeObjectURL(blobUrl); reject(new Error("gemini tts playback failed")); };
+        audio.play().catch(reject);
+      });
+    } catch(e){
+      e.remainingText = chunks.slice(i).join(" ");
+      releaseAudioResources(audio);
+      throw e;
+    }
+  }
+  releaseAudioResources(audio);
+}
+
+function stopAllAudio(){
+  if(synth) synth.cancel();
+  if(currentTTSAudio){
+    currentTTSAudio.onended = null;
+    currentTTSAudio.onerror = null;
+    currentTTSAudio.pause();
+    releaseAudioResources(currentTTSAudio);
+    currentTTSAudio = null;
+  }
+  if(currentPlayingBtn){
+    currentPlayingBtn.classList.remove("playing");
+    currentPlayingBtn = null;
+  }
+}
+
+function speakViaBrowserTTS(text, speechLang, rateVal, finish, notifyIfUnsupported){
+  if(!synth){
+    if(notifyIfUnsupported) alert("この端末・ブラウザは音声合成（読み上げ）に対応していないようです。SafariやChromeなど別のブラウザでお試しください。");
+    finish();
+    return;
+  }
+  const utter = new SpeechSynthesisUtterance(text);
+  currentUtter = utter;
+  const voice = pickVoiceByPrefix(speechLang.split('-')[0].toLowerCase());
+  if(voice) utter.voice = voice;
+  utter.lang = speechLang;
+  utter.rate = rateVal;
+  utter.onend = finish;
+  utter.onerror = finish;
+  synth.speak(utter);
+}
+
+function ttsLangFor(speechLang){
+  return speechLang.toLowerCase().startsWith("ja") ? "ja" : "en";
+}
+
+function speakRaw(text, speechLang, btn, onDone, rateOverride){
+  stopAllAudio();
+  text = text.replace(/~/g, " ").replace(/\s+/g, " ").trim();
+  const isJapanese = speechLang.toLowerCase().startsWith("ja");
+  const rateVal = rateOverride || rate;
+  if(btn){ btn.classList.add("playing"); currentPlayingBtn = btn; }
+  const finish = ()=>{
+    if(btn) btn.classList.remove("playing");
+    if(currentPlayingBtn === btn) currentPlayingBtn = null;
+    if(onDone) onDone();
+  };
+  const ttsLang = ttsLangFor(speechLang);
+  const viaDevice = (t)=> speakViaBrowserTTS(t || text, speechLang, rateVal, finish, !!btn);
+  const viaGeminiThenDevice = (err)=>{
+    const remaining = (err && err.remainingText) || text;
+    if(geminiApiKey && navigator.onLine !== false){
+      playGeminiTTS(remaining, rateVal).then(finish).catch((e)=> viaDevice((e && e.remainingText) || remaining));
+    } else {
+      viaDevice(remaining);
+    }
+  };
+  if(navigator.onLine !== false){
+    playGoogleTTS(text, ttsLang, rateVal).then(finish).catch(viaGeminiThenDevice);
+  } else {
+    viaGeminiThenDevice();
+  }
+}
+
+// --- 範囲（ティア）：WORDS3000の実際の最大rankから動的に500語ずつのティア数を計算するため、
+// バッチを追加していってもUI側の変更は不要。 ---
+function words3000TierRanges(){
+  const maxRank = WORDS3000.reduce((m,w)=>Math.max(m,w.rank), 0);
+  const tierSize = 500;
+  const tierCount = Math.max(1, Math.ceil(maxRank / tierSize));
+  return Array.from({length:tierCount}, (_,i)=>({from:i*tierSize+1, to:(i+1)*tierSize}));
+}
+function populateWords3000TierSelect(){
+  const sel = document.getElementById("words3000TierSel");
+  const prev = sel.value;
+  sel.innerHTML = words3000TierRanges().map(r=>`<option value="${r.from}">${r.from}〜${r.to}語</option>`).join('');
+  if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+
+function renderWords3000List(){
+  const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
+  const tierTo = tierFrom + 499;
+  const q = document.getElementById("words3000Search").value.trim().toLowerCase();
+  const wrap = document.getElementById("words3000List");
+  let items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+  if(q){
+    items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
+  }
+  const doneCount = items.filter(w=>wordsLearned[w.word]).length;
+  document.getElementById("words3000Progress").textContent = `覚えた ${doneCount} / ${items.length}`;
+  if(items.length === 0){ wrap.innerHTML = '<p class="hint">該当する単語がありません。</p>'; return; }
+  wrap.innerHTML = items.map(w=>{
+    const isLearned = !!wordsLearned[w.word];
+    return `<div class="w3k-card ${isLearned?'learned':''}" data-word="${esc(w.word)}">
+      <div class="w3k-front">
+        <span class="w3k-rank">${w.rank}</span>
+        <span class="w3k-word-wrap">
+          <span class="w3k-word">${esc(w.word)}</span><span class="w3k-pos">${esc(w.pos||"")}</span>
+          <div class="w3k-kana">${esc(w.kana)}</div>
+          <div class="w3k-ja-front">${esc(w.ja)}</div>
+        </span>
+        <span class="w3k-btns">
+          <button class="mini-btn ${isLearned?'done':''}" aria-label="覚えた" data-role="learn">✓</button>
+          <button class="mini-btn" aria-label="発音を聞く" data-role="speak-word">🔊</button>
+        </span>
+      </div>
+      <div class="w3k-back">
+        <div class="w3k-ja">${esc(w.ja)}</div>
+        <div class="w3k-ex">
+          <div class="w3k-ex-text">
+            <div class="w3k-ex-en">${esc(w.ex.en)}</div>
+            <div class="w3k-ex-kana">${esc(w.ex.kana)}</div>
+            <div class="w3k-ex-ja">${esc(w.ex.ja)}</div>
+          </div>
+          <button class="mini-btn" aria-label="例文の発音を聞く" data-role="speak-ex">🔊</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  wrap.querySelectorAll('.w3k-card').forEach(card=>{
+    const w = WORDS3000.find(x=>x.word===card.dataset.word);
+    card.querySelector('.w3k-front').addEventListener('click', (e)=>{
+      if(e.target.closest('[data-role]')) return;
+      card.classList.toggle('revealed');
+      speakRaw(w.word, "en-US", card.querySelector('[data-role="speak-word"]'), null);
+    });
+    card.querySelector('[data-role="speak-word"]').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      speakRaw(w.word, "en-US", e.currentTarget, null);
+    });
+    card.querySelector('[data-role="speak-ex"]').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      speakRaw(w.ex.en, "en-US", e.currentTarget, null);
+    });
+    card.querySelector('[data-role="learn"]').addEventListener('click', (e)=>{
+      e.stopPropagation();
+      if(wordsLearned[w.word]) delete wordsLearned[w.word]; else wordsLearned[w.word] = true;
+      saveWordsLearned();
+      renderWords3000List();
+    });
+  });
+}
+
+// --- 自動再生（聞き流し）：フレーズ帳本体の聞き流しと同じ操作感を再現する独立版。
+// 速度(rate)・フレーズ間隔(listenGap)・ループ(listenLoop)・日本語読み上げ挟み込み(listenJaMode)は
+// `phrasebook-settings`を通じて同じ設定を共有し、対象は現在の範囲・検索絞り込みのみ。 ---
+let words3000ListenState = { active:false, list:[], index:0 };
+function updateWords3000ListenButton(){
+  const btn = document.getElementById("words3000ListenBtn");
+  if(words3000ListenState.active){
+    btn.textContent = "■";
+    btn.title = `再生中 ${words3000ListenState.index+1}/${words3000ListenState.list.length}`;
+    btn.classList.add("listen-on");
+  }else{
+    btn.textContent = "▶";
+    btn.title = "この範囲を自動再生";
+    btn.classList.remove("listen-on");
+  }
+}
+function highlightWords3000Playing(word){
+  document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
+  const el = document.querySelector(`.w3k-card[data-word="${CSS.escape(word)}"]`);
+  if(el){ el.classList.add("now-playing"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
+}
+function playWords3000Step(){
+  if(!words3000ListenState.active) return;
+  if(words3000ListenState.index >= words3000ListenState.list.length){
+    if(listenLoop){ words3000ListenState.index = 0; } else { stopWords3000Listening(); return; }
+  }
+  const w = words3000ListenState.list[words3000ListenState.index];
+  highlightWords3000Playing(w.word);
+  updateWords3000ListenButton();
+  const goNext = ()=>{
+    if(!words3000ListenState.active) return;
+    setTimeout(()=>{
+      words3000ListenState.index++;
+      playWords3000Step();
+    }, listenGap);
+  };
+  const afterMain = ()=>{
+    if(!words3000ListenState.active) return;
+    if(listenJaMode){
+      setTimeout(()=>{
+        if(!words3000ListenState.active) return;
+        speakRaw(w.ja, "ja-JP", null, goNext);
+      }, Math.min(listenGap, 350));
+    } else {
+      goNext();
+    }
+  };
+  speakRaw(w.word, "en-US", null, afterMain);
+}
+function startWords3000Listening(){
+  const tierFrom = parseInt(document.getElementById("words3000TierSel").value, 10) || 1;
+  const tierTo = tierFrom + 499;
+  const q = document.getElementById("words3000Search").value.trim().toLowerCase();
+  let list = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+  if(q){ list = list.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q)); }
+  if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認してください）"); return; }
+  words3000ListenState = { active:true, list, index:0 };
+  playWords3000Step();
+}
+function stopWords3000Listening(){
+  if(!words3000ListenState.active) return;
+  words3000ListenState.active = false;
+  stopAllAudio();
+  document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
+  updateWords3000ListenButton();
+}
+
+document.getElementById("words3000TierSel").addEventListener("change", ()=>{ stopWords3000Listening(); renderWords3000List(); });
+document.getElementById("words3000Search").addEventListener("input", ()=>{ stopWords3000Listening(); renderWords3000List(); });
+document.getElementById("words3000ListenBtn").addEventListener("click", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); else startWords3000Listening(); });
+document.getElementById("words3000RateBtn").addEventListener("click", ()=>{
+  const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
+  rate = next;
+  const label = rate.toFixed(2).replace(/0$/,'') + "x";
+  document.getElementById("words3000RateBtn").textContent = label;
+  if(currentTTSAudio) currentTTSAudio.playbackRate = rate;
+  saveSharedSetting({ rate });
+});
+document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
+  listenLoop = !listenLoop;
+  e.currentTarget.classList.toggle("on", listenLoop);
+  saveSharedSetting({ listenLoop });
+});
+
+(async function init(){
+  await loadState();
+  document.getElementById("words3000RateBtn").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
+  document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
+  populateWords3000TierSelect();
+  renderWords3000List();
+  updateWords3000ListenButton();
+
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>

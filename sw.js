@@ -10,8 +10,8 @@
 // 特有の挙動）。つまりこの横取り自体が、キャッシュの恩恵と引き換えに再生失敗を招きうる状態だった。
 // <audio src>からの直接リクエスト（このservice workerが一切関与しない経路）は安定して成功するため、
 // translate_tts宛てのリクエストは他の外部APIと同様、素通しに戻している。
-const CACHE_NAME = "phrasebook-shell-v2";
-const SHELL_FILES = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png"];
+const CACHE_NAME = "phrasebook-shell-v3";
+const SHELL_FILES = ["./", "./index.html", "./words3000.html", "./words3000-data.js", "./manifest.json", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", (event) => {
   // cache: "reload" でブラウザのHTTPキャッシュを無視して必ずオリジンから取得する。
