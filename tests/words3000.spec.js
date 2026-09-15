@@ -33,6 +33,8 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     await expect(card).toHaveClass(/revealed/);
     await expect(card.locator('.w3k-ja')).toHaveText('その、あの（定冠詞）');
     await expect(card.locator('.w3k-ex-en')).toHaveText('I saw the movie.');
+    // word-by-word gloss for the example sentence, same "word(meaning)" format/display as the main phrasebook's gloss feature
+    await expect(card.locator('.w3k-ex-gloss .gloss-line')).toHaveText('🔤 I(私は) saw(見た) the(その、あの（定冠詞）) movie(映画).');
 
     await card.locator('.w3k-front').click();
     await expect(card).not.toHaveClass(/revealed/);
@@ -288,6 +290,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#testShowBtn');
       await expect(page.locator('.w3k-ja')).toHaveText('水');
       await expect(page.locator('.w3k-ex-en')).toHaveText('Can I have some water, please?');
+      await expect(page.locator('.w3k-ex-gloss .gloss-line')).toHaveText('🔤 Can(〜できる) I(私は) have(持っている) some(いくつかの) water(水), please(喜ばせる)?');
       await expect(page.locator('#testShowBtn')).toHaveCount(0);
       await expect(page.locator('#testWrongBtn')).toBeVisible();
       await expect(page.locator('#testRightBtn')).toBeVisible();
