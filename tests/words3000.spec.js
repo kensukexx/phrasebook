@@ -278,6 +278,60 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('英語/日本語のくり返し回数（自動再生）', () => {
+    test('plays English enReps times, then Japanese jaReps times, in that order, per word', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.fill('#words3000Search', 'water'); // exactly one match, keeps the request order unambiguous
+
+      await page.selectOption('#words3000EnRepsSel', '2');
+      await page.selectOption('#words3000JaRepsSel', '1');
+
+      const requests = [];
+      page.on('request', req => {
+        if (req.url().includes('translate_tts')) {
+          const u = new URL(req.url());
+          requests.push(`${u.searchParams.get('tl')}:${u.searchParams.get('q')}`);
+        }
+      });
+
+      await page.click('#words3000ListenBtn');
+      // only one word in range and loop is off, so playback finishes on its own
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶', { timeout: 10000 });
+
+      // Collapse consecutive duplicates into "runs" rather than asserting an exact request
+      // count: the mocked <audio> occasionally re-requests the same URL under headless
+      // Chromium's autoplay handling, but that's an artifact of the mock, not of the app's
+      // playback logic. What actually matters here is (a) English is played entirely before
+      // Japanese (not alternated en/ja/en/ja), and (b) English's run is twice as long as
+      // Japanese's, matching enReps:jaReps = 2:1.
+      const runs = [];
+      for (const r of requests) {
+        if (runs.length === 0 || runs[runs.length - 1].value !== r) runs.push({ value: r, count: 1 });
+        else runs[runs.length - 1].count++;
+      }
+      expect(runs.map(r => r.value)).toEqual(['en:water', 'ja:水']);
+      expect(runs[0].count).toBe(runs[1].count * 2);
+    });
+
+    test('the selected counts persist across reload via the words3000-only prefs key', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await page.selectOption('#words3000EnRepsSel', '3');
+      await page.selectOption('#words3000JaRepsSel', '2');
+      const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
+      expect(prefs.enReps).toBe(3);
+      expect(prefs.jaReps).toBe(2);
+
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000EnRepsSel')).toHaveValue('3');
+      await expect(page.locator('#words3000JaRepsSel')).toHaveValue('2');
+    });
+  });
+
   test.describe('テストモード（意味を隠して自己採点するフラッシュカード）', () => {
     test('shows the word without its meaning until "こたえを見る" is tapped', async ({ page }) => {
       await mockGoogleTTS(page);

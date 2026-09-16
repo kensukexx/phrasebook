@@ -57,6 +57,10 @@
   .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .w3k-playbar{ display:flex; align-items:center; gap:8px; padding:0 0 10px; }
 
+  .w3k-repeatrow{ display:flex; align-items:center; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
+  .w3k-repeatrow label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
+  .w3k-repeatrow select{ padding:6px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:13px; color:var(--ink); }
+
   .w3k-optionrow{ display:flex; gap:8px; margin-bottom:14px; }
   .chip-toggle{ flex:1; padding:9px 10px; border:1.5px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft);
     font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; font-weight:700; cursor:pointer; }
@@ -136,6 +140,20 @@
     <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
     <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
   </div>
+  <div class="w3k-repeatrow">
+    <label for="words3000EnRepsSel">英語</label>
+    <select id="words3000EnRepsSel">
+      <option value="1">×1</option>
+      <option value="2">×2</option>
+      <option value="3">×3</option>
+    </select>
+    <label for="words3000JaRepsSel">日本語</label>
+    <select id="words3000JaRepsSel">
+      <option value="0">なし</option>
+      <option value="1">×1</option>
+      <option value="2">×2</option>
+    </select>
+  </div>
   <div class="w3k-optionrow">
     <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
     <button class="chip-toggle" id="words3000TestModeBtn" aria-label="テストモード">📝 テストモード</button>
@@ -168,11 +186,10 @@ async function safeSet(key, value){
 function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 
 // --- 設定：フレーズ帳本体と同じ`phrasebook-settings`を共有する。このページが使うのは
-// rate/listenLoop/listenJaMode/listenGapのみだが、書き込み時は他のフィールド（fsScale等、
+// rate/listenLoop/listenGapのみだが、書き込み時は他のフィールド（fsScale等、
 // フレーズ帳側が使う設定）を壊さないよう、必ず読み込み→該当フィールドだけ上書き→書き込む。 ---
 let rate = 1.0;
 let listenLoop = false;
-let listenJaMode = false;
 let listenGap = 450;
 let geminiApiKey = "";
 let wordsLearned = {};
@@ -185,7 +202,6 @@ async function loadState(){
       const p = JSON.parse(s.value);
       rate = p.rate || 1.0;
       listenLoop = !!p.listenLoop;
-      listenJaMode = !!p.listenJaMode;
       listenGap = (p.listenGap !== undefined) ? p.listenGap : 450;
       geminiApiKey = p.geminiApiKey || "";
     }
@@ -205,13 +221,16 @@ async function saveSharedSetting(fields){
 }
 async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
 
-// --- このページ独自の表示設定（品詞フィルタ・未習得のみ・ランダム再生）。フレーズ帳本体は
-// 関知しない項目のため、共有のphrasebook-settingsとは別の専用キーに保存する（settings側に
-// 混ぜると、index.htmlのsaveSettings()が自分の知らないフィールドごと書き換えて消してしまう）。
-// テストモードかどうかは永続化しない（開くたびに一覧モードから始まる方がわかりやすいため）。 ---
+// --- このページ独自の表示設定（品詞フィルタ・未習得のみ・ランダム再生・自動再生の
+// 英語/日本語くり返し回数）。フレーズ帳本体は関知しない項目のため、共有のphrasebook-settingsとは
+// 別の専用キーに保存する（settings側に混ぜると、index.htmlのsaveSettings()が自分の知らない
+// フィールドごと書き換えて消してしまう）。テストモードかどうかは永続化しない（開くたびに
+// 一覧モードから始まる方がわかりやすいため）。 ---
 let unlearnedOnly = false;
 let shuffleListen = false;
 let testMode = false;
+let enReps = 1;
+let jaReps = 0;
 async function loadW3kPrefs(){
   let saved = {};
   try{
@@ -220,11 +239,13 @@ async function loadW3kPrefs(){
   }catch(e){}
   unlearnedOnly = !!saved.unlearnedOnly;
   shuffleListen = !!saved.shuffleListen;
+  enReps = (saved.enReps>0) ? saved.enReps : 1;
+  jaReps = (saved.jaReps>=0) ? saved.jaReps : 0;
   return saved.posFilter || "";
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, enReps, jaReps }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -587,9 +608,13 @@ function renderWords3000List(){
 }
 
 // --- 自動再生（聞き流し）：フレーズ帳本体の聞き流しと同じ操作感を再現する独立版。
-// 速度(rate)・フレーズ間隔(listenGap)・ループ(listenLoop)・日本語読み上げ挟み込み(listenJaMode)は
-// `phrasebook-settings`を通じて同じ設定を共有し、対象は現在の範囲・品詞・検索・未習得のみの
-// 絞り込み（words3000FilteredList()）。shuffleListenがONなら再生順もランダムにする。 ---
+// 速度(rate)・フレーズ間隔(listenGap)・ループ(listenLoop)は`phrasebook-settings`を通じて
+// 同じ設定を共有し、対象は現在の範囲・品詞・検索・未習得のみの絞り込み
+// （words3000FilteredList()）。shuffleListenがONなら再生順もランダムにする。
+// 英語enReps回→日本語jaReps回、という単語ごとの読み上げパターンはこのページ専用の設定
+// （enReps/jaReps）で、「英語2回・日本語1回」のように交互ではなくまとめて繰り返せるよう、
+// 1語分の読み上げ手順を["en","en",...,"ja","ja",...]という単純なキューに展開してから
+// 順番に読み上げる。 ---
 let words3000ListenState = { active:false, list:[], index:0 };
 function updateWords3000ListenButton(){
   const btn = document.getElementById("words3000ListenBtn");
@@ -608,6 +633,24 @@ function highlightWords3000Playing(word){
   const el = document.querySelector(`.w3k-card[data-word="${CSS.escape(word)}"]`);
   if(el){ el.classList.add("now-playing"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
 }
+function playWords3000Queue(w, queue, i){
+  if(!words3000ListenState.active) return;
+  if(i >= queue.length){
+    setTimeout(()=>{
+      if(!words3000ListenState.active) return;
+      words3000ListenState.index++;
+      playWords3000Step();
+    }, listenGap);
+    return;
+  }
+  const isEn = queue[i] === "en";
+  const isLastInWord = i === queue.length - 1;
+  speakRaw(isEn ? w.word : w.ja, isEn ? "en-US" : "ja-JP", null, ()=>{
+    if(!words3000ListenState.active) return;
+    if(isLastInWord){ playWords3000Queue(w, queue, i+1); }
+    else { setTimeout(()=> playWords3000Queue(w, queue, i+1), Math.min(listenGap, 350)); }
+  });
+}
 function playWords3000Step(){
   if(!words3000ListenState.active) return;
   if(words3000ListenState.index >= words3000ListenState.list.length){
@@ -616,25 +659,11 @@ function playWords3000Step(){
   const w = words3000ListenState.list[words3000ListenState.index];
   highlightWords3000Playing(w.word);
   updateWords3000ListenButton();
-  const goNext = ()=>{
-    if(!words3000ListenState.active) return;
-    setTimeout(()=>{
-      words3000ListenState.index++;
-      playWords3000Step();
-    }, listenGap);
-  };
-  const afterMain = ()=>{
-    if(!words3000ListenState.active) return;
-    if(listenJaMode){
-      setTimeout(()=>{
-        if(!words3000ListenState.active) return;
-        speakRaw(w.ja, "ja-JP", null, goNext);
-      }, Math.min(listenGap, 350));
-    } else {
-      goNext();
-    }
-  };
-  speakRaw(w.word, "en-US", null, afterMain);
+  const queue = [];
+  for(let i=0; i<enReps; i++) queue.push("en");
+  for(let i=0; i<jaReps; i++) queue.push("ja");
+  if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回は想定しないが、無音で止まらないための保険
+  playWords3000Queue(w, queue, 0);
 }
 function startWords3000Listening(){
   let list = words3000FilteredList();
@@ -791,6 +820,14 @@ document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", listenLoop);
   saveSharedSetting({ listenLoop });
 });
+document.getElementById("words3000EnRepsSel").addEventListener("change", (e)=>{
+  enReps = parseInt(e.target.value, 10) || 1;
+  saveW3kPrefs();
+});
+document.getElementById("words3000JaRepsSel").addEventListener("change", (e)=>{
+  jaReps = parseInt(e.target.value, 10) || 0;
+  saveW3kPrefs();
+});
 
 (async function init(){
   await loadState();
@@ -799,6 +836,8 @@ document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
   document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
+  document.getElementById("words3000EnRepsSel").value = String(enReps);
+  document.getElementById("words3000JaRepsSel").value = String(jaReps);
   populateWords3000TierSelect();
   populateWords3000PosSelect(savedPos);
   renderWords3000List();
