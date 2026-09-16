@@ -171,6 +171,29 @@ test.describe('syncable state (catOrder / langOrder / phraseOrder included)', ()
     expect(after).toEqual(reversedGreetings);
   });
 
+  test('a locally-learned word not yet in the cloud is merged (not overwritten) and flagged so the caller can push it', async ({ page }) => {
+    // Regression test for a real cross-device sync gap: words3000.html marks words learned by
+    // writing straight to localStorage (it has no Firebase module of its own), bypassing the
+    // wrapped save functions that normally trigger schedulePush(). Without this, a word learned
+    // via words3000.html would never reach the cloud, and worse, the next pull from another
+    // device could silently overwrite it. applyCloudState() must (a) union-merge wordsLearned
+    // instead of overwriting it, and (b) tell the caller when a local-only entry was found so a
+    // push can be scheduled after the pull settles.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.evaluate(() => localStorage.setItem('phrasebook-words-learned', JSON.stringify({ the: true })));
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+
+    const result1 = await page.evaluate(() => window.applyCloudState({ wordsLearned: { water: true } }));
+    expect(result1.localOnlyWordsLearned).toBe(true);
+    const state1 = await page.evaluate(() => window.getSyncableState());
+    expect(state1.wordsLearned).toEqual({ water: true, the: true });
+
+    const result2 = await page.evaluate(() => window.applyCloudState({ wordsLearned: { water: true, the: true } }));
+    expect(result2.localOnlyWordsLearned).toBe(false);
+  });
+
   test('a duplicate entry in a persisted catOrder/langOrder does not render as two tabs/rows', async ({ page }) => {
     // Regression test: orderedCats()/orderedLangs() used to map catOrder/langOrder directly to
     // rendered tabs, so if that array ever ended up with a duplicate key (old app version, a

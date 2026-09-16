@@ -1203,7 +1203,14 @@ async function applyCloudState(state){
   // 単独でlocalStorageに書くため、index.htmlを開いた瞬間の初回pull（このページ側では
   // まだ一度もpushしていない＝pushTimerが立っていない）でクラウドの古い状態にそのまま
   // 上書きされると、他デバイスのwords3000.htmlで新しく覚えた単語が消えてしまうため。
-  if(state.wordsLearned && typeof state.wordsLearned === "object") wordsLearned = { ...state.wordsLearned, ...wordsLearned };
+  // マージの結果、クラウド側にまだ無いローカル限定のエントリが見つかったら、呼び出し元に
+  // 知らせて後でpushさせる（words3000.htmlでの変更をクラウドへ反映する唯一の経路のため。
+  // ここで直接pushしようとしてもapplyingRemote中はschedulePush()が無視するので効果が無い）。
+  let localOnlyWordsLearned = false;
+  if(state.wordsLearned && typeof state.wordsLearned === "object"){
+    localOnlyWordsLearned = Object.keys(wordsLearned).some(k => !state.wordsLearned[k]);
+    wordsLearned = { ...state.wordsLearned, ...wordsLearned };
+  }
   if(Array.isArray(state.catOrder) && state.catOrder.length) catOrder = state.catOrder;
   if(Array.isArray(state.langOrder) && state.langOrder.length) langOrder = state.langOrder;
   if(Array.isArray(state.phraseOrder) && state.phraseOrder.length) phraseOrder = state.phraseOrder;
@@ -1217,6 +1224,7 @@ async function applyCloudState(state){
   renderLangButton();
   if(document.getElementById("langPickerOverlay").classList.contains("open")) renderLangPickList();
   if(document.getElementById("practiceOverlay").classList.contains("open")) renderPracticeList();
+  return { localOnlyWordsLearned };
 }
 
 function allData(){ return BUILTIN.concat(customData); }
@@ -3819,8 +3827,15 @@ if("serviceWorker" in navigator){
           return;
         }
         applyingRemote = true;
-        try{ await window.applyCloudState(snap.data()); }
+        let result;
+        try{ result = await window.applyCloudState(snap.data()); }
         finally{ applyingRemote = false; }
+        // words3000.htmlはこのページのFirebase同期モジュールを経由せず直接localStorageに
+        // 書くため、通常の（ラップした保存関数経由の）pushの仕組みが働かない。マージの結果
+        // クラウド側にまだ無いローカル限定の「覚えた」語が見つかった時だけ、ここで明示的に
+        // pushを予約して反映する（pullが終わってapplyingRemoteが下りた後なので、直前の
+        // pushTimerチェックとは競合しない）。
+        if(result && result.localOnlyWordsLearned) schedulePush();
         syncStatusText.textContent = "同期しました（" + new Date().toLocaleTimeString("ja-JP") + "）";
       }, (e)=>{ console.error("cloud watch error:", e); });
     }
@@ -3845,8 +3860,10 @@ if("serviceWorker" in navigator){
         );
         if(useCloud){
           applyingRemote = true;
-          try{ await window.applyCloudState(snap.data()); }
+          let result;
+          try{ result = await window.applyCloudState(snap.data()); }
           finally{ applyingRemote = false; }
+          if(result && result.localOnlyWordsLearned) schedulePush();
         } else {
           await pushNow();
         }
