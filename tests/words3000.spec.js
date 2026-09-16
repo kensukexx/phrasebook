@@ -215,6 +215,58 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
       await expect(page.locator('.w3k-card.now-playing')).toHaveCount(0);
     });
+
+    test('stopping mid-playback and pressing ▶ again resumes from where it left off, not from the start', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      // "can" matches exactly two words in tier 1 (rank order: can, then cancel)
+      await page.fill('#words3000Search', 'can');
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'can');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'cancel', { timeout: 10000 });
+      await page.click('#words3000ListenBtn'); // stop while "cancel" is playing
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
+
+      await page.click('#words3000ListenBtn'); // resume
+      // resumes at "cancel" (where it was stopped), not back at "can" (the start of the range)
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'cancel');
+    });
+
+    test('changing a filter after pausing discards the resume point, so the next play starts fresh', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.fill('#words3000Search', 'can');
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'cancel', { timeout: 10000 });
+      await page.click('#words3000ListenBtn'); // stop
+      await page.fill('#words3000Search', 'water'); // change the filter while paused
+
+      await page.click('#words3000ListenBtn'); // start again
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'water');
+    });
+  });
+
+  test.describe('上部コントロールの固定表示（自動再生中に隠れない）', () => {
+    test('the range/part-of-speech/playback controls stay pinned near the top of the viewport even after scrolling down the list', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const position = await page.locator('.w3k-sticky').evaluate(el => getComputedStyle(el).position);
+      expect(position).toBe('sticky');
+
+      await page.evaluate(() => window.scrollTo(0, 3000));
+      const rect = await page.locator('.w3k-sticky').evaluate(el => el.getBoundingClientRect());
+      expect(rect.top).toBeGreaterThanOrEqual(-1);
+      expect(rect.top).toBeLessThan(5);
+
+      // and it's still interactive - not just visually present
+      await page.selectOption('#words3000PosSel', '動詞');
+      await expect(page.locator('#words3000PosSel')).toHaveValue('動詞');
+    });
   });
 
   test.describe('品詞フィルタ', () => {

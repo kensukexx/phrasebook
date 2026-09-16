@@ -46,6 +46,10 @@
   header p.sub{ margin:6px 0 0 52px; font-size:12.5px; color:rgba(255,255,255,0.92); }
 
   main{ padding:16px 16px 28px; }
+  /* 自動再生中、今読んでいる単語のカードへ自動スクロールすると、範囲・品詞・速度などの
+     上部コントロールも一緒に画面外へ流れてしまい操作できなくなる、という指摘を受けて追加。
+     一覧・テストモードの表示領域だけがスクロールし、この操作パネルは常に画面上部に残る。 */
+  .w3k-sticky{ position:sticky; top:0; z-index:5; background:var(--paper); padding-top:16px; margin:-16px -16px 14px; padding-left:16px; padding-right:16px; padding-bottom:14px; box-shadow:0 8px 10px -8px rgba(47,53,66,0.15); }
   .field{ margin-bottom:14px; }
   .field label{ display:block; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
   .field select{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
@@ -126,42 +130,44 @@
 </header>
 
 <main>
-  <div class="field">
-    <label>範囲</label>
-    <select id="words3000TierSel"></select>
+  <div class="w3k-sticky">
+    <div class="field">
+      <label>範囲</label>
+      <select id="words3000TierSel"></select>
+    </div>
+    <div class="field">
+      <label>品詞</label>
+      <select id="words3000PosSel"></select>
+    </div>
+    <div class="w3k-playbar">
+      <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
+      <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
+      <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
+      <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
+    </div>
+    <div class="w3k-repeatrow">
+      <label for="words3000EnRepsSel">英語</label>
+      <select id="words3000EnRepsSel">
+        <option value="1">×1</option>
+        <option value="2">×2</option>
+        <option value="3">×3</option>
+      </select>
+      <label for="words3000JaRepsSel">日本語</label>
+      <select id="words3000JaRepsSel">
+        <option value="0">なし</option>
+        <option value="1">×1</option>
+        <option value="2">×2</option>
+      </select>
+    </div>
+    <div class="w3k-optionrow">
+      <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
+      <button class="chip-toggle" id="words3000TestModeBtn" aria-label="テストモード">📝 テストモード</button>
+    </div>
+    <div class="searchwrap">
+      <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索">
+    </div>
+    <p class="hint" id="words3000Progress" style="margin-bottom:0;"></p>
   </div>
-  <div class="field">
-    <label>品詞</label>
-    <select id="words3000PosSel"></select>
-  </div>
-  <div class="w3k-playbar">
-    <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
-    <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
-    <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
-    <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
-  </div>
-  <div class="w3k-repeatrow">
-    <label for="words3000EnRepsSel">英語</label>
-    <select id="words3000EnRepsSel">
-      <option value="1">×1</option>
-      <option value="2">×2</option>
-      <option value="3">×3</option>
-    </select>
-    <label for="words3000JaRepsSel">日本語</label>
-    <select id="words3000JaRepsSel">
-      <option value="0">なし</option>
-      <option value="1">×1</option>
-      <option value="2">×2</option>
-    </select>
-  </div>
-  <div class="w3k-optionrow">
-    <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
-    <button class="chip-toggle" id="words3000TestModeBtn" aria-label="テストモード">📝 テストモード</button>
-  </div>
-  <div class="searchwrap">
-    <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索">
-  </div>
-  <p class="hint" id="words3000Progress" style="margin-bottom:10px;"></p>
   <div id="words3000List"></div>
   <div id="words3000TestArea" hidden></div>
 </main>
@@ -631,7 +637,15 @@ function updateWords3000ListenButton(){
 function highlightWords3000Playing(word){
   document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
   const el = document.querySelector(`.w3k-card[data-word="${CSS.escape(word)}"]`);
-  if(el){ el.classList.add("now-playing"); el.scrollIntoView({behavior:"smooth", block:"center"}); }
+  if(!el) return;
+  el.classList.add("now-playing");
+  // scrollIntoView(block:"center")は範囲・品詞・速度などをまとめたsticky領域の分だけ
+  // 画面上部が塞がれていることを考慮しないため、そのまま使うとカードがsticky領域の
+  // 裏に隠れることがある。sticky領域の実際の高さを差し引いた位置へ手動でスクロールする。
+  const stickyEl = document.querySelector(".w3k-sticky");
+  const stickyHeight = stickyEl ? stickyEl.offsetHeight : 0;
+  const targetY = window.scrollY + el.getBoundingClientRect().top - stickyHeight - 12;
+  window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
 }
 function playWords3000Queue(w, queue, i){
   if(!words3000ListenState.active) return;
@@ -665,7 +679,18 @@ function playWords3000Step(){
   if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回は想定しないが、無音で止まらないための保険
   playWords3000Queue(w, queue, 0);
 }
+// 一時停止した続きから再生できるように、■で止めた時点のlist/indexを保持しておく
+// （「1回止めて途中から再生したい」という要望）。範囲・品詞・検索・未習得のみを変更した
+// 時（onWords3000FiltersChanged・各トグル）は対象の語自体が変わりうるため、この保存を
+// 明示的に破棄し、次の▶では必ず最初から再生し直す。
+let words3000PausedState = null;
 function startWords3000Listening(){
+  if(words3000PausedState && words3000PausedState.index < words3000PausedState.list.length){
+    words3000ListenState = { active:true, list: words3000PausedState.list, index: words3000PausedState.index };
+    words3000PausedState = null;
+    playWords3000Step();
+    return;
+  }
   let list = words3000FilteredList();
   if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認してください）"); return; }
   if(shuffleListen) list = shuffleArray(list.slice());
@@ -675,6 +700,7 @@ function startWords3000Listening(){
 function stopWords3000Listening(){
   if(!words3000ListenState.active) return;
   words3000ListenState.active = false;
+  words3000PausedState = { list: words3000ListenState.list, index: words3000ListenState.index };
   stopAllAudio();
   document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
   updateWords3000ListenButton();
@@ -786,7 +812,9 @@ function renderTestCard(autoSpeak){
 }
 
 function onWords3000FiltersChanged(){
-  if(testMode){ startTestMode(); } else { stopWords3000Listening(); renderWords3000List(); }
+  stopWords3000Listening();
+  words3000PausedState = null; // 対象の語自体が変わりうるので、一時停止からの再開を無効化する
+  if(testMode){ startTestMode(); } else { renderWords3000List(); }
 }
 
 document.getElementById("words3000TierSel").addEventListener("change", onWords3000FiltersChanged);

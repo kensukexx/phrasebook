@@ -54,6 +54,9 @@
   - **自動再生の英語/日本語くり返し回数設定（2026-09-16）**: 「英語2回日本語1回みたいな設定もできるといいと思います」という要望を受けて追加。従来は`listenJaMode`という共有設定のON/OFFしか無く、しかもON時の実際の再生順は「英語→日本語→（もう一度）英語→日本語」のように**1回ごとに交互**になっていた（`listenRepeat`回の繰り返しループの中で毎回日本語を挟む構造だったため）。「英語2回→日本語1回」のように**英語をまとめて複数回言ってから日本語**、という順番はこの構造では表現できなかったため、words3000.html専用の新しい設定として作り直した（フレーズ帳本体`index.html`の聞き流し機能`listenRepeat`/`listenJaMode`はそのまま手を付けていない）。
     - `enReps`（既定1）・`jaReps`（既定0、＝旧`listenJaMode`オフ相当）を`phrasebook-words3000-prefs`に保存。1語ぶんの読み上げ手順を`["en","en",...,"ja","ja",...]`という単純な配列（キュー）に展開してから`playWords3000Queue()`で順番に読み上げるだけ、というシンプルな実装にした（英語n回→日本語m回、を「回数ぶん交互に繰り返す」より素直に表現できる）。単語内の読み上げ間の間隔は`Math.min(listenGap, 350)`（短め・固定）、単語と単語の間は通常の`listenGap`（設定値そのまま）。
     - UIは「範囲」「品詞」に続けて「英語 ×1/×2/×3」「日本語 なし/×1/×2」の2つの`<select>`を追加。
+  - **操作パネルの固定表示＋自動再生の一時停止/再開（2026-09-16）**: 「単語を1つずつ言ってくと下のほうに行ってしまい、上の範囲・品詞・速度が全部下に行っちゃって変更できなくなる」「1回止めて途中から再生したい」という2つの要望に対応。
+    - **固定表示**: 範囲・品詞・自動再生の操作行・英語日本語のくり返し回数・未習得のみ/テストモードのトグル・検索・進捗をまとめて`.w3k-sticky`（`position:sticky; top:0`）で包み、一覧（`#words3000List`）とテストモード領域だけがその下でスクロールするようにした。フレーズ帳本体`index.html`の`.sticky-controls`と同じ考え方。あわせて`highlightWords3000Playing()`のスクロール位置計算も、素の`scrollIntoView(block:"center")`から「sticky領域の実際の高さぶんを引いた位置へ`window.scrollTo`する」方式に変更した（`block:"center"`はsticky領域が画面上部を占有している事実を知らないため、そのままだとハイライトされたカードがsticky領域の裏に隠れることがあったため）。
+    - **一時停止/再開**: `stopWords3000Listening()`で止めた時点の`{list, index}`を`words3000PausedState`に保持しておき、次に▶（`startWords3000Listening()`）を押した時、保存があればそこから再開する。範囲・品詞・検索・未習得のみを変更した時（`onWords3000FiltersChanged()`）は対象の語自体が変わりうるため、明示的に`words3000PausedState = null`にして次回は必ず最初から再生させる（シャッフルのON/OFF切り替えだけは、一時停止中の並び自体には影響しないため`words3000PausedState`を破棄しない＝一時停止した時の並びのまま再開する）。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -73,7 +76,7 @@ manifest.json          PWAマニフェスト
 sw.js                   Service Worker（オフラインシェルキャッシュのみ、v3）
 firestore.rules         Firestoreセキュリティルール
 tests/                  Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計284テスト
+playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計290テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 
