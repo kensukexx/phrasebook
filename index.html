@@ -3795,6 +3795,15 @@ if("serviceWorker" in navigator){
     }
 
     async function pushNow(){
+      // schedulePush()のsetTimeoutが自然に発火してここへ来た場合、pushTimerには
+      // 既に実行済み（無効）のタイマーIDが残ったままになる。ここで明示的にnullへ戻さないと、
+      // 以後に届く別端末からのonSnapshot更新がすべて「未送信のローカル変更がまだある」と
+      // 誤認され（watchRemote側のpushTimerチェック）、正しく反映されずに毎回ローカルの
+      // 状態で上書き送信されてしまう（＝そのセッション中ずっと相手の変更を取りこぼす）。
+      // 【重要・修正済みの不具合】2026-09-16、「PCとスマホで同期されていない」という
+      // 報告の調査中に発見。1回でも保存操作をした後、別端末の変更が届かなくなる
+      // （ページを再読み込みするまで直らない）という形で発現していたと考えられる。
+      pushTimer = null;
       if(!currentUser) return;
       try{
         const state = window.getSyncableState();
