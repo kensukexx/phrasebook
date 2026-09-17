@@ -461,4 +461,40 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await expect(page.locator('.w3k-card')).toHaveCount(500);
     });
   });
+
+  test.describe('端末間同期（「覚えた」状態のみ、このページ単独で完結）', () => {
+    // 本物のサインインが必要な経路（クラウドへのpull/pushそのもの）はCIでは再現できない
+    // （tests/sync.spec.jsのファイル冒頭コメントと同じ理由）。ここでは、このページ用に
+    // 追加したFirebaseモジュール（words3000.htmlはindex.html本体の保存関数を一切経由しない
+    // ため、単独でpushできる仕組みを別途持たせた）が、未サインイン状態で読み込まれても
+    // クラッシュしないことと、let宣言のwordsLearnedを直接読み書きするための橋渡し関数
+    // （getWordsLearnedSnapshot/applyCloudWordsLearned）が正しく動くことを確認する。
+    test('the sync module loads without errors while signed out', async ({ page }) => {
+      const errors = [];
+      page.on('pageerror', e => errors.push(e.message));
+      page.on('console', msg => { if (msg.type() === 'error' && !msg.text().includes('favicon')) errors.push(msg.text()); });
+
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.waitForTimeout(1000); // let the module script's dynamic Firebase imports resolve
+
+      expect(errors).toEqual([]);
+    });
+
+    test('getWordsLearnedSnapshot/applyCloudWordsLearned bridge functions merge (not overwrite) and report local-only entries', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.locator('.w3k-card').first().locator('[data-role="learn"]').click(); // learns "the" locally
+      await expect(page.evaluate(() => window.getWordsLearnedSnapshot())).resolves.toEqual({ the: true });
+
+      const hadLocalOnly1 = await page.evaluate(() => window.applyCloudWordsLearned({ water: true }));
+      expect(hadLocalOnly1).toBe(true); // "the" isn't in the cloud snapshot yet
+      await expect(page.evaluate(() => window.getWordsLearnedSnapshot())).resolves.toEqual({ water: true, the: true });
+      const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
+      expect(stored).toEqual({ water: true, the: true }); // merged result also persisted locally
+
+      const hadLocalOnly2 = await page.evaluate(() => window.applyCloudWordsLearned({ water: true, the: true }));
+      expect(hadLocalOnly2).toBe(false); // nothing local-only left to push
+    });
+  });
 });

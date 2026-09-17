@@ -59,6 +59,10 @@
     - **一時停止/再開**: `stopWords3000Listening()`で止めた時点の`{list, index}`を`words3000PausedState`に保持しておき、次に▶（`startWords3000Listening()`）を押した時、保存があればそこから再開する。範囲・品詞・検索・未習得のみを変更した時（`onWords3000FiltersChanged()`）は対象の語自体が変わりうるため、明示的に`words3000PausedState = null`にして次回は必ず最初から再生させる（シャッフルのON/OFF切り替えだけは、一時停止中の並び自体には影響しないため`words3000PausedState`を破棄しない＝一時停止した時の並びのまま再開する）。
   - **カード表に例文の英文も表示（2026-09-17）**: 「例文も少し小さくてもいいんですけど、表示ってできますか？」という要望を受けて追加。`.w3k-ja-front`（日本語の意味、2026-09-15追加分）に続けて`.w3k-ex-front`（`w.ex.en`、11px・`var(--ink-soft)`の小さめ表示）を一覧カードの表に追加した。例文のカナ・和訳・🔤単語ごとの意味（gloss）は従来通りタップした裏面のみ（表に出すと情報過多になるため、英文だけに絞った）。テストモードのカード（`renderTestCard()`）には適用していない——そちらは意味を隠して自己採点する設計上、正解に直結する例文の英文を答え合わせ前に見せるわけにはいかないため。
   - **カード前面を2カラムに変更、例文の和訳も追加表示（2026-09-18）**: 「右側に余白あるから右に例文配置すれば文章とか解説も入れられるんじゃない？」という指摘を受けて対応。それまで`.w3k-word-wrap`は単語・pos・カナ・意味・例文を縦一列に積んでいたため、短い単語だとその右側に横方向の余白が常に空いていた。`.w3k-word-wrap`を`display:flex`の2カラムに変更し、`.w3k-word-col`（単語・pos・カナ、`max-width:40%`）と`.w3k-meaning-col`（日本語の意味・例文英文・例文和訳、`flex:1`）を横並びにして、その余白を実際のコンテンツ表示に使うようにした。この変更で空いた分の表示余地を使い、新たに`.w3k-ex-ja-front`（例文の和訳）も表に追加した——「文章とか解説も」という要望に応える形で、既存の英文だけでなく和訳も一目で見えるようにした（カナと🔤gloss は引き続きタップした裏面のみ）。実装前にPlaywrightで実際にローカルサーバーを立ててスクリーンショットを撮り、モバイル幅(390px)・広め幅(700px)・長い単語("interesting")・タップ後の裏面表示、の4パターンで見た目を確認してから確定した。**命名の注意**: 当初`.w3k-ex-front`のバリアントとして`.w3k-ex-front w3k-ex-front-ja`のような複合クラスにしたところ、両方とも`.w3k-ex-front`に一致してしまいPlaywrightのstrict mode違反（2件ヒット）を引き起こした。既存の`.filterbar`クラス名衝突（本ファイル内、英単語3000独立ページ化の節を参照）と同種の教訓として、英文用と和訳用を最初から別クラス（`.w3k-ex-front`と`.w3k-ex-ja-front`）に分けて解決した。
+  - **英単語3000の「覚えた」を、このページ単独でも同期できるように（2026-09-18）**: 「スマホとPCって同期されてる？覚えたやつが同期されてないかも？」という報告を受けて、9/16の修正（前述の「既知の不具合として修正済み（3）」、`applyCloudState`のマージ処理）だけでは不十分だったことが判明したため追加対応。9/16の修正は「`index.html`を開いた時にクラウドから届く古い状態で、ローカル限定の`wordsLearned`エントリを上書きしてしまう」事故は防げていたが、**そもそも`words3000.html`単独では一度もクラウドへpushする経路が無い**、という、より根本的な問題は残っていた（`index.html`側の同期の仕組みは、`index.html`自身の保存関数（`saveCustom`等）が呼ばれた時だけ動くため、別ページの`words3000.html`が`localStorage`に直接書いても一切トリガーされない）。実運用では「`words3000.html`で単語を覚えたら、その端末で`index.html`を開き直さない限りクラウドに届かない」という条件が実際には満たされにくく（英単語3000は`index.html`のツールメニューからのリンク先という位置づけで、使い終わったら閉じてしまうことが多いため）、報告の直接の原因だったと考えられる。
+    - **対応**: `words3000.html`の末尾に、`index.html`本体と**同じFirebaseプロジェクト**（`firebaseConfig`は秘密情報ではないためそのまま複製）を使う、独立した`<script type="module">`同期モジュールを追加した。Firebase Authはブラウザに永続化されるため、`index.html`側で一度サインインしていれば、同一オリジンのこのページでも自動的にサインイン状態を引き継ぐ（このページ側にサインインUIは無い）。ページを開いた時に一度だけクラウドの`wordsLearned`をpull→和集合マージ→ローカル限定のエントリがあればpushし、以後は「覚えた✓」の操作のたびに1.2秒デバウンスでpush、`visibilitychange`（hidden化）での即時flushも`index.html`と同じパターンで持たせた。
+    - **`setDoc(..., {merge:true})`でwordsLearnedだけを部分更新**: `index.html`本体の`pushNow()`は`customData`/`learned`/`catOrder`等を含む状態全体を`setDoc`で丸ごと上書きするが、`words3000.html`はそれらのフィールドを一切メモリに持っていない（読み込んでもいない）ため、同じやり方をすると他のフィールドを消してしまう。`words3000.html`側のpushは`{wordsLearned, updatedAt}`だけを`{merge:true}`で送ることで、他のフィールドに一切触れずに済むようにしている。
+    - **`let`変数はモジュールから直接触れない、という制約への対処**: `wordsLearned`はクラシックスクリプト側の`let`宣言のため、`type="module"`のスクリプトからは（`window`に乗らないため）直接読み書きできない（`index.html`本体の`applyCloudState`が同じ理由でクラシックスクリプト側に置かれているのと全く同じ制約）。`getWordsLearnedSnapshot()`・`applyCloudWordsLearned()`という2つの橋渡し関数をクラシックスクリプト側に用意し、モジュール側はこれらを`window.関数名()`経由で呼ぶことで解決した。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -72,13 +76,13 @@
 ## ファイル構成
 ```
 index.html            フレーズ帳本体（UI・データ・ロジック、単一ファイル、約770KB）
-words3000.html         英単語3000（独立ページ、UI・TTSエンジン簡易版込み、約27KB）
+words3000.html         英単語3000（独立ページ、UI・TTSエンジン簡易版・「覚えた」専用の同期モジュール込み、約50KB）
 words3000-data.js       英単語3000のデータ（WORDS3000配列3000件、約800KB）。words3000.htmlのみが読み込む
 manifest.json          PWAマニフェスト
 sw.js                   Service Worker（オフラインシェルキャッシュのみ、v3）
 firestore.rules         Firestoreセキュリティルール
 tests/                  Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計290テスト
+playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計294テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 

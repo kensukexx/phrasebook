@@ -233,6 +233,21 @@ async function saveSharedSetting(fields){
 }
 async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
 
+// --- 末尾の端末間同期モジュール（type="module"のscript）から呼ばれる橋渡し関数。
+// let宣言のwordsLearnedはwindowに乗らずモジュール側から直接読み書きできないため、
+// クラシックスクリプト側に用意する（index.html本体のapplyCloudStateと同じ理由）。
+// これが無いと、このページ単独で「覚えた」にした単語は、後でindex.htmlを開き直さない限り
+// 一切クラウドに届かない（index.html側の保存関数を一切経由しないため）——実際に
+// 「スマホとPCで同期されてない」という報告のもう一つの原因だった。
+function getWordsLearnedSnapshot(){ return wordsLearned; }
+async function applyCloudWordsLearned(cloudWordsLearned){
+  const hadLocalOnly = Object.keys(wordsLearned).some(k => !cloudWordsLearned[k]);
+  wordsLearned = { ...cloudWordsLearned, ...wordsLearned };
+  await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned));
+  renderWords3000List();
+  return hadLocalOnly;
+}
+
 // --- このページ独自の表示設定（品詞フィルタ・未習得のみ・ランダム再生・自動再生の
 // 英語/日本語くり返し回数）。フレーズ帳本体は関知しない項目のため、共有のphrasebook-settingsとは
 // 別の専用キーに保存する（settings側に混ぜると、index.htmlのsaveSettings()が自分の知らない
@@ -887,6 +902,95 @@ document.getElementById("words3000JaRepsSel").addEventListener("change", (e)=>{
     navigator.serviceWorker.register("./sw.js").catch(()=>{});
   }
 })();
+</script>
+
+<script type="module">
+  // --- 端末間同期（「覚えた」状態のみ）。index.html本体の同期モジュールと同じ
+  // Firebaseプロジェクトを使うが、このページは英単語3000の学習だけが目的のため、
+  // フレーズ・カテゴリ順などindex.html側が扱う他のフィールドには一切触れない
+  // （setDoc(..., {merge:true})でwordsLearnedだけを部分更新する）。
+  //
+  // 背景: words3000.htmlはlocalStorageに直接書くだけの独立ページで、index.html本体の
+  // 保存関数（wrapされてpushをスケジュールする仕組み）を一切経由しない。そのため、
+  // このページだけで単語を「覚えた」にしても、後でindex.htmlを開き直さない限り
+  // クラウドに一切届かなかった（index.html側でwordsLearnedのマージ処理を直しても、
+  // "push"を実際にトリガーする経路がこのページ単独では存在しなかったため）。
+  // このモジュールを追加し、このページ単独でも同じアカウントでサインイン済みなら
+  // 直接pushできるようにした。
+  //
+  // Firebase AuthはブラウザのlocalStorage/IndexedDBに永続化されるため、index.html側で
+  // 一度サインインしていれば、同一オリジンのこのページでも自動的にサインイン状態が
+  // 引き継がれる（このページ側に別途サインインUIは無い）。
+  const firebaseConfig = {
+    apiKey: "AIzaSyB9UwLRIZqhf46LvTHVLU-U1rHWA7WTLXU",
+    authDomain: "english-app-74dbd.firebaseapp.com",
+    projectId: "english-app-74dbd",
+    storageBucket: "english-app-74dbd.firebasestorage.app",
+    messagingSenderId: "521761491935",
+    appId: "1:521761491935:web:dd1f0eeae11a16050c926a",
+  };
+  if(firebaseConfig.apiKey !== "YOUR_API_KEY"){
+    const [
+      { initializeApp },
+      { getAuth, onAuthStateChanged },
+      { getFirestore, doc, getDoc, setDoc },
+    ] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js"),
+      import("https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js"),
+    ]);
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    function userDocRef(uid){ return doc(db, "users", uid); }
+
+    let currentUser = null;
+    let pushTimer = null;
+
+    async function pushWordsLearned(){
+      pushTimer = null;
+      if(!currentUser) return;
+      try{
+        await setDoc(userDocRef(currentUser.uid), { wordsLearned: window.getWordsLearnedSnapshot(), updatedAt: Date.now() }, { merge: true });
+      }catch(e){ console.error("words3000 cloud push error:", e); }
+    }
+    function scheduleWordsLearnedPush(){
+      if(!currentUser) return;
+      clearTimeout(pushTimer);
+      pushTimer = setTimeout(pushWordsLearned, 1200);
+    }
+    // index.html本体と同じ対策：デバウンス中にタブを閉じる・バックグラウンドに回すと
+    // pushが一度もクラウドに届かないまま消えることがあるため、hidden化で即座に確定させる。
+    document.addEventListener("visibilitychange", ()=>{
+      if(document.visibilityState === "hidden" && pushTimer){
+        clearTimeout(pushTimer);
+        pushTimer = null;
+        pushWordsLearned();
+      }
+    });
+
+    // 「覚えた✓」がローカルに保存されるたびに（saveWordsLearned()呼び出しのたび）pushを予約する。
+    const origSaveWordsLearned = window.saveWordsLearned;
+    window.saveWordsLearned = async function(...args){
+      const result = await origSaveWordsLearned.apply(this, args);
+      scheduleWordsLearnedPush();
+      return result;
+    };
+
+    onAuthStateChanged(auth, async (user)=>{
+      currentUser = user;
+      if(!user) return;
+      // ページを開いた時点で一度だけクラウド側のwordsLearnedを取り込む。ローカル限定の
+      // エントリ（このページで新しく覚えたがまだ届いていない分）が見つかれば、その場でpushする。
+      try{
+        const snap = await getDoc(userDocRef(user.uid));
+        const cloudWordsLearned = (snap.exists() && snap.data().wordsLearned) || {};
+        const hadLocalOnly = await window.applyCloudWordsLearned(cloudWordsLearned);
+        if(hadLocalOnly) scheduleWordsLearnedPush();
+      }catch(e){ console.error("words3000 initial cloud pull error:", e); }
+    });
+  }
 </script>
 </body>
 </html>
