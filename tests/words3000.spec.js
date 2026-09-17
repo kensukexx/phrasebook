@@ -9,11 +9,13 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     const card = page.locator('.w3k-card').first();
     await expect(card).toBeVisible();
     await expect(card.locator('.w3k-word')).toHaveText('the');
-    // the Japanese meaning and the example sentence (English only) are visible on the
-    // front at a glance, without tapping
+    // the word meaning and the example sentence (English + Japanese) are visible on the
+    // front at a glance, without tapping - laid out beside the word/kana column so the
+    // whitespace that would otherwise sit to the right of a short word is put to use
     await expect(card.locator('.w3k-ja-front')).toHaveText('その、あの（定冠詞）');
     await expect(card.locator('.w3k-ex-front')).toHaveText('I saw the movie.');
-    // the example's kana/Japanese translation/gloss stay hidden until the card is tapped
+    await expect(card.locator('.w3k-ex-ja-front')).toHaveText('私はその映画を見た。');
+    // the example's kana and the word-by-word gloss stay hidden until the card is tapped
     await expect(card).not.toHaveClass(/revealed/);
     await expect(card.locator('.w3k-back')).toBeHidden();
   });
