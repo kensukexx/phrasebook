@@ -386,6 +386,73 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await expect(page.locator('#words3000EnRepsSel')).toHaveValue('3');
       await expect(page.locator('#words3000JaRepsSel')).toHaveValue('2');
     });
+
+    test('the "例文も読む" toggle appends the example sentence (English then Japanese) after the word, and persists', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.fill('#words3000Search', 'water'); // exactly one match
+
+      await page.check('#words3000ExampleToggle');
+      const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
+      expect(prefs.readExample).toBe(true);
+
+      const requests = [];
+      page.on('request', req => {
+        if (req.url().includes('translate_tts')) {
+          const u = new URL(req.url());
+          requests.push(`${u.searchParams.get('tl')}:${u.searchParams.get('q')}`);
+        }
+      });
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶', { timeout: 10000 });
+
+      const runs = [];
+      for (const r of requests) { if (runs.length === 0 || runs[runs.length - 1] !== r) runs.push(r); }
+      expect(runs).toEqual(['en:water', 'en:Can I have some water, please?', 'ja:お水をいただけますか？']);
+
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleToggle')).toBeChecked();
+    });
+  });
+
+  test.describe('自動再生は覚えた単語を飛ばす', () => {
+    test('already-learned words are skipped entirely during auto-play, not just played anyway', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.fill('#words3000Search', 'can'); // matches "can" then "cancel", in that rank order
+      await page.locator('.w3k-card[data-word="can"] [data-role="learn"]').click();
+
+      const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 15000 });
+      await page.click('#words3000ListenBtn');
+      const req = await ttsRequest;
+      // "can" is already learned, so playback jumps straight to "cancel" instead of playing "can" first
+      expect(new URL(req.url()).searchParams.get('q')).toBe('cancel');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveAttribute('data-word', 'cancel');
+    });
+  });
+
+  test.describe('詳細設定の折りたたみ（上部パネルの表示量を自分で調整できる）', () => {
+    test('collapsing hides 品詞・くり返し回数・検索など, while 範囲 and the playback buttons stay visible', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await expect(page.locator('#words3000CollapsibleControls')).toBeVisible();
+      await expect(page.locator('#words3000PosSel')).toBeVisible();
+
+      await page.click('#words3000CollapseToggle');
+      await expect(page.locator('#words3000CollapsibleControls')).toBeHidden();
+      // 範囲・自動再生ボタンはパネル折りたたみの影響を受けず常に見える
+      await expect(page.locator('#words3000TierSel')).toBeVisible();
+      await expect(page.locator('#words3000ListenBtn')).toBeVisible();
+      await expect(page.locator('#words3000RateBtn')).toBeVisible();
+
+      await page.click('#words3000CollapseToggle');
+      await expect(page.locator('#words3000CollapsibleControls')).toBeVisible();
+    });
   });
 
   test.describe('テストモード（意味を隠して自己採点するフラッシュカード）', () => {

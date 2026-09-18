@@ -64,6 +64,16 @@
   .w3k-repeatrow{ display:flex; align-items:center; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
   .w3k-repeatrow label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
   .w3k-repeatrow select{ padding:6px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:13px; color:var(--ink); }
+  .w3k-checkbox-label{ display:flex; align-items:center; gap:5px; margin-left:4px; }
+  .w3k-checkbox-label input{ width:16px; height:16px; }
+
+  /* 「上のパネルが常に完全固定で表示幅を圧迫する」という指摘を受けて追加。範囲・自動再生の
+     ボタンは常時表示のまま、品詞以下の詳細設定だけをこのボタンで開閉できるようにし、
+     どれだけ画面を使うかを自分で調整できるようにする。 */
+  .w3k-collapse-toggle{ display:block; width:100%; padding:6px; margin-bottom:2px; border:none; background:none; color:var(--blue);
+    font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12px; font-weight:700; cursor:pointer; }
+  #words3000CollapsibleControls{ padding-top:10px; }
+  #words3000CollapsibleControls.collapsed{ display:none; }
 
   .w3k-optionrow{ display:flex; gap:8px; margin-bottom:14px; }
   .chip-toggle{ flex:1; padding:9px 10px; border:1.5px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft);
@@ -141,38 +151,42 @@
       <label>範囲</label>
       <select id="words3000TierSel"></select>
     </div>
-    <div class="field">
-      <label>品詞</label>
-      <select id="words3000PosSel"></select>
-    </div>
     <div class="w3k-playbar">
       <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
       <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
       <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
       <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
     </div>
-    <div class="w3k-repeatrow">
-      <label for="words3000EnRepsSel">英語</label>
-      <select id="words3000EnRepsSel">
-        <option value="1">×1</option>
-        <option value="2">×2</option>
-        <option value="3">×3</option>
-      </select>
-      <label for="words3000JaRepsSel">日本語</label>
-      <select id="words3000JaRepsSel">
-        <option value="0">なし</option>
-        <option value="1">×1</option>
-        <option value="2">×2</option>
-      </select>
+    <button class="w3k-collapse-toggle" id="words3000CollapseToggle" aria-expanded="true">詳細設定 ▾</button>
+    <div id="words3000CollapsibleControls">
+      <div class="field">
+        <label>品詞</label>
+        <select id="words3000PosSel"></select>
+      </div>
+      <div class="w3k-repeatrow">
+        <label for="words3000EnRepsSel">英語</label>
+        <select id="words3000EnRepsSel">
+          <option value="1">×1</option>
+          <option value="2">×2</option>
+          <option value="3">×3</option>
+        </select>
+        <label for="words3000JaRepsSel">日本語</label>
+        <select id="words3000JaRepsSel">
+          <option value="0">なし</option>
+          <option value="1">×1</option>
+          <option value="2">×2</option>
+        </select>
+        <label class="w3k-checkbox-label"><input type="checkbox" id="words3000ExampleToggle"> 例文も読む</label>
+      </div>
+      <div class="w3k-optionrow">
+        <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
+        <button class="chip-toggle" id="words3000TestModeBtn" aria-label="テストモード">📝 テストモード</button>
+      </div>
+      <div class="searchwrap">
+        <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索">
+      </div>
+      <p class="hint" id="words3000Progress" style="margin-bottom:0;"></p>
     </div>
-    <div class="w3k-optionrow">
-      <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
-      <button class="chip-toggle" id="words3000TestModeBtn" aria-label="テストモード">📝 テストモード</button>
-    </div>
-    <div class="searchwrap">
-      <input type="text" id="words3000Search" placeholder="単語 or 日本語で検索">
-    </div>
-    <p class="hint" id="words3000Progress" style="margin-bottom:0;"></p>
   </div>
   <div id="words3000List"></div>
   <div id="words3000TestArea" hidden></div>
@@ -258,6 +272,7 @@ let shuffleListen = false;
 let testMode = false;
 let enReps = 1;
 let jaReps = 0;
+let readExample = false;
 async function loadW3kPrefs(){
   let saved = {};
   try{
@@ -268,11 +283,12 @@ async function loadW3kPrefs(){
   shuffleListen = !!saved.shuffleListen;
   enReps = (saved.enReps>0) ? saved.enReps : 1;
   jaReps = (saved.jaReps>=0) ? saved.jaReps : 0;
+  readExample = !!saved.readExample;
   return saved.posFilter || "";
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, enReps, jaReps }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, enReps, jaReps, readExample }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -674,6 +690,9 @@ function highlightWords3000Playing(word){
   const targetY = window.scrollY + el.getBoundingClientRect().top - stickyHeight - 12;
   window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
 }
+// queueの各要素は "en"(単語の発音)・"ja"(単語の意味)・"ex-en"(例文の英文)・"ex-ja"(例文の和訳)。
+const W3K_QUEUE_TEXT = { en: w=>w.word, ja: w=>w.ja, "ex-en": w=>w.ex.en, "ex-ja": w=>w.ex.ja };
+const W3K_QUEUE_LANG = { en: "en-US", ja: "ja-JP", "ex-en": "en-US", "ex-ja": "ja-JP" };
 function playWords3000Queue(w, queue, i){
   if(!words3000ListenState.active) return;
   if(i >= queue.length){
@@ -684,9 +703,9 @@ function playWords3000Queue(w, queue, i){
     }, listenGap);
     return;
   }
-  const isEn = queue[i] === "en";
+  const kind = queue[i];
   const isLastInWord = i === queue.length - 1;
-  speakRaw(isEn ? w.word : w.ja, isEn ? "en-US" : "ja-JP", null, ()=>{
+  speakRaw(W3K_QUEUE_TEXT[kind](w), W3K_QUEUE_LANG[kind], null, ()=>{
     if(!words3000ListenState.active) return;
     if(isLastInWord){ playWords3000Queue(w, queue, i+1); }
     else { setTimeout(()=> playWords3000Queue(w, queue, i+1), Math.min(listenGap, 350)); }
@@ -703,7 +722,8 @@ function playWords3000Step(){
   const queue = [];
   for(let i=0; i<enReps; i++) queue.push("en");
   for(let i=0; i<jaReps; i++) queue.push("ja");
-  if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回は想定しないが、無音で止まらないための保険
+  if(readExample){ queue.push("ex-en"); queue.push("ex-ja"); }
+  if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回・例文もOFFは想定しないが、無音で止まらないための保険
   playWords3000Queue(w, queue, 0);
 }
 // 一時停止した続きから再生できるように、■で止めた時点のlist/indexを保持しておく
@@ -718,8 +738,12 @@ function startWords3000Listening(){
     playWords3000Step();
     return;
   }
-  let list = words3000FilteredList();
-  if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認してください）"); return; }
+  // 表示（一覧）は「未習得のみ」がOFFなら覚えた単語も見えたままにしておきたいが、自動再生は
+  // 「覚えた単語チェック入ってるやつは読み飛ばしていい」という要望を受けて、表示フィルタとは
+  // 別に常に✓済みの単語を飛ばす（「未習得のみ」がONの時はwords3000FilteredList()側で
+  // 既に除外済みなので、ここでの絞り込みは実質何もしない）。
+  let list = words3000FilteredList().filter(w=>!wordsLearned[w.word]);
+  if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認するか、すべて覚えた✓済みかもしれません）"); return; }
   if(shuffleListen) list = shuffleArray(list.slice());
   words3000ListenState = { active:true, list, index:0 };
   playWords3000Step();
@@ -883,6 +907,15 @@ document.getElementById("words3000JaRepsSel").addEventListener("change", (e)=>{
   jaReps = parseInt(e.target.value, 10) || 0;
   saveW3kPrefs();
 });
+document.getElementById("words3000ExampleToggle").addEventListener("change", (e)=>{
+  readExample = e.target.checked;
+  saveW3kPrefs();
+});
+document.getElementById("words3000CollapseToggle").addEventListener("click", (e)=>{
+  const collapsed = document.getElementById("words3000CollapsibleControls").classList.toggle("collapsed");
+  e.currentTarget.textContent = collapsed ? "詳細設定 ▸" : "詳細設定 ▾";
+  e.currentTarget.setAttribute("aria-expanded", String(!collapsed));
+});
 
 (async function init(){
   await loadState();
@@ -893,6 +926,7 @@ document.getElementById("words3000JaRepsSel").addEventListener("change", (e)=>{
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
   document.getElementById("words3000EnRepsSel").value = String(enReps);
   document.getElementById("words3000JaRepsSel").value = String(jaReps);
+  document.getElementById("words3000ExampleToggle").checked = readExample;
   populateWords3000TierSelect();
   populateWords3000PosSelect(savedPos);
   renderWords3000List();

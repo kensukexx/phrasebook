@@ -63,6 +63,10 @@
     - **対応**: `words3000.html`の末尾に、`index.html`本体と**同じFirebaseプロジェクト**（`firebaseConfig`は秘密情報ではないためそのまま複製）を使う、独立した`<script type="module">`同期モジュールを追加した。Firebase Authはブラウザに永続化されるため、`index.html`側で一度サインインしていれば、同一オリジンのこのページでも自動的にサインイン状態を引き継ぐ（このページ側にサインインUIは無い）。ページを開いた時に一度だけクラウドの`wordsLearned`をpull→和集合マージ→ローカル限定のエントリがあればpushし、以後は「覚えた✓」の操作のたびに1.2秒デバウンスでpush、`visibilitychange`（hidden化）での即時flushも`index.html`と同じパターンで持たせた。
     - **`setDoc(..., {merge:true})`でwordsLearnedだけを部分更新**: `index.html`本体の`pushNow()`は`customData`/`learned`/`catOrder`等を含む状態全体を`setDoc`で丸ごと上書きするが、`words3000.html`はそれらのフィールドを一切メモリに持っていない（読み込んでもいない）ため、同じやり方をすると他のフィールドを消してしまう。`words3000.html`側のpushは`{wordsLearned, updatedAt}`だけを`{merge:true}`で送ることで、他のフィールドに一切触れずに済むようにしている。
     - **`let`変数はモジュールから直接触れない、という制約への対処**: `wordsLearned`はクラシックスクリプト側の`let`宣言のため、`type="module"`のスクリプトからは（`window`に乗らないため）直接読み書きできない（`index.html`本体の`applyCloudState`が同じ理由でクラシックスクリプト側に置かれているのと全く同じ制約）。`getWordsLearnedSnapshot()`・`applyCloudWordsLearned()`という2つの橋渡し関数をクラシックスクリプト側に用意し、モジュール側はこれらを`window.関数名()`経由で呼ぶことで解決した。
+  - **自動再生・画面表示の改善（2026-09-18）**: 上記の同期修正と同じセッションで、続けて3つの要望に対応。
+    - **自動再生が覚えた単語を自動で読み飛ばす**:「覚えた単語チェック入ってるやつは読み飛ばしていいと思う」という提案を受けて、`startWords3000Listening()`で組み立てる再生キューから`wordsLearned[w.word]`が真の単語を無条件に除外するようにした（一覧の表示自体は「未習得のみ」がOFFなら従来通り✓済みの単語も見える。自動再生の対象だけを絞る）。フレーズ帳本体の聞き流し（`orderForListening()`）は「覚えた分を末尾に回す」だけで除外はしないが、今回は「読み飛ばしていい」という明示的な要望だったため、words3000側は完全に除外する仕様にした。
+    - **「例文も読む」トグル**: `enReps`/`jaReps`と同じ仕組みで、1語分の読み上げキューの末尾に`readExample`がONの時だけ`"ex-en"`・`"ex-ja"`を追加するようにした（`playWords3000Queue`のキュー要素を`en`/`ja`の2種類から4種類に拡張し、テキスト・言語の対応表`W3K_QUEUE_TEXT`/`W3K_QUEUE_LANG`で一本化）。`phrasebook-words3000-prefs`に`readExample`として保存。
+    - **上部操作パネルの折りたたみ**:「インターフェースの上の方が完全に固定になってるんで...自分で稼働して表示の幅を変えられるほうがいい」という指摘を受けて追加。`.w3k-sticky`のうち「範囲」select と自動再生の`.w3k-playbar`は常に表示したまま、それ以外（品詞・英語/日本語くり返し回数・例文も読む・未習得のみ/テストモードのトグル・検索・進捗）を`#words3000CollapsibleControls`という1つの`<div>`にまとめ、「詳細設定 ▾/▸」ボタン（`words3000CollapseToggle`）でCSSの`.collapsed{display:none}`により開閉できるようにした。折りたたみ状態はテストモードと同様に永続化しない（開くたびに展開済みから始まる）。実装前にPlaywrightでローカルサーバーを立て、展開時・折りたたみ時の両方をスクリーンショットで確認してから確定した。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -82,7 +86,7 @@ manifest.json          PWAマニフェスト
 sw.js                   Service Worker（オフラインシェルキャッシュのみ、v3）
 firestore.rules         Firestoreセキュリティルール
 tests/                  Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計294テスト
+playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計300テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 
