@@ -38,12 +38,8 @@
   header{ position:relative; background: linear-gradient(135deg, #FF6B6B 0%, #FF9F43 70%, #FEC84D 100%); color:#fff; padding:18px 20px 22px; overflow:hidden; }
   header::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:7px;
     background: linear-gradient(90deg, #FF6B6B, #F7B731, #20BF6B, #0FB9B1, #4D96FF, #A55EEA, #FF6FA5); }
-  .headtop{ display:flex; align-items:center; gap:12px; }
-  .icon-btn{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; border:none;
-    background:rgba(255,255,255,0.25); color:#fff; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; text-decoration:none; }
-  .icon-btn:active{ transform:scale(0.94); }
   h1{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:900; font-size:clamp(20px,6vw,26px); margin:0; letter-spacing:.02em; text-shadow:0 2px 0 rgba(0,0,0,0.08); }
-  header p.sub{ margin:6px 0 0 52px; font-size:12.5px; color:rgba(255,255,255,0.92); }
+  header p.sub{ margin:6px 0 0; font-size:12.5px; color:rgba(255,255,255,0.92); }
 
   main{ padding:16px 16px 28px; }
   /* 自動再生中、今読んでいる単語のカードへ自動スクロールすると、範囲・品詞・速度などの
@@ -60,6 +56,9 @@
   .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
   .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .w3k-playbar{ display:flex; align-items:center; gap:8px; padding:0 0 10px; }
+  /* 戻るボタン。以前はヘッダー内（ページ最上部）にしか無く、自動再生でカードが自動スクロール
+     すると一緒に画面外へ流れて戻れなくなる、という指摘を受けてsticky領域内に移設した。 */
+  .w3k-back-btn{ display:flex; align-items:center; justify-content:center; text-decoration:none; font-weight:700; }
 
   .w3k-repeatrow{ display:flex; align-items:center; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
   .w3k-repeatrow label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
@@ -138,10 +137,7 @@
 <body>
 
 <header>
-  <div class="headtop">
-    <a class="icon-btn" href="./index.html" aria-label="フレーズ帳に戻る">←</a>
-    <h1>📚 英単語3000</h1>
-  </div>
+  <h1>📚 英単語3000</h1>
   <p class="sub">日常会話の9割をカバーすると言われる頻出語を、使用頻度順に学べます。</p>
 </header>
 
@@ -152,6 +148,7 @@
       <select id="words3000TierSel"></select>
     </div>
     <div class="w3k-playbar">
+      <a class="filter-icon w3k-back-btn" href="./index.html" aria-label="フレーズ帳に戻る" title="フレーズ帳に戻る">←</a>
       <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
       <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
       <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>

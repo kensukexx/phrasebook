@@ -27,6 +27,20 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     await expect(page.locator('#menuWords3000')).toHaveAttribute('href', 'words3000.html');
   });
 
+  test('the back-to-phrasebook link lives in the sticky panel, so it stays reachable after scrolling (not stuck at the top of the page)', async ({ page }) => {
+    // Regression guard: this link used to sit only in the page header, which isn't sticky -
+    // scrolling down (e.g. during auto-play, which auto-scrolls to the playing card) carried
+    // it off-screen with no way back short of scrolling all the way back up.
+    await page.goto('/words3000.html');
+    await page.waitForSelector('.w3k-card');
+    const backLink = page.locator('.w3k-back-btn');
+    await expect(backLink).toHaveAttribute('href', './index.html');
+    await expect(backLink).toBeVisible();
+
+    await page.evaluate(() => window.scrollTo(0, 3000));
+    await expect(backLink).toBeVisible(); // still reachable, inside .w3k-sticky
+  });
+
   test('tapping a card reveals the meaning and example sentence, tapping again hides it', async ({ page }) => {
     await mockGoogleTTS(page);
     await page.goto('/words3000.html');

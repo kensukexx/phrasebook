@@ -67,6 +67,7 @@
     - **自動再生が覚えた単語を自動で読み飛ばす**:「覚えた単語チェック入ってるやつは読み飛ばしていいと思う」という提案を受けて、`startWords3000Listening()`で組み立てる再生キューから`wordsLearned[w.word]`が真の単語を無条件に除外するようにした（一覧の表示自体は「未習得のみ」がOFFなら従来通り✓済みの単語も見える。自動再生の対象だけを絞る）。フレーズ帳本体の聞き流し（`orderForListening()`）は「覚えた分を末尾に回す」だけで除外はしないが、今回は「読み飛ばしていい」という明示的な要望だったため、words3000側は完全に除外する仕様にした。
     - **「例文も読む」トグル**: `enReps`/`jaReps`と同じ仕組みで、1語分の読み上げキューの末尾に`readExample`がONの時だけ`"ex-en"`・`"ex-ja"`を追加するようにした（`playWords3000Queue`のキュー要素を`en`/`ja`の2種類から4種類に拡張し、テキスト・言語の対応表`W3K_QUEUE_TEXT`/`W3K_QUEUE_LANG`で一本化）。`phrasebook-words3000-prefs`に`readExample`として保存。
     - **上部操作パネルの折りたたみ**:「インターフェースの上の方が完全に固定になってるんで...自分で稼働して表示の幅を変えられるほうがいい」という指摘を受けて追加。`.w3k-sticky`のうち「範囲」select と自動再生の`.w3k-playbar`は常に表示したまま、それ以外（品詞・英語/日本語くり返し回数・例文も読む・未習得のみ/テストモードのトグル・検索・進捗）を`#words3000CollapsibleControls`という1つの`<div>`にまとめ、「詳細設定 ▾/▸」ボタン（`words3000CollapseToggle`）でCSSの`.collapsed{display:none}`により開閉できるようにした。折りたたみ状態はテストモードと同様に永続化しない（開くたびに展開済みから始まる）。実装前にPlaywrightでローカルサーバーを立て、展開時・折りたたみ時の両方をスクリーンショットで確認してから確定した。
+  - **「フレーズ帳に戻る」ボタンをsticky領域内へ移設（2026-09-18）**:「戻るボタンが一番上にあるので、再生中などは戻れないようになっている」という指摘で発覚。この戻るリンクは`<header>`内（`.headtop`）にあったが、`<header>`自体はsticky化しておらず、自動再生でカードへ自動スクロールすると一緒に画面外へ流れて、スクロールバーを一番上まで戻さない限り押せなくなっていた——`.w3k-sticky`導入時（9/16）に他の操作（品詞・速度等）は移設済みだったのに、この戻るリンクだけ`<header>`側に取り残されていた見落とし。`.w3k-playbar`の先頭（▶ボタンの前）に`.w3k-back-btn`として移設し、`<header>`側の`.headtop`ラッパー・`.icon-btn`は不要になったため削除した（`h1`が直接`<header>`の子になり、`p.sub`の`margin-left:52px`という、削除したアイコンぶんのオフセットも合わせて0に戻した）。実装前後でPlaywrightのスクリーンショットにより、ページ最上部・大きくスクロールした状態の両方で戻るボタンが見えることを確認済み。
 
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
@@ -86,7 +87,7 @@ manifest.json          PWAマニフェスト
 sw.js                   Service Worker（オフラインシェルキャッシュのみ、v3）
 firestore.rules         Firestoreセキュリティルール
 tests/                  Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計300テスト
+playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計302テスト
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 
