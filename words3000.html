@@ -68,11 +68,11 @@
      すると一緒に画面外へ流れて戻れなくなる、という指摘を受けてsticky領域内に移設した。 */
   .w3k-back-btn{ display:flex; align-items:center; justify-content:center; text-decoration:none; font-weight:700; }
 
-  .w3k-repeatrow{ display:flex; align-items:center; gap:6px; margin-bottom:14px; flex-wrap:wrap; }
-  .w3k-repeatrow label{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; color:var(--ink-soft); }
-  .w3k-repeatrow select{ padding:6px 8px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:13px; color:var(--ink); }
-  .w3k-checkbox-label{ display:flex; align-items:center; gap:5px; margin-left:4px; }
-  .w3k-checkbox-label input{ width:16px; height:16px; }
+  /* 「最後に例文も読む」のチェックボックス。.field label は大文字化・小さめの見出し用なので、
+     そちらの指定を打ち消して通常の文章として読める見た目にする。 */
+  .w3k-checkbox-label{ display:flex; align-items:center; gap:6px; margin:8px 0 0; font-size:12.5px;
+    letter-spacing:normal; text-transform:none; color:var(--ink); }
+  .w3k-checkbox-label input{ width:16px; height:16px; flex:0 0 auto; }
 
   /* 「上のパネルが常に完全固定で表示幅を圧迫する」という指摘を受けて追加。範囲・自動再生の
      ボタンは常時表示のまま、品詞以下の詳細設定だけをこのボタンで開閉できるようにし、
@@ -169,20 +169,10 @@
         <label>品詞</label>
         <select id="words3000PosSel"></select>
       </div>
-      <div class="w3k-repeatrow">
-        <label for="words3000EnRepsSel">英語</label>
-        <select id="words3000EnRepsSel">
-          <option value="1">×1</option>
-          <option value="2">×2</option>
-          <option value="3">×3</option>
-        </select>
-        <label for="words3000JaRepsSel">日本語</label>
-        <select id="words3000JaRepsSel">
-          <option value="0">なし</option>
-          <option value="1">×1</option>
-          <option value="2">×2</option>
-        </select>
-        <label class="w3k-checkbox-label"><input type="checkbox" id="words3000ExampleToggle"> 例文も読む</label>
+      <div class="field">
+        <label>自動再生の読み上げ順</label>
+        <select id="words3000ReadOrderSel"></select>
+        <label class="w3k-checkbox-label"><input type="checkbox" id="words3000ExampleToggle"> 最後に例文も読む（英文 → 和訳）</label>
       </div>
       <div class="w3k-optionrow">
         <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
@@ -312,9 +302,24 @@ async function applyCloudWordsLearned(cloudWordsLearned){
 let unlearnedOnly = false;
 let shuffleListen = false;
 let testMode = false;
-let enReps = 1;
-let jaReps = 0;
 let readExample = false;
+
+// --- 自動再生の読み上げ順 ---
+// 元は「英語×N回」「日本語×M回」という2つの数値で指定していたが、実際にどの順番で読まれるか
+// （まとめて英英和なのか、交互に英和英和なのか）がUIから読み取れない、という指摘を受けて
+// 「順番そのものを選ぶ」形に作り替えた。値は "en,ja,en" のような読み上げ順をそのまま表した
+// 文字列で、これを分解するだけで再生キューになる。
+const READ_ORDER_PRESETS = [
+  { value:"en",          label:"英語" },
+  { value:"en,en",       label:"英語 → 英語" },
+  { value:"en,ja",       label:"英語 → 日本語" },
+  { value:"en,en,ja",    label:"英語 → 英語 → 日本語" },
+  { value:"en,ja,en",    label:"英語 → 日本語 → 英語" },
+  { value:"en,ja,en,ja", label:"英語 → 日本語 → 英語 → 日本語" },
+  { value:"ja,en",       label:"日本語 → 英語（意味から英語を思い出す）" },
+  { value:"ja,en,en",    label:"日本語 → 英語 → 英語" },
+];
+let readOrder = "en";
 async function loadW3kPrefs(){
   let saved = {};
   try{
@@ -323,14 +328,27 @@ async function loadW3kPrefs(){
   }catch(e){}
   unlearnedOnly = !!saved.unlearnedOnly;
   shuffleListen = !!saved.shuffleListen;
-  enReps = (saved.enReps>0) ? saved.enReps : 1;
-  jaReps = (saved.jaReps>=0) ? saved.jaReps : 0;
   readExample = !!saved.readExample;
+  readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
+}
+// 旧形式（enReps/jaReps）で保存されていた設定を、同じ読み上げ順を表す新形式へ読み替える。
+// 一覧に無い組み合わせ（英語3回など）だった場合は、いちばん近い「英語 → 日本語」に寄せる。
+function normalizeReadOrder(saved){
+  if(saved.readOrder && READ_ORDER_PRESETS.some(p=>p.value === saved.readOrder)) return saved.readOrder;
+  if(saved.enReps > 0 || saved.jaReps > 0){
+    const legacy = [
+      ...Array(Math.max(saved.enReps|0, 0)).fill("en"),
+      ...Array(Math.max(saved.jaReps|0, 0)).fill("ja"),
+    ].join(',');
+    if(READ_ORDER_PRESETS.some(p=>p.value === legacy)) return legacy;
+    return "en,ja";
+  }
+  return "en";
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, enReps, jaReps, readExample }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -737,10 +755,9 @@ function renderWords3000List(){
 // 速度(rate)・フレーズ間隔(listenGap)・ループ(listenLoop)は`phrasebook-settings`を通じて
 // 同じ設定を共有し、対象は現在の範囲・品詞・検索・未習得のみの絞り込み
 // （words3000FilteredList()）。shuffleListenがONなら再生順もランダムにする。
-// 英語enReps回→日本語jaReps回、という単語ごとの読み上げパターンはこのページ専用の設定
-// （enReps/jaReps）で、「英語2回・日本語1回」のように交互ではなくまとめて繰り返せるよう、
-// 1語分の読み上げ手順を["en","en",...,"ja","ja",...]という単純なキューに展開してから
-// 順番に読み上げる。 ---
+// 1語ぶんの読み上げ順はこのページ専用の設定（readOrder）で、"en,ja,en" のような文字列を
+// そのまま分解してキューにする。「英語→日本語→英語→日本語」のような交互も、
+// 「英語→英語→日本語」のようなまとめ読みも、同じ仕組みで表せる。 ---
 let words3000ListenState = { active:false, list:[], index:0 };
 function updateWords3000ListenButton(){
   const btn = document.getElementById("words3000ListenBtn");
@@ -796,9 +813,7 @@ function playWords3000Step(){
   const w = words3000ListenState.list[words3000ListenState.index];
   highlightWords3000Playing(w.word);
   updateWords3000ListenButton();
-  const queue = [];
-  for(let i=0; i<enReps; i++) queue.push("en");
-  for(let i=0; i<jaReps; i++) queue.push("ja");
+  const queue = readOrder.split(',').filter(Boolean);
   if(readExample){ queue.push("ex-en"); queue.push("ex-ja"); }
   if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回・例文もOFFは想定しないが、無音で止まらないための保険
   playWords3000Queue(w, queue, 0);
@@ -983,12 +998,8 @@ document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", listenLoop);
   saveSharedSetting({ listenLoop });
 });
-document.getElementById("words3000EnRepsSel").addEventListener("change", (e)=>{
-  enReps = parseInt(e.target.value, 10) || 1;
-  saveW3kPrefs();
-});
-document.getElementById("words3000JaRepsSel").addEventListener("change", (e)=>{
-  jaReps = parseInt(e.target.value, 10) || 0;
+document.getElementById("words3000ReadOrderSel").addEventListener("change", (e)=>{
+  readOrder = e.target.value;
   saveW3kPrefs();
 });
 document.getElementById("words3000ExampleToggle").addEventListener("change", (e)=>{
@@ -1008,8 +1019,9 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", (e)
   document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
-  document.getElementById("words3000EnRepsSel").value = String(enReps);
-  document.getElementById("words3000JaRepsSel").value = String(jaReps);
+  const readOrderSel = document.getElementById("words3000ReadOrderSel");
+  readOrderSel.innerHTML = READ_ORDER_PRESETS.map(p=>`<option value="${p.value}">${p.label}</option>`).join('');
+  readOrderSel.value = readOrder;
   document.getElementById("words3000ExampleToggle").checked = readExample;
   populateWords3000TierSelect();
   populateWords3000PosSelect(savedPos);

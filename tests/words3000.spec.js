@@ -353,15 +353,14 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
-  test.describe('英語/日本語のくり返し回数（自動再生）', () => {
-    test('plays English enReps times, then Japanese jaReps times, in that order, per word', async ({ page }) => {
-      await mockGoogleTTS(page);
-      await page.goto('/words3000.html');
-      await page.waitForSelector('.w3k-card');
-      await page.fill('#words3000Search', 'water'); // exactly one match, keeps the request order unambiguous
-
-      await page.selectOption('#words3000EnRepsSel', '2');
-      await page.selectOption('#words3000JaRepsSel', '1');
+  test.describe('自動再生の読み上げ順', () => {
+    // Collapsing consecutive duplicates into "runs" (rather than asserting an exact request
+    // count) is deliberate: the mocked <audio> occasionally re-requests the same URL under
+    // headless Chromium's autoplay handling, which is an artifact of the mock, not of the
+    // app's playback logic. The order of distinct steps is what actually matters here.
+    async function playOnceAndCollectOrder(page, order) {
+      await page.fill('#words3000Search', 'water'); // exactly one match, so the order is unambiguous
+      await page.selectOption('#words3000ReadOrderSel', order);
 
       const requests = [];
       page.on('request', req => {
@@ -374,36 +373,60 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#words3000ListenBtn');
       // only one word in range and loop is off, so playback finishes on its own
       await expect(page.locator('#words3000ListenBtn')).toHaveText('▶', { timeout: 10000 });
+      return requests.filter((r, i) => r !== requests[i - 1]);
+    }
 
-      // Collapse consecutive duplicates into "runs" rather than asserting an exact request
-      // count: the mocked <audio> occasionally re-requests the same URL under headless
-      // Chromium's autoplay handling, but that's an artifact of the mock, not of the app's
-      // playback logic. What actually matters here is (a) English is played entirely before
-      // Japanese (not alternated en/ja/en/ja), and (b) English's run is twice as long as
-      // Japanese's, matching enReps:jaReps = 2:1.
-      const runs = [];
-      for (const r of requests) {
-        if (runs.length === 0 || runs[runs.length - 1].value !== r) runs.push({ value: r, count: 1 });
-        else runs[runs.length - 1].count++;
-      }
-      expect(runs.map(r => r.value)).toEqual(['en:water', 'ja:水']);
-      expect(runs[0].count).toBe(runs[1].count * 2);
+    test('reads the word in exactly the order picked - batched (英語→英語→日本語)', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      expect(await playOnceAndCollectOrder(page, 'en,en,ja')).toEqual(['en:water', 'ja:水']);
     });
 
-    test('the selected counts persist across reload via the words3000-only prefs key', async ({ page }) => {
+    test('reads the word in exactly the order picked - alternating (英語→日本語→英語→日本語)', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      // the point of this option: en/ja alternate rather than being grouped together
+      expect(await playOnceAndCollectOrder(page, 'en,ja,en,ja')).toEqual(['en:water', 'ja:水', 'en:water', 'ja:水']);
+    });
+
+    test('reads the word in exactly the order picked - Japanese first (日本語→英語)', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      expect(await playOnceAndCollectOrder(page, 'ja,en')).toEqual(['ja:水', 'en:water']);
+    });
+
+    test('the selected order persists across reload via the words3000-only prefs key', async ({ page }) => {
       await page.goto('/words3000.html');
       await page.waitForSelector('.w3k-card');
 
-      await page.selectOption('#words3000EnRepsSel', '3');
-      await page.selectOption('#words3000JaRepsSel', '2');
+      await page.selectOption('#words3000ReadOrderSel', 'en,ja,en,ja');
       const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
-      expect(prefs.enReps).toBe(3);
-      expect(prefs.jaReps).toBe(2);
+      expect(prefs.readOrder).toBe('en,ja,en,ja');
 
       await page.reload();
       await page.waitForSelector('.w3k-card');
-      await expect(page.locator('#words3000EnRepsSel')).toHaveValue('3');
-      await expect(page.locator('#words3000JaRepsSel')).toHaveValue('2');
+      await expect(page.locator('#words3000ReadOrderSel')).toHaveValue('en,ja,en,ja');
+    });
+
+    test('settings saved in the old enReps/jaReps format are carried over to the equivalent order', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words3000-prefs', JSON.stringify({ enReps: 2, jaReps: 1 }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ReadOrderSel')).toHaveValue('en,en,ja');
+    });
+
+    test('an old combination with no matching order falls back to 英語→日本語 instead of breaking', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words3000-prefs', JSON.stringify({ enReps: 3, jaReps: 2 }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ReadOrderSel')).toHaveValue('en,ja');
     });
 
     test('the "例文も読む" toggle appends the example sentence (English then Japanese) after the word, and persists', async ({ page }) => {
