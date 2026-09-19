@@ -303,6 +303,15 @@ let unlearnedOnly = false;
 let shuffleListen = false;
 let testMode = false;
 let readExample = false;
+// 詳細設定パネルの開閉。スマホだと開いたままでは画面の6割近くを占めて単語が2枚半しか
+// 見えないため、閉じた状態も記憶して次に開いた時もそのままにする。
+let controlsCollapsed = false;
+function applyControlsCollapsed(){
+  document.getElementById("words3000CollapsibleControls").classList.toggle("collapsed", controlsCollapsed);
+  const btn = document.getElementById("words3000CollapseToggle");
+  btn.textContent = controlsCollapsed ? "詳細設定 ▸" : "詳細設定 ▾";
+  btn.setAttribute("aria-expanded", String(!controlsCollapsed));
+}
 
 // --- 自動再生の読み上げ順 ---
 // 元は「英語×N回」「日本語×M回」という2つの数値で指定していたが、実際にどの順番で読まれるか
@@ -329,6 +338,7 @@ async function loadW3kPrefs(){
   unlearnedOnly = !!saved.unlearnedOnly;
   shuffleListen = !!saved.shuffleListen;
   readExample = !!saved.readExample;
+  controlsCollapsed = !!saved.controlsCollapsed;
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
 }
@@ -348,7 +358,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -771,18 +781,21 @@ function updateWords3000ListenButton(){
     btn.classList.remove("listen-on");
   }
 }
+// scrollIntoView(block:"center"等)は、範囲・品詞・速度などをまとめたsticky領域が画面上部を
+// 塞いでいることを考慮しないため、そのまま使うと対象がsticky領域の裏に隠れる。sticky領域の
+// 実際の高さを差し引いた位置へ手動でスクロールする。
+function scrollBelowSticky(el){
+  const stickyEl = document.querySelector(".w3k-sticky");
+  const stickyHeight = stickyEl ? stickyEl.offsetHeight : 0;
+  const targetY = window.scrollY + el.getBoundingClientRect().top - stickyHeight - 12;
+  window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
+}
 function highlightWords3000Playing(word){
   document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
   const el = document.querySelector(`.w3k-card[data-word="${CSS.escape(word)}"]`);
   if(!el) return;
   el.classList.add("now-playing");
-  // scrollIntoView(block:"center")は範囲・品詞・速度などをまとめたsticky領域の分だけ
-  // 画面上部が塞がれていることを考慮しないため、そのまま使うとカードがsticky領域の
-  // 裏に隠れることがある。sticky領域の実際の高さを差し引いた位置へ手動でスクロールする。
-  const stickyEl = document.querySelector(".w3k-sticky");
-  const stickyHeight = stickyEl ? stickyEl.offsetHeight : 0;
-  const targetY = window.scrollY + el.getBoundingClientRect().top - stickyHeight - 12;
-  window.scrollTo({ top: Math.max(targetY, 0), behavior: "smooth" });
+  scrollBelowSticky(el);
 }
 // queueの各要素は "en"(単語の発音)・"ja"(単語の意味)・"ex-en"(例文の英文)・"ex-ja"(例文の和訳)。
 const W3K_QUEUE_TEXT = { en: w=>w.word, ja: w=>w.ja, "ex-en": w=>w.ex.en, "ex-ja": w=>w.ex.ja };
@@ -954,7 +967,14 @@ function renderTestCard(autoSpeak){
   document.getElementById("testNextBtn").addEventListener("click", ()=>{
     testState.index++; testState.revealed = false; renderTestCard(true);
   });
-  if(autoSpeak){ speakRaw(w.word, "en-US", document.getElementById("testSpeakBtn"), null); }
+  if(autoSpeak){
+    // 新しい問題に進んだ時だけ、カードの先頭がsticky領域の裏に隠れない位置へ戻す。
+    // （スマホだと1問がほぼ画面の高さぶんあり、答え合わせのボタンを押すために下へ
+    // スクロールした状態のまま次の問題に進むと、肝心の単語が隠れてしまうため）
+    // こたえを見た時（autoSpeak=false）はスクロールしない＝読んでいる位置を動かさない。
+    scrollBelowSticky(area);
+    speakRaw(w.word, "en-US", document.getElementById("testSpeakBtn"), null);
+  }
 }
 
 function onWords3000FiltersChanged(){
@@ -1006,10 +1026,10 @@ document.getElementById("words3000ExampleToggle").addEventListener("change", (e)
   readExample = e.target.checked;
   saveW3kPrefs();
 });
-document.getElementById("words3000CollapseToggle").addEventListener("click", (e)=>{
-  const collapsed = document.getElementById("words3000CollapsibleControls").classList.toggle("collapsed");
-  e.currentTarget.textContent = collapsed ? "詳細設定 ▸" : "詳細設定 ▾";
-  e.currentTarget.setAttribute("aria-expanded", String(!collapsed));
+document.getElementById("words3000CollapseToggle").addEventListener("click", ()=>{
+  controlsCollapsed = !controlsCollapsed;
+  applyControlsCollapsed();
+  saveW3kPrefs();
 });
 
 (async function init(){
@@ -1023,6 +1043,7 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", (e)
   readOrderSel.innerHTML = READ_ORDER_PRESETS.map(p=>`<option value="${p.value}">${p.label}</option>`).join('');
   readOrderSel.value = readOrder;
   document.getElementById("words3000ExampleToggle").checked = readExample;
+  applyControlsCollapsed();
   populateWords3000TierSelect();
   populateWords3000PosSelect(savedPos);
   renderWords3000List();

@@ -611,6 +611,42 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#words3000CollapseToggle');
       await expect(page.locator('#words3000CollapsibleControls')).toBeVisible();
     });
+
+    test('the collapsed state is remembered, so the panel does not eat the screen again on every visit', async ({ page }) => {
+      // on a phone the expanded panel covers ~60% of the viewport, leaving barely two cards
+      // visible - having to collapse it again on every visit defeats the point
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.click('#words3000CollapseToggle');
+
+      const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
+      expect(prefs.controlsCollapsed).toBe(true);
+
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000CollapsibleControls')).toBeHidden();
+      await expect(page.locator('#words3000CollapseToggle')).toHaveText('詳細設定 ▸');
+    });
+  });
+
+  test.describe('テストモードのスクロール位置', () => {
+    test('advancing to the next question brings the card back below the sticky panel, not behind it', async ({ page }) => {
+      // the sticky panel covers the top of the screen; on a phone one question is nearly a
+      // full screen tall, so after scrolling down to press ✓ the next word would otherwise
+      // render hidden behind the panel
+      await mockGoogleTTS(page);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.click('#words3000TestModeBtn');
+      await page.click('#testShowBtn');
+      await page.click('#testRightBtn'); // advance to the next question
+      await page.waitForTimeout(800);    // let the smooth scroll settle
+
+      const word = await page.locator('.w3k-testword').boundingBox();
+      const stickyBottom = await page.locator('.w3k-sticky').evaluate(el => el.getBoundingClientRect().bottom);
+      expect(word.y).toBeGreaterThan(stickyBottom);
+    });
   });
 
   test.describe('テストモード（意味を隠して自己採点するフラッシュカード）', () => {
