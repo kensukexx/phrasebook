@@ -77,6 +77,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     expect(options).toEqual([
       '1〜500語', '501〜1000語', '1001〜1500語', '1501〜2000語', '2001〜2500語', '2501〜3000語',
       '全3000語（1〜3000語）',
+      '🔁 今日の復習（0語）',
     ]);
     await expect(page.locator('.w3k-card')).toHaveCount(500);
     await page.selectOption('#words3000TierSel', '501-1000');
@@ -116,8 +117,11 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     await expect(card.locator('[data-role="learn"]')).toHaveClass(/done/);
     await expect(page.locator('#words3000Progress')).toHaveText('覚えた 1 / 500');
 
+    // the value carries the spaced-repetition schedule ({step, due}); what the rest of the app
+    // cares about is only that the entry exists and is truthy
     const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
-    expect(stored).toEqual({ the: true });
+    expect(Object.keys(stored)).toEqual(['the']);
+    expect(stored.the).toBeTruthy();
 
     await page.reload();
     await page.waitForSelector('.w3k-card');
@@ -137,7 +141,8 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     const syncable = await page.evaluate(() => window.getSyncableState());
-    expect(syncable.wordsLearned).toEqual({ the: true });
+    expect(Object.keys(syncable.wordsLearned)).toEqual(['the']);
+    expect(syncable.wordsLearned.the).toBeTruthy();
   });
 
   test('both speak buttons (word and example sentence) work without crashing', async ({ page }) => {
@@ -432,6 +437,122 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('間隔反復（忘れかけた頃に復習する）', () => {
+    // wordsLearnedは元々`{単語: true}`だったが、復習スケジュールを持たせるため
+    // `{単語: {step, due}}`も入るようにした。どちらもtruthyなので「覚えたかどうか」を見る
+    // 既存の判定や端末間同期はそのまま動く、というのがこの設計の肝。
+    test('marking a word learned schedules its first review for the next day (not today)', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.locator('.w3k-card[data-word="the"] [data-role="learn"]').click();
+
+      const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
+      expect(stored.the.step).toBe(0);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const pad = n => String(n).padStart(2, '0');
+      expect(stored.the.due).toBe(`${tomorrow.getFullYear()}-${pad(tomorrow.getMonth() + 1)}-${pad(tomorrow.getDate())}`);
+      // just learned, so it is not part of today's review batch yet
+      await expect(page.locator('#words3000TierSel option[value="review"]')).toHaveText('🔁 今日の復習（0語）');
+    });
+
+    test('the review range collects only words whose due date has arrived (legacy true entries count as due)', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words-learned', JSON.stringify({
+          water: { step: 1, due: '2020-01-01' },   // overdue
+          people: true,                             // old-format entry: treated as due
+          time: { step: 2, due: '2099-01-01' },     // not due yet
+        }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000TierSel option[value="review"]')).toHaveText('🔁 今日の復習（2語）');
+
+      await page.selectOption('#words3000TierSel', 'review');
+      await expect(page.locator('.w3k-card')).toHaveCount(2);
+      const shown = await page.locator('.w3k-word').allTextContents();
+      expect(shown.sort()).toEqual(['people', 'water']);
+      await expect(page.locator('#words3000Progress')).toHaveText('今日の復習 2語');
+    });
+
+    test('answering ✓ in the review batch pushes the next review further out, and ❌ drops it back to unlearned', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words-learned', JSON.stringify({ water: { step: 1, due: '2020-01-01' } }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TierSel', 'review');
+      await page.click('#words3000TestModeBtn');
+
+      await page.click('#testShowBtn');
+      await page.click('#testRightBtn');
+      let stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
+      expect(stored.water.step).toBe(2); // 1 -> 2, i.e. next review in 7 days instead of 3
+      expect(stored.water.due > new Date().toISOString().slice(0, 10)).toBeTruthy();
+      await expect(page.locator('#words3000TierSel option[value="review"]')).toHaveText('🔁 今日の復習（0語）');
+
+      // getting it wrong on a later review clears the ✓ entirely, so it returns to the 未習得 pool
+      await page.evaluate(() => localStorage.setItem('phrasebook-words-learned', JSON.stringify({ water: { step: 3, due: '2020-01-01' } })));
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TierSel', 'review');
+      await page.click('#words3000TestModeBtn');
+      await page.click('#testShowBtn');
+      await page.click('#testWrongBtn');
+      stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
+      expect(stored.water).toBeUndefined();
+    });
+
+    test('the review range ignores 未習得のみ and the auto-play skip, which would otherwise empty it (review words are all learned)', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words-learned', JSON.stringify({ water: { step: 1, due: '2020-01-01' } }));
+        localStorage.setItem('phrasebook-words3000-prefs', JSON.stringify({ unlearnedOnly: true }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TierSel', 'review');
+      await expect(page.locator('.w3k-card')).toHaveCount(1); // 未習得のみ is on, but ignored here
+
+      const ttsRequest = page.waitForRequest(req => req.url().includes('translate_tts'), { timeout: 15000 });
+      await page.click('#words3000ListenBtn');
+      expect(new URL((await ttsRequest).url()).searchParams.get('q')).toBe('water');
+    });
+
+    test('a prompt appears when reviews are due and switches to the review batch when tapped', async ({ page }) => {
+      // the count inside the 範囲 selector is invisible while another range is selected, so due
+      // reviews would otherwise go unnoticed - this prompt is what makes the feature discoverable
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words-learned', JSON.stringify({ water: { step: 1, due: '2020-01-01' } }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const prompt = page.locator('#words3000ReviewPrompt');
+      await expect(prompt).toBeVisible();
+      await expect(prompt).toHaveText('🔁 今日の復習が1語あります → まとめて復習する');
+
+      await prompt.click();
+      await expect(page.locator('#words3000TierSel')).toHaveValue('review');
+      await expect(page.locator('.w3k-card')).toHaveCount(1);
+      await expect(prompt).toBeHidden(); // already in the review batch, so the nudge goes away
+    });
+
+    test('no prompt is shown when nothing is due', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ReviewPrompt')).toBeHidden();
+    });
+
+    test('an empty review batch shows a "done for today" message rather than a generic empty state', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TierSel', 'review');
+      await expect(page.locator('#words3000List')).toContainText('今日の復習は完了しています');
+    });
+  });
+
   test.describe('自動再生は覚えた単語を飛ばす', () => {
     test('already-learned words are skipped entirely during auto-play, not just played anyway', async ({ page }) => {
       await mockGoogleTTS(page);
@@ -505,7 +626,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#testRightBtn');
 
       let stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
-      expect(stored.can).toBe(true);
+      expect(stored.can).toBeTruthy(); // value is the {step, due} review schedule
       await expect(page.locator('.w3k-testword')).toHaveText('cancel');
 
       await page.click('#testShowBtn');
@@ -566,13 +687,16 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.goto('/words3000.html');
       await page.waitForSelector('.w3k-card');
       await page.locator('.w3k-card').first().locator('[data-role="learn"]').click(); // learns "the" locally
-      await expect(page.evaluate(() => window.getWordsLearnedSnapshot())).resolves.toEqual({ the: true });
+      expect(Object.keys(await page.evaluate(() => window.getWordsLearnedSnapshot()))).toEqual(['the']);
 
+      // the cloud copy may still hold old-format `true` values; merging must keep both sides
       const hadLocalOnly1 = await page.evaluate(() => window.applyCloudWordsLearned({ water: true }));
       expect(hadLocalOnly1).toBe(true); // "the" isn't in the cloud snapshot yet
-      await expect(page.evaluate(() => window.getWordsLearnedSnapshot())).resolves.toEqual({ water: true, the: true });
+      expect(Object.keys(await page.evaluate(() => window.getWordsLearnedSnapshot())).sort()).toEqual(['the', 'water']);
       const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words-learned')));
-      expect(stored).toEqual({ water: true, the: true }); // merged result also persisted locally
+      expect(Object.keys(stored).sort()).toEqual(['the', 'water']); // merged result also persisted locally
+      expect(stored.the).toBeTruthy();
+      expect(stored.water).toBeTruthy();
 
       const hadLocalOnly2 = await page.evaluate(() => window.applyCloudWordsLearned({ water: true, the: true }));
       expect(hadLocalOnly2).toBe(false); // nothing local-only left to push

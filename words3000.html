@@ -56,6 +56,14 @@
   .filter-icon.on{ background:var(--green); border-color:var(--green); color:var(--paper); }
   .filter-icon.listen-on{ background:var(--red); border-color:var(--red); color:var(--paper); }
   .w3k-playbar{ display:flex; align-items:center; gap:8px; padding:0 0 10px; }
+  /* 復習が溜まっている時だけ出る誘導。範囲セレクタの中にある「今日の復習」は、別の範囲を
+     選んでいると件数が見えないため、気づけるようにここへ出す。 */
+  /* `display:block`を無条件に書くと、著者スタイルがブラウザ標準の`[hidden]{display:none}`に
+     勝ってしまい、hidden属性を立てても消えない（実際にそれで消えない不具合を出した）。
+     hiddenでない時だけ効くようにセレクタを絞る。 */
+  .w3k-review-prompt:not([hidden]){ display:block; }
+  .w3k-review-prompt{ width:100%; margin:-4px 0 12px; padding:10px 12px; border:1.5px solid var(--green); border-radius:10px;
+    background:rgba(32,191,107,0.10); color:var(--ink); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:13px; font-weight:700; cursor:pointer; text-align:left; }
   /* 戻るボタン。以前はヘッダー内（ページ最上部）にしか無く、自動再生でカードが自動スクロール
      すると一緒に画面外へ流れて戻れなくなる、という指摘を受けてsticky領域内に移設した。 */
   .w3k-back-btn{ display:flex; align-items:center; justify-content:center; text-decoration:none; font-weight:700; }
@@ -147,6 +155,7 @@
       <label>範囲</label>
       <select id="words3000TierSel"></select>
     </div>
+    <button class="w3k-review-prompt" id="words3000ReviewPrompt" hidden></button>
     <div class="w3k-playbar">
       <a class="filter-icon w3k-back-btn" href="./index.html" aria-label="フレーズ帳に戻る" title="フレーズ帳に戻る">←</a>
       <button class="filter-icon" id="words3000ListenBtn" aria-label="自動再生" title="この範囲を自動再生" style="width:44px;">▶</button>
@@ -243,6 +252,42 @@ async function saveSharedSetting(fields){
   await safeSet('phrasebook-settings', JSON.stringify({ ...current, ...fields }));
 }
 async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
+
+// --- 間隔反復（忘れかけた頃に復習する）---
+// 「覚えても定着しない」という相談を受けて追加。覚えた直後ではなく、少しずつ間隔を空けて
+// 復習した方が長期記憶に残る、という考え方に沿って、単語ごとに次の復習日を持たせる。
+//
+// 【データの持ち方】wordsLearnedは元々`{単語: true}`だったが、`{単語: {step, due}}`という
+// オブジェクトも入るようにした。**どちらもtruthyなので「覚えたかどうか」を見ている既存の
+// 判定（`!!wordsLearned[w.word]`・`!wordsLearned[w.word]`・`delete`）は一切変更不要**で、
+// 端末間同期（getSyncableState/applyCloudStateのマージ、words3000.html側のpush）も
+// 同じキー・同じフィールドのままなので手を加えなくてよい、という点を重視した設計。
+// 旧データ（値がtrueのまま）は「まだ一度も復習していない＝今日が復習日」として扱う。
+const SRS_INTERVAL_DAYS = [1, 3, 7, 14, 30, 60];
+function dateKey(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function srsEntryFor(word){
+  const v = wordsLearned[word];
+  if(!v) return null;
+  if(v === true) return { step:0, due:"1970-01-01" }; // 旧データ：復習日が無いので常に「今日ぶん」に含める
+  return v;
+}
+function isDueForReview(word){
+  const e = srsEntryFor(word);
+  return !!e && e.due <= dateKey(new Date());
+}
+function countDueWords(){
+  return WORDS3000.reduce((n,w)=> n + (isDueForReview(w.word) ? 1 : 0), 0);
+}
+// 正解した時：1段階進めて、次の復習日を先に延ばす（1日→3日→7日→14日→30日→60日）。
+function advanceSrs(word){
+  const prev = srsEntryFor(word);
+  const step = prev ? Math.min(prev.step + 1, SRS_INTERVAL_DAYS.length - 1) : 0;
+  const due = new Date();
+  due.setDate(due.getDate() + SRS_INTERVAL_DAYS[step]);
+  wordsLearned[word] = { step, due: dateKey(due) };
+}
 
 // --- 末尾の端末間同期モジュール（type="module"のscript）から呼ばれる橋渡し関数。
 // let宣言のwordsLearnedはwindowに乗らずモジュール側から直接読み書きできないため、
@@ -547,11 +592,30 @@ function words3000TierRanges(){
 function populateWords3000TierSelect(){
   const sel = document.getElementById("words3000TierSel");
   const prev = sel.value;
+  // 500語区切り・全語に加えて、末尾に「今日復習すべき単語だけ」を選べる特別な範囲を足す。
+  // 既存の絞り込み（words3000FilteredList）に乗せるだけで、一覧・自動再生・テストモードの
+  // すべてが復習対象だけを扱うようになる。
   sel.innerHTML = words3000TierRanges().map(r=>{
     const label = r.all ? `全${r.to}語（1〜${r.to}語）` : `${r.from}〜${r.to}語`;
     return `<option value="${r.from}-${r.to}">${label}</option>`;
-  }).join('');
+  }).join('') + `<option value="review">🔁 今日の復習（${countDueWords()}語）</option>`;
   if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+}
+function isReviewTier(){
+  return document.getElementById("words3000TierSel").value === "review";
+}
+// 復習の残り語数は覚えた✓を付けるたびに変わるので、選択状態を壊さずラベルだけ差し替える。
+// あわせて、別の範囲を選んでいると件数に気づけないため、溜まっている時だけ誘導ボタンを出す。
+function refreshReviewOptionLabel(){
+  const due = countDueWords();
+  const opt = document.querySelector('#words3000TierSel option[value="review"]');
+  if(opt) opt.textContent = `🔁 今日の復習（${due}語）`;
+  const prompt = document.getElementById("words3000ReviewPrompt");
+  if(prompt){
+    const show = due > 0 && !isReviewTier();
+    prompt.hidden = !show;
+    if(show) prompt.textContent = `🔁 今日の復習が${due}語あります → まとめて復習する`;
+  }
 }
 
 // 品詞の並び順は、学習上よく目にする順（名詞・動詞・形容詞・副詞...）を優先。データに
@@ -569,15 +633,23 @@ function populateWords3000PosSelect(initialValue){
 // 範囲・品詞・検索・未習得のみ、すべての絞り込みを1箇所にまとめる。一覧表示・自動再生・
 // テストモードの対象リストは、すべてこの関数の結果をそのまま使う。
 function words3000FilteredList(){
-  const [tierFromStr, tierToStr] = document.getElementById("words3000TierSel").value.split('-');
-  const tierFrom = parseInt(tierFromStr, 10) || 1;
-  const tierTo = parseInt(tierToStr, 10) || (tierFrom + 499);
+  const tierValue = document.getElementById("words3000TierSel").value;
   const q = document.getElementById("words3000Search").value.trim().toLowerCase();
   const pos = document.getElementById("words3000PosSel").value;
-  let items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+  let items;
+  if(tierValue === "review"){
+    items = WORDS3000.filter(w=>isDueForReview(w.word));
+  } else {
+    const [tierFromStr, tierToStr] = tierValue.split('-');
+    const tierFrom = parseInt(tierFromStr, 10) || 1;
+    const tierTo = parseInt(tierToStr, 10) || (tierFrom + 499);
+    items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+  }
   if(pos) items = items.filter(w=>w.pos===pos);
   if(q) items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
-  if(unlearnedOnly) items = items.filter(w=>!wordsLearned[w.word]);
+  // 復習対象は定義上すべて✓済みなので、「未習得のみ」をそのまま適用すると必ず0件になる。
+  // 復習の範囲を選んでいる間はこの絞り込みを無視する。
+  if(unlearnedOnly && tierValue !== "review") items = items.filter(w=>!wordsLearned[w.word]);
   return items;
 }
 function shuffleArray(arr){
@@ -591,9 +663,17 @@ function shuffleArray(arr){
 function renderWords3000List(){
   const wrap = document.getElementById("words3000List");
   const items = words3000FilteredList();
+  refreshReviewOptionLabel();
   const doneCount = items.filter(w=>wordsLearned[w.word]).length;
-  document.getElementById("words3000Progress").textContent = `覚えた ${doneCount} / ${items.length}`;
-  if(items.length === 0){ wrap.innerHTML = '<p class="hint">該当する単語がありません。</p>'; return; }
+  document.getElementById("words3000Progress").textContent = isReviewTier()
+    ? `今日の復習 ${items.length}語`
+    : `覚えた ${doneCount} / ${items.length}`;
+  if(items.length === 0){
+    wrap.innerHTML = isReviewTier()
+      ? '<p class="hint">🎉 今日の復習は完了しています。また明日、忘れかけた頃に出題されます。</p>'
+      : '<p class="hint">該当する単語がありません。</p>';
+    return;
+  }
   wrap.innerHTML = items.map(w=>{
     const isLearned = !!wordsLearned[w.word];
     return `<div class="w3k-card ${isLearned?'learned':''}" data-word="${esc(w.word)}">
@@ -646,7 +726,7 @@ function renderWords3000List(){
     });
     card.querySelector('[data-role="learn"]').addEventListener('click', (e)=>{
       e.stopPropagation();
-      if(wordsLearned[w.word]) delete wordsLearned[w.word]; else wordsLearned[w.word] = true;
+      if(wordsLearned[w.word]) delete wordsLearned[w.word]; else advanceSrs(w.word);
       saveWordsLearned();
       renderWords3000List();
     });
@@ -738,8 +818,10 @@ function startWords3000Listening(){
   // 表示（一覧）は「未習得のみ」がOFFなら覚えた単語も見えたままにしておきたいが、自動再生は
   // 「覚えた単語チェック入ってるやつは読み飛ばしていい」という要望を受けて、表示フィルタとは
   // 別に常に✓済みの単語を飛ばす（「未習得のみ」がONの時はwords3000FilteredList()側で
-  // 既に除外済みなので、ここでの絞り込みは実質何もしない）。
-  let list = words3000FilteredList().filter(w=>!wordsLearned[w.word]);
+  // 既に除外済みなので、ここでの絞り込みは実質何もしない）。ただし「今日の復習」の範囲は
+  // 対象が全て✓済みなので、そこでこの絞り込みを効かせると必ず0件になってしまう＝除外する。
+  let list = words3000FilteredList();
+  if(!isReviewTier()) list = list.filter(w=>!wordsLearned[w.word]);
   if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認するか、すべて覚えた✓済みかもしれません）"); return; }
   if(shuffleListen) list = shuffleArray(list.slice());
   words3000ListenState = { active:true, list, index:0 };
@@ -784,6 +866,7 @@ function startTestMode(){
 }
 function renderTestCard(autoSpeak){
   const area = document.getElementById("words3000TestArea");
+  refreshReviewOptionLabel(); // ✓/❌のたびに「今日の復習（N語）」の残数を更新する
   if(testState.list.length === 0){
     area.innerHTML = '<p class="hint w3k-test-done">該当する単語がありません（範囲・検索・品詞の条件を確認してください）。</p>';
     return;
@@ -833,13 +916,13 @@ function renderTestCard(autoSpeak){
   document.getElementById("testSpeakBtn").addEventListener("click", (e)=> speakRaw(w.word, "en-US", e.currentTarget, null));
   if(testState.revealed){
     document.getElementById("testWrongBtn").addEventListener("click", ()=>{
-      delete wordsLearned[w.word];
+      delete wordsLearned[w.word]; // 不正解：覚えた✓ごと外して未習得に戻す（復習日もリセットされる）
       saveWordsLearned();
       testState.index++; testState.revealed = false;
       renderTestCard(true);
     });
     document.getElementById("testRightBtn").addEventListener("click", ()=>{
-      wordsLearned[w.word] = true;
+      advanceSrs(w.word); // 正解：次の復習日を1段階先へ延ばす
       saveWordsLearned();
       testState.index++; testState.revealed = false;
       renderTestCard(true);
@@ -866,6 +949,10 @@ function onWords3000FiltersChanged(){
 }
 
 document.getElementById("words3000TierSel").addEventListener("change", onWords3000FiltersChanged);
+document.getElementById("words3000ReviewPrompt").addEventListener("click", ()=>{
+  document.getElementById("words3000TierSel").value = "review";
+  onWords3000FiltersChanged();
+});
 document.getElementById("words3000Search").addEventListener("input", onWords3000FiltersChanged);
 document.getElementById("words3000PosSel").addEventListener("change", ()=>{ saveW3kPrefs(); onWords3000FiltersChanged(); });
 document.getElementById("words3000UnlearnedBtn").addEventListener("click", (e)=>{
