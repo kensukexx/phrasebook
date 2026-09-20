@@ -10,10 +10,37 @@ async function mockTranslate(page, map) {
   });
 }
 
-async function mockGoogleTTS(page) {
-  // a tiny valid-enough response; the app only checks for a 200 + audio content-type
+// A real, decodable WAV of silence. Needed when a test cares about the audio actually
+// *playing for a while* rather than just being requested.
+function silentWav(seconds, sampleRate = 8000) {
+  const samples = Math.round(seconds * sampleRate);
+  const buf = Buffer.alloc(44 + samples * 2); // 16-bit mono, already zero-filled = silence
+  buf.write('RIFF', 0);
+  buf.writeUInt32LE(36 + samples * 2, 4);
+  buf.write('WAVE', 8);
+  buf.write('fmt ', 12);
+  buf.writeUInt32LE(16, 16);          // PCM header size
+  buf.writeUInt16LE(1, 20);           // format = PCM
+  buf.writeUInt16LE(1, 22);           // channels
+  buf.writeUInt32LE(sampleRate, 24);
+  buf.writeUInt32LE(sampleRate * 2, 28); // byte rate
+  buf.writeUInt16LE(2, 32);           // block align
+  buf.writeUInt16LE(16, 34);          // bits per sample
+  buf.write('data', 36);
+  buf.writeUInt32LE(samples * 2, 40);
+  return buf;
+}
+
+// `seconds` makes the mock return audio that really plays for that long. Without it the
+// response is 4 bytes that no decoder accepts, so playback ends (with an error) almost
+// immediately - fine when a test only checks that the request was made, but it makes any
+// test that observes state *during* playback depend on machine load. Two BGM tests failed
+// exactly that way under parallel execution before this option existed.
+async function mockGoogleTTS(page, { seconds } = {}) {
+  const body = seconds ? silentWav(seconds) : Buffer.from([0xff, 0xfb, 0x90, 0x00]);
+  const contentType = seconds ? 'audio/wav' : 'audio/mpeg';
   await page.route('**/translate_tts**', route => {
-    route.fulfill({ status: 200, contentType: 'audio/mpeg', body: Buffer.from([0xff, 0xfb, 0x90, 0x00]) });
+    route.fulfill({ status: 200, contentType, body });
   });
 }
 

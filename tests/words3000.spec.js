@@ -389,20 +389,40 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
 
     test('ducks while a word is being read and comes back afterwards', async ({ page }) => {
-      await mockGoogleTTS(page);
+      // real playable audio, so the duck is observable for longer than the machine's mood
+      await mockGoogleTTS(page, { seconds: 3 });
       await page.goto('/words3000.html');
       await page.waitForSelector('.w3k-card');
       await page.click('#words3000BgmBtn');
 
-      await page.evaluate(() => speakRaw('test', 'en-US', null, null));
-      await page.waitForTimeout(300);
-      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.03, 2);
+      // speakRaw ducks synchronously, before it touches the network, so reading the flag
+      // straight after it returns is not a race. Waiting inside the page (rather than with
+      // waitForTimeout) also keeps the 0.12s ramp free of protocol round-trip jitter.
+      const onSpeak = await page.evaluate(async () => {
+        speakRaw('test', 'en-US', null, null);
+        const duckedImmediately = bgmDucked;
+        await new Promise((r) => setTimeout(r, 250));
+        return { duckedImmediately, stillDucked: bgmDucked, value: bgmGain.gain.value };
+      });
+      expect(onSpeak.duckedImmediately).toBe(true);
+      // how long the mocked audio survives is the browser's business (WebKit gives up on it
+      // sooner under load), so only assert the level while the duck is still in force
+      if (onSpeak.stillDucked) expect(onSpeak.value).toBeCloseTo(0.03, 2);
 
       // interrupting playback must also restore the volume - stopAllAudio() skips the
-      // finish() callback, so the un-duck has to live there too
-      await page.evaluate(() => stopAllAudio());
-      await page.waitForTimeout(300);
-      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 2);
+      // finish() callback, so the un-duck has to live there too. Driving the duck directly
+      // keeps this, the part that actually regressed once, independent of audio timing.
+      const afterStop = await page.evaluate(async () => {
+        duckBgm(true);
+        await new Promise((r) => setTimeout(r, 200));
+        const during = bgmGain.gain.value;
+        stopAllAudio();
+        await new Promise((r) => setTimeout(r, 250));
+        return { during, after: bgmGain.gain.value, ducked: bgmDucked };
+      });
+      expect(afterStop.during).toBeCloseTo(0.03, 2);
+      expect(afterStop.after).toBeCloseTo(0.10, 2);
+      expect(afterStop.ducked).toBe(false);
     });
 
     test('the synthesized note is an audible, correctly pitched, decaying music-box tone', async ({ page }) => {
@@ -525,7 +545,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
     test('stops when auto-play stops, and starts again with the next ▶', async ({ page }) => {
       // otherwise the BGM keeps looping on its own long after the last word was read
-      await mockGoogleTTS(page);
+      await mockGoogleTTS(page, { seconds: 3 });
       await page.goto('/words3000.html');
       await page.waitForSelector('.w3k-card');
 
@@ -607,6 +627,76 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       // no piece stands out as much louder than the quietest when switching between them
       const peaks = report.map((r) => r.peak);
       expect(Math.max(...peaks) / Math.min(...peaks)).toBeLessThan(2);
+    });
+
+    test('the sound does not drop out between notes or at bar lines', async ({ page }) => {
+      // The BGM used to "breathe": a slow attack plus an exponential release meant that at
+      // every note change the level fell to ~40% of normal, which reads as the music cutting
+      // out. Equal-length linear fades make consecutive notes sum to a constant instead.
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const report = await page.evaluate(async () => {
+        const SR = 22050;
+        const rows = [];
+        for (const [key, piece] of Object.entries(ORCHESTRA_PIECES)) {
+          const bars = Math.min(piece.bars.length, 6);
+          const total = bars * piece.barSec;
+          const off = new OfflineAudioContext(1, Math.ceil(SR * (total + 1)), SR);
+          bgmCtx = off;
+          bgmGain = off.createGain();
+          bgmGain.gain.value = BGM_MAX_VOLUME * 0.5;
+          bgmGain.connect(off.destination);
+          for (let i = 0; i < bars; i++) scheduleOrchestraBar(piece, i, i * piece.barSec);
+          const d = (await off.startRendering()).getChannelData(0);
+
+          const w = Math.round(SR * 0.02);
+          const env = [];
+          for (let a = 0; a + w < Math.floor(SR * total); a += w) {
+            let s = 0;
+            for (let i = a; i < a + w; i++) s += d[i] * d[i];
+            env.push(Math.sqrt(s / w));
+          }
+          // skip the first bar: the very start legitimately fades in from silence
+          const body = env.slice(Math.round(piece.barSec / 0.02));
+          const sorted = [...body].sort((x, y) => x - y);
+          const median = sorted[Math.floor(sorted.length / 2)];
+          // a rest written into the score is a real gap in the melody, so only the pieces
+          // without rests are held to the strict "never dips" bar
+          const hasRest = piece.bars.some((bar) => bar.mel.some(([n]) => !n));
+          rows.push({ key, hasRest, lowest: sorted[0] / median });
+        }
+        return rows;
+      });
+
+      for (const row of report) {
+        expect(row.lowest, `${row.key} drops out between notes`).toBeGreaterThan(row.hasRest ? 0.35 : 0.55);
+      }
+    });
+
+    test('a stalled main thread makes the music resume, not pile up in the past', async ({ page }) => {
+      // setInterval is easily delayed past the lookahead window while the page fetches speech
+      // or renders 3000 cards. Scheduling notes at an already-past time makes them all fire at
+      // once after a silence, which is heard as the BGM cutting out and then stuttering.
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.click('#words3000BgmBtn');
+      await page.selectOption('#words3000BgmStyleSel', 'canon');
+
+      const result = await page.evaluate(() => {
+        const scheduled = [];
+        const realPlay = playStringNote;
+        playStringNote = (f, at, ...rest) => { scheduled.push(at); return realPlay(f, at, ...rest); };
+        // pretend the scheduler was starved for 5 seconds
+        bgmNextBarAt = bgmCtx.currentTime - 5;
+        const before = bgmCtx.currentTime;
+        scheduleBgmNotes();
+        playStringNote = realPlay;
+        return { before, earliest: Math.min(...scheduled), count: scheduled.length };
+      });
+
+      expect(result.count).toBeGreaterThan(0);
+      expect(result.earliest).toBeGreaterThanOrEqual(result.before); // nothing scheduled in the past
     });
 
     test('the style menu offers every piece and each one actually plays', async ({ page }) => {

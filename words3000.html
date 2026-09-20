@@ -615,6 +615,19 @@ function noteHz(name){
   return 440 * Math.pow(2, (midi - 69) / 12);
 }
 
+// 先読みの長さ。読み上げの通信や3000件の描画・スムーススクロールでメインスレッドが
+// 詰まるとsetIntervalは平気で1秒以上遅れるため、余裕を持って先まで予約しておく。
+const BGM_LOOKAHEAD_SEC = 2.5;
+
+// それでも遅れて予約時刻が過去になった場合の受け皿。過去の時刻でstart()すると
+// 「無音のあと、たまっていた音が一度に鳴る」という形で途切れて聞こえるので、
+// 現在時刻まで繰り上げてから予約し直す。
+function catchUpBgmClock(){
+  const now = bgmCtx.currentTime;
+  if(bgmNextBarAt < now) bgmNextBarAt = now + 0.05;
+  if(bgmNextNoteAt < now) bgmNextNoteAt = now + 0.05;
+}
+
 // --- スタイル1：オルゴール ---
 // オルゴール＝金属の弁を弾く音なので、「ごく短いアタック＋長い減衰」のサイン波に、
 // 非整数倍の倍音を1つ重ねて金属的な響きを出している。ペンタトニック音階を
@@ -648,7 +661,8 @@ function playMusicBoxNote(freq, at){
   partial.stop(at + 1.0);
 }
 function scheduleMusicBoxNotes(){
-  while(bgmNextNoteAt < bgmCtx.currentTime + 0.5){
+  catchUpBgmClock();
+  while(bgmNextNoteAt < bgmCtx.currentTime + BGM_LOOKAHEAD_SEC){
     if(Math.random() > 0.18){ // たまに休符を入れて単調さを避ける
       playMusicBoxNote(BGM_SCALE_HZ[bgmScaleIndex], bgmNextNoteAt);
     }
@@ -796,18 +810,22 @@ let bgmBarIndex = 0;
 let bgmNextBarAt = 0;
 
 // 弦らしい音：わずかにデチューンした2つのノコギリ波をローパスで丸め、ゆっくり立ち上げる
-function playStringNote(freq, at, dur, level, cutoff){
+// 立ち上がりと減衰は「同じ長さの直線」にすること。こうすると、隣り合う音が入れ替わるとき
+// 前の音の減衰と次の音の立ち上がりがちょうど打ち消し合い、音量の合計が一定になる。
+// 以前は「ゆっくりの立ち上がり＋指数減衰」だったため、音符の変わり目と小節線のたびに
+// 音量が通常の4割まで落ち、BGMが息継ぎして途切れて聞こえていた（実測で確認）。
+// fadeMax を短くすると音の粒が立ち、長くするとなめらかになる。
+function playStringNote(freq, at, dur, level, cutoff, fadeMax){
   const filter = bgmCtx.createBiquadFilter();
   filter.type = "lowpass";
   filter.frequency.value = cutoff;
   filter.Q.value = 0.7;
   const gain = bgmCtx.createGain();
-  const attack = Math.min(0.22, dur * 0.4);
-  const release = 0.4;
-  gain.gain.setValueAtTime(0.0001, at);
-  gain.gain.linearRampToValueAtTime(level, at + attack);
-  gain.gain.setValueAtTime(level, at + dur);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + dur + release);
+  const fade = Math.min(fadeMax || 0.09, dur * 0.35);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(level, at + fade);
+  gain.gain.setValueAtTime(level, at + dur);       // 次のrampの起点。これが無いとrampが早く始まる
+  gain.gain.linearRampToValueAtTime(0, at + dur + fade);
   filter.connect(gain).connect(bgmGain);
   for(const detune of [-6, 6]){
     const osc = bgmCtx.createOscillator();
@@ -816,26 +834,29 @@ function playStringNote(freq, at, dur, level, cutoff){
     osc.detune.value = detune;
     osc.connect(filter);
     osc.start(at);
-    osc.stop(at + dur + release + 0.05);
+    osc.stop(at + dur + fade + 0.02);
   }
 }
 function currentPiece(){ return ORCHESTRA_PIECES[bgmStyle] || ORCHESTRA_PIECES.canon; }
 function scheduleOrchestraBar(piece, barIndex, at){
   const b = piece.bars[barIndex];
   const beatSec = piece.barSec / piece.beats;
-  playStringNote(noteHz(b.bass), at, piece.barSec, 0.16, 300);
-  for(const n of b.pad) playStringNote(noteHz(n), at, piece.barSec, 0.05, 1100);
+  // 低音と和音は「途切れない土台」なので長めのクロスフェードでつなぐ。
+  // 旋律は音の粒が分かるほうがよいので、フェードを短くして少しだけ輪郭を残す。
+  playStringNote(noteHz(b.bass), at, piece.barSec, 0.16, 300, 0.12);
+  for(const n of b.pad) playStringNote(noteHz(n), at, piece.barSec, 0.05, 1100, 0.12);
   let t = at;
   for(const [note, beats] of b.mel){
     const dur = beats * beatSec;
     // 短い音ほど粒立ちが要るので、長い音より少しだけ大きくしている
-    if(note) playStringNote(noteHz(note), t, dur, dur < 0.6 ? 0.16 : 0.17, 2600);
+    if(note) playStringNote(noteHz(note), t, dur, dur < 0.6 ? 0.16 : 0.17, 2600, 0.05);
     t += dur;
   }
 }
 function scheduleOrchestraBars(){
   const piece = currentPiece();
-  while(bgmNextBarAt < bgmCtx.currentTime + 1.5){
+  catchUpBgmClock();
+  while(bgmNextBarAt < bgmCtx.currentTime + BGM_LOOKAHEAD_SEC){
     scheduleOrchestraBar(piece, bgmBarIndex % piece.bars.length, bgmNextBarAt);
     bgmNextBarAt += piece.barSec;
     bgmBarIndex = (bgmBarIndex + 1) % piece.bars.length;
