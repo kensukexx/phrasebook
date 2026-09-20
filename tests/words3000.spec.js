@@ -425,7 +425,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
         const off = new OfflineAudioContext(1, SR * dur * notes.length, SR);
         bgmCtx = off;
         bgmGain = off.createGain();
-        bgmGain.gain.value = BGM_VOLUME;
+        bgmGain.gain.value = bgmVolumeValue();
         bgmGain.connect(off.destination);
         notes.forEach((n, i) => playStringNote(noteHz(n), i * dur, dur * 0.8, 0.3, 4000));
         const d = (await off.startRendering()).getChannelData(0);
@@ -449,6 +449,50 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       expect(result.heard).toBe('D A B F# G D G A');
       expect(result.peak).toBeGreaterThan(0.02); // audible
       expect(result.peak).toBeLessThan(0.3);     // still background, not competing with speech
+    });
+
+    test('the volume slider changes the level live, persists, and keeps ducking proportional', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000BgmVolumeVal')).toHaveText('50%');
+
+      await page.click('#words3000BgmBtn');
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 3);
+
+      // dragging the slider takes effect while it is being moved, so the level can be
+      // judged by ear rather than only after letting go
+      await page.locator('#words3000BgmVolume').fill('100');
+      await page.dispatchEvent('#words3000BgmVolume', 'input');
+      await expect(page.locator('#words3000BgmVolumeVal')).toHaveText('100%');
+      await page.waitForTimeout(200);
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.20, 3);
+
+      // ducking is a ratio of the chosen volume, not a fixed level - otherwise turning the
+      // BGM down below the old duck level would make speech *raise* it
+      await page.evaluate(() => speakRaw('test', 'en-US', null, null));
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.06, 3);
+
+      // moving the slider mid-speech must stay ducked, not jump back to full volume
+      await page.locator('#words3000BgmVolume').fill('50');
+      await page.dispatchEvent('#words3000BgmVolume', 'input');
+      await page.waitForTimeout(200);
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.03, 3);
+
+      await page.evaluate(() => stopAllAudio());
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 3);
+
+      const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
+      expect(prefs.bgmVolumePct).toBe(50);
+
+      await page.locator('#words3000BgmVolume').fill('20');
+      await page.dispatchEvent('#words3000BgmVolume', 'input');
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000BgmVolume')).toHaveValue('20');
+      await expect(page.locator('#words3000BgmVolumeVal')).toHaveText('20%');
     });
 
     test('switching style while playing keeps the BGM running and persists the choice', async ({ page }) => {

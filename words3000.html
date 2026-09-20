@@ -74,6 +74,14 @@
     letter-spacing:normal; text-transform:none; color:var(--ink); }
   .w3k-checkbox-label input{ width:16px; height:16px; flex:0 0 auto; }
 
+  /* BGMの音量スライダー。.field label の見出し指定を打ち消すのは上と同じ理由。 */
+  .w3k-range-row{ display:flex; align-items:center; gap:8px; margin-top:8px; }
+  .w3k-range-row label{ flex:0 0 auto; margin:0; font-size:12.5px;
+    letter-spacing:normal; text-transform:none; color:var(--ink); }
+  .w3k-range-row input[type="range"]{ flex:1 1 auto; min-width:0; margin:0; accent-color:var(--blue); }
+  .w3k-range-row .w3k-range-val{ flex:0 0 3.2em; text-align:right; font-size:12.5px;
+    font-variant-numeric:tabular-nums; color:var(--ink-soft); }
+
   /* 「上のパネルが常に完全固定で表示幅を圧迫する」という指摘を受けて追加。範囲・自動再生の
      ボタンは常時表示のまま、品詞以下の詳細設定だけをこのボタンで開閉できるようにし、
      どれだけ画面を使うかを自分で調整できるようにする。 */
@@ -181,6 +189,11 @@
           <option value="musicbox">オルゴール（ゆっくり・不規則）</option>
           <option value="canon">カノン（弦楽・パッヘルベル）</option>
         </select>
+        <div class="w3k-range-row">
+          <label for="words3000BgmVolume">音量</label>
+          <input type="range" id="words3000BgmVolume" min="0" max="100" step="5" value="50">
+          <span class="w3k-range-val" id="words3000BgmVolumeVal">50%</span>
+        </div>
       </div>
       <div class="w3k-optionrow">
         <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
@@ -349,6 +362,7 @@ async function loadW3kPrefs(){
   controlsCollapsed = !!saved.controlsCollapsed;
   bgmOn = !!saved.bgmOn;
   bgmStyle = saved.bgmStyle === "canon" ? "canon" : "musicbox";
+  bgmVolumePct = Number.isFinite(saved.bgmVolumePct) ? Math.min(100, Math.max(0, saved.bgmVolumePct)) : 50;
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
 }
@@ -368,7 +382,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn, bgmStyle }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn, bgmStyle, bgmVolumePct }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -555,11 +569,16 @@ async function playGeminiTTS(text, rateVal){
 //
 // 【重要】英語の聞き取り練習と音が競合しないよう、①既定OFF ②音量は小さめ
 // ③読み上げ中はさらに音量を下げる（ダッキング）、の3点を必ず守ること。
-// 新しいスタイルを足すときも、この3点と「合計の音量がBGM_VOLUMEを超えない」ことを守る。
-const BGM_VOLUME = 0.10;      // 通常時
-const BGM_DUCK_VOLUME = 0.03; // 読み上げ中
+// 新しいスタイルを足すときも、この3点と「合計の音量がマスターのbgmGainを超えない」ことを守る。
+// 音量はスライダー（0〜100%）で調整する。100%でもBGM_MAX_VOLUMEまでしか上がらないのは、
+// BGMが読み上げより大きくなると聞き取り練習が成立しなくなるため。既定の50%＝0.10は、
+// スライダーを付ける前から使っていた音量そのもの。
+const BGM_MAX_VOLUME = 0.20;
+const BGM_DUCK_RATIO = 0.3;   // 読み上げ中は通常音量の3割まで絞る
 let bgmOn = false;
+let bgmVolumePct = 50;
 let bgmStyle = "musicbox";
+function bgmVolumeValue(){ return BGM_MAX_VOLUME * bgmVolumePct / 100; }
 let bgmCtx = null;
 let bgmGain = null;
 let bgmTimer = null;
@@ -705,7 +724,7 @@ function startBgm(){
     if(!Ctx) return false;
     bgmCtx = new Ctx();
     bgmGain = bgmCtx.createGain();
-    bgmGain.gain.value = BGM_VOLUME;
+    bgmGain.gain.value = bgmDucked ? bgmVolumeValue() * BGM_DUCK_RATIO : bgmVolumeValue();
     bgmGain.connect(bgmCtx.destination);
   }
   bgmCtx.resume();
@@ -733,11 +752,19 @@ function restartBgmForStyleChange(){
   startBgm();
 }
 // 読み上げ中はBGMをさらに絞る。英語の音がBGMに埋もれると聞き取り練習にならないため。
-function duckBgm(on){
-  if(!bgmGain || !bgmOn) return;
-  const target = on ? BGM_DUCK_VOLUME : BGM_VOLUME;
+// スライダーを動かしても「今ダッキング中かどうか」を保てるよう、状態を変数に持って
+// 目標音量は必ずapplyBgmVolume()で計算する（2か所で別々に計算するとズレる）。
+let bgmDucked = false;
+function applyBgmVolume(rampSec){
+  if(!bgmGain || !bgmCtx) return;
+  const target = bgmDucked ? bgmVolumeValue() * BGM_DUCK_RATIO : bgmVolumeValue();
   bgmGain.gain.cancelScheduledValues(bgmCtx.currentTime);
-  bgmGain.gain.linearRampToValueAtTime(target, bgmCtx.currentTime + 0.12);
+  bgmGain.gain.linearRampToValueAtTime(target, bgmCtx.currentTime + rampSec);
+}
+function duckBgm(on){
+  bgmDucked = on;
+  if(!bgmGain || !bgmOn) return;
+  applyBgmVolume(0.12);
 }
 
 function stopAllAudio(){
@@ -1219,6 +1246,13 @@ document.getElementById("words3000BgmStyleSel").addEventListener("change", (e)=>
   restartBgmForStyleChange();
   saveW3kPrefs();
 });
+// スライダーは動かしている最中（input）に音量へ反映する。聞きながら決められないと調整できないため。
+document.getElementById("words3000BgmVolume").addEventListener("input", (e)=>{
+  bgmVolumePct = Number(e.currentTarget.value);
+  document.getElementById("words3000BgmVolumeVal").textContent = bgmVolumePct + "%";
+  applyBgmVolume(0.05);
+  saveW3kPrefs();
+});
 document.getElementById("words3000TestModeBtn").addEventListener("click", ()=>{
   setWords3000Mode(testMode ? 'list' : 'test');
 });
@@ -1259,6 +1293,8 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
   document.getElementById("words3000BgmBtn").classList.toggle("on", bgmOn);
   document.getElementById("words3000BgmStyleSel").value = bgmStyle;
+  document.getElementById("words3000BgmVolume").value = bgmVolumePct;
+  document.getElementById("words3000BgmVolumeVal").textContent = bgmVolumePct + "%";
   if(bgmOn){
     // ブラウザはユーザー操作なしに音を鳴らすことを許さないため、ページを開いた直後は
     // まだ鳴らせない。最初のタップ/クリックの時に一度だけ鳴らし始める。
