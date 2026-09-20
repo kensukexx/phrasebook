@@ -360,7 +360,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
-  test.describe('BGM（オルゴール/カノン）', () => {
+  test.describe('BGM（オルゴール／クラシック）', () => {
     // 音源ファイルではなくWeb Audioで合成している（著作権とファイルサイズを避けるため）。
     // 英語の聞き取り練習と競合しないよう、既定OFF・小音量・読み上げ中はさらに絞る、が要件。
     test('is off by default and does not create an audio context until asked', async ({ page }) => {
@@ -558,6 +558,73 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#words3000BgmBtn');
       expect(await page.evaluate(() => bgmOn)).toBe(false);
       expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+    });
+
+    test('every classical piece is well-formed and none is louder than the others', async ({ page }) => {
+      // The pieces are hand-entered note data, so the things that silently go wrong are a bar
+      // that doesn't add up to its beat count, a typo'd note name (noteHz returns NaN and the
+      // oscillator is silently dropped), and one piece being much louder than the rest.
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const report = await page.evaluate(async () => {
+        const SR = 22050;
+        const rows = [];
+        for (const [key, piece] of Object.entries(ORCHESTRA_PIECES)) {
+          const problems = [];
+          for (const [i, bar] of piece.bars.entries()) {
+            const beats = bar.mel.reduce((n, [, d]) => n + d, 0);
+            if (Math.abs(beats - piece.beats) > 1e-9) problems.push(`${key} bar${i + 1}: ${beats}/${piece.beats} beats`);
+            for (const n of [bar.bass, ...bar.pad]) if (!isFinite(noteHz(n))) problems.push(`${key} bar${i + 1}: bad note ${n}`);
+            for (const [n] of bar.mel) if (n && !isFinite(noteHz(n))) problems.push(`${key} bar${i + 1}: bad note ${n}`);
+          }
+
+          const barsToRender = Math.min(piece.bars.length, 3);
+          const off = new OfflineAudioContext(1, Math.ceil(SR * (barsToRender * piece.barSec + 1)), SR);
+          bgmCtx = off;
+          bgmGain = off.createGain();
+          bgmGain.gain.value = BGM_MAX_VOLUME * 0.5; // the default 50% setting
+          bgmGain.connect(off.destination);
+          for (let i = 0; i < barsToRender; i++) scheduleOrchestraBar(piece, i, i * piece.barSec);
+          const data = (await off.startRendering()).getChannelData(0);
+          let peak = 0;
+          for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+
+          rows.push({ key, label: piece.label, bars: piece.bars.length, peak, problems });
+        }
+        return rows;
+      });
+
+      expect(report.flatMap((r) => r.problems)).toEqual([]);
+      expect(report.length).toBeGreaterThanOrEqual(6); // canon + the five added later
+
+      for (const row of report) {
+        expect(row.label, `${row.key} needs a label`).toBeTruthy();
+        expect(row.bars, `${row.key} is too short to avoid an obvious loop`).toBeGreaterThanOrEqual(8);
+        expect(row.peak, `${row.key} is inaudible`).toBeGreaterThan(0.02);
+        expect(row.peak, `${row.key} would compete with the speech`).toBeLessThan(0.15);
+      }
+      // no piece stands out as much louder than the quietest when switching between them
+      const peaks = report.map((r) => r.peak);
+      expect(Math.max(...peaks) / Math.min(...peaks)).toBeLessThan(2);
+    });
+
+    test('the style menu offers every piece and each one actually plays', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const keys = await page.evaluate(() => Object.keys(ORCHESTRA_PIECES));
+      const options = await page.locator('#words3000BgmStyleSel option').evaluateAll((els) => els.map((e) => e.value));
+      expect(options).toEqual(['musicbox', ...keys]);
+
+      await page.click('#words3000BgmBtn');
+      for (const key of keys) {
+        await page.selectOption('#words3000BgmStyleSel', key);
+        expect(await page.evaluate(() => bgmStyle)).toBe(key);
+        expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+        // the scheduler must queue notes for the newly selected piece, not silently do nothing
+        expect(await page.evaluate(() => bgmNextBarAt)).toBeGreaterThan(0);
+      }
     });
 
     test('switching style while playing keeps the BGM running and persists the choice', async ({ page }) => {

@@ -198,7 +198,6 @@
         <label>BGMの種類（🎵で再生）</label>
         <select id="words3000BgmStyleSel">
           <option value="musicbox">オルゴール（ゆっくり・不規則）</option>
-          <option value="canon">カノン（弦楽・パッヘルベル）</option>
         </select>
         <div class="w3k-range-row">
           <label for="words3000BgmVolume">音量</label>
@@ -386,7 +385,7 @@ async function loadW3kPrefs(){
   readExample = !!saved.readExample;
   controlsCollapsed = !!saved.controlsCollapsed;
   bgmOn = !!saved.bgmOn;
-  bgmStyle = saved.bgmStyle === "canon" ? "canon" : "musicbox";
+  bgmStyle = ORCHESTRA_PIECES[saved.bgmStyle] ? saved.bgmStyle : "musicbox";
   bgmVolumePct = Number.isFinite(saved.bgmVolumePct) ? Math.min(100, Math.max(0, saved.bgmVolumePct)) : 50;
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
@@ -659,10 +658,17 @@ function scheduleMusicBoxNotes(){
   }
 }
 
-// --- スタイル2：カノン（弦楽合奏風） ---
-// パッヘルベルのカノン（ニ長調）の8小節の循環和音を、低音・和音・旋律の3層で鳴らす。
-// 弦の音色は「少しずらした2つのノコギリ波 → ローパスフィルタ → ゆっくり立ち上がる音量」で作る。
-// 1周目は原曲の主題（2分音符）、2周目は8分音符の装飾に変わるので、16小節で一巡する。
+// --- スタイル2以降：クラシック（弦楽合奏風） ---
+// 低音・和音・旋律の3層で鳴らす。弦の音色は「少しずらした2つのノコギリ波 → ローパス
+// フィルタ → ゆっくり立ち上がる音量」で作る（playStringNote）。
+//
+// 【著作権】収録しているのはすべて著作権の切れた古典（作曲者の没後70年をはるかに超える）。
+// 新しい曲を足すときも必ずパブリックドメインであることを確認すること。
+// 【注意】これらは楽譜からの正確な採譜ではなく、BGMとして成立する範囲で簡略化した編曲。
+//
+// 曲のデータ形式：
+//   { label, barSec, beats, bars:[ { bass, pad:[...], mel:[[音名 or null, 拍数], ...] } ] }
+//   barSec = 1小節の秒数、beats = 1小節の拍数。mel の音名 null は休符。
 const CANON_BAR_SEC = 3.4; // 1小節＝1和音。ゆっくりめにして学習の邪魔をしない
 const CANON_CHORDS = [
   { bass:"D3",  pad:["A3","D4","F#4"] },  // D
@@ -690,7 +696,103 @@ const CANON_FIGURE = [
   ["G4","B4","A4","G4","F#4","E4","F#4","G4"],
   ["A4","C#5","E5","C#5","B4","A4","G4","E4"],
 ];
-let bgmBarIndex = 0;   // 0〜15（8小節 × 2周）
+// カノンは既存の3つの配列（和音・主題・装飾）から小節の並びを組み立てる。
+// 1周目は主題（2分音符）、2周目は8分音符の装飾なので、16小節＝約54秒で一巡する。
+function canonBars(){
+  const bars = [];
+  for(let pass=0; pass<2; pass++){
+    for(let i=0; i<8; i++){
+      const mel = pass === 0
+        ? CANON_THEME[i].map(n => [n, 2])
+        : CANON_FIGURE[i].map(n => [n, 0.5]);
+      bars.push({ bass: CANON_CHORDS[i].bass, pad: CANON_CHORDS[i].pad, mel });
+    }
+  }
+  return bars;
+}
+
+// 和音の書き方を短くするための helper（同じ和音を何度も書くため）
+const CH = {
+  C:  { bass:"C3",  pad:["C4","E4","G4"] },
+  Cm: { bass:"C3",  pad:["C4","D#4","G4"] },
+  D:  { bass:"D3",  pad:["A3","D4","F#4"] },
+  Dl: { bass:"D2",  pad:["A3","D4","F#4"] },
+  G:  { bass:"G2",  pad:["G3","B3","D4"] },
+  Gh: { bass:"G3",  pad:["G3","B3","D4"] },
+  A:  { bass:"A2",  pad:["A3","C#4","E4"] },
+  Am: { bass:"A2",  pad:["A3","C4","E4"] },
+  Em: { bass:"E3",  pad:["E3","G3","B3"] },
+  F:  { bass:"F2",  pad:["F3","A3","C4"] },
+  Bm: { bass:"B2",  pad:["B3","D4","F#4"] },
+};
+// 1小節ぶんを組み立てる。bar(和音, [音名, 拍数], ...) と書けるようにする
+function bar(ch, ...mel){ return { bass:ch.bass, pad:ch.pad, mel }; }
+
+const ORCHESTRA_PIECES = {
+  canon: { label:"カノン（パッヘルベル）", barSec:3.4, beats:4, bars:canonBars() },
+
+  // ベートーヴェン 交響曲第9番「歓喜の歌」（ニ長調の主題）
+  ode: { label:"歓喜の歌（ベートーヴェン）", barSec:2.8, beats:4, bars:[
+    bar(CH.D,  ["F#5",1],["F#5",1],["G5",1],["A5",1]),
+    bar(CH.A,  ["A5",1],["G5",1],["F#5",1],["E5",1]),
+    bar(CH.D,  ["D5",1],["D5",1],["E5",1],["F#5",1]),
+    bar(CH.A,  ["F#5",1.5],["E5",0.5],["E5",2]),
+    bar(CH.D,  ["F#5",1],["F#5",1],["G5",1],["A5",1]),
+    bar(CH.A,  ["A5",1],["G5",1],["F#5",1],["E5",1]),
+    bar(CH.D,  ["D5",1],["D5",1],["E5",1],["F#5",1]),
+    bar(CH.D,  ["E5",1.5],["D5",0.5],["D5",2]),
+  ]},
+
+  // モーツァルト「アイネ・クライネ・ナハトムジーク」第1楽章 冒頭（ト長調）
+  eine: { label:"アイネ・クライネ・ナハトムジーク（モーツァルト）", barSec:2.4, beats:4, bars:[
+    bar(CH.G,  ["G4",1],["D4",1],["G4",1],["D4",1]),
+    bar(CH.G,  ["G4",0.5],["B4",0.5],["D5",0.5],["G5",0.5],["D5",1],[null,1]),
+    bar(CH.D,  ["D5",1],["A4",1],["D5",1],["A4",1]),
+    bar(CH.D,  ["D5",0.5],["F#5",0.5],["A5",0.5],["D6",0.5],["A5",1],[null,1]),
+    bar(CH.G,  ["G5",0.5],["F#5",0.5],["G5",0.5],["A5",0.5],["G5",1],["D5",1]),
+    bar(CH.G,  ["G5",0.5],["F#5",0.5],["G5",0.5],["B5",0.5],["G5",1],["D5",1]),
+    bar(CH.D,  ["A5",0.5],["G5",0.5],["F#5",0.5],["E5",0.5],["D5",2]),
+    bar(CH.G,  ["G4",1],["B4",1],["G4",2]),
+  ]},
+
+  // ドヴォルザーク 交響曲第9番「新世界より」第2楽章（日本では「家路」）
+  largo: { label:"家路（ドヴォルザーク「新世界より」）", barSec:4.0, beats:4, bars:[
+    bar(CH.C,  ["E5",1.5],["G5",0.5],["G5",2]),
+    bar(CH.C,  ["G5",1.5],["E5",0.5],["D5",2]),
+    bar(CH.C,  ["C5",4]),
+    bar(CH.G,  ["D5",2],["E5",2]),
+    bar(CH.Am, ["D5",1],["C5",1],["A4",2]),
+    bar(CH.Am, ["A4",4]),
+    bar(CH.C,  ["E5",1.5],["G5",0.5],["G5",2]),
+    bar(CH.C,  ["G5",2],["C5",2]),
+  ]},
+
+  // ペツォールト「メヌエット ト長調」（長く「バッハのメヌエット」として知られてきた曲）
+  minuet: { label:"メヌエット ト長調（ペツォールト）", barSec:2.2, beats:3, bars:[
+    bar(CH.G,  ["D5",1],["G4",0.5],["A4",0.5],["B4",0.5],["C5",0.5]),
+    bar(CH.G,  ["D5",1],["G4",1],["G4",1]),
+    bar(CH.C,  ["E5",1],["C5",0.5],["D5",0.5],["E5",0.5],["F#5",0.5]),
+    bar(CH.G,  ["G5",1],["G4",1],["G4",1]),
+    bar(CH.C,  ["C5",1],["D5",0.5],["C5",0.5],["B4",0.5],["A4",0.5]),
+    bar(CH.G,  ["B4",1],["C5",0.5],["B4",0.5],["A4",0.5],["G4",0.5]),
+    bar(CH.D,  ["F#4",1],["G4",0.5],["A4",0.5],["B4",0.5],["G4",0.5]),
+    bar(CH.D,  ["A4",3]),
+  ]},
+
+  // バッハ「主よ、人の望みの喜びよ」（カンタータ147番）の、流れ続ける3連符の旋律
+  jesu: { label:"主よ、人の望みの喜びよ（バッハ）", barSec:3.0, beats:9, bars:[
+    bar(CH.G,  ["G4",1],["A4",1],["B4",1],["D5",1],["B4",1],["D5",1],["G5",1],["D5",1],["B4",1]),
+    bar(CH.Am, ["A4",1],["B4",1],["C5",1],["E5",1],["C5",1],["E5",1],["A5",1],["E5",1],["C5",1]),
+    bar(CH.G,  ["B4",1],["C5",1],["D5",1],["G5",1],["D5",1],["G5",1],["B5",1],["G5",1],["D5",1]),
+    bar(CH.C,  ["C5",1],["D5",1],["E5",1],["G5",1],["E5",1],["G5",1],["C6",1],["G5",1],["E5",1]),
+    bar(CH.Am, ["A4",1],["B4",1],["C5",1],["E5",1],["C5",1],["A4",1],["D5",1],["C5",1],["B4",1]),
+    bar(CH.D,  ["A4",1],["B4",1],["C#5",1],["E5",1],["C#5",1],["A4",1],["D5",1],["A4",1],["F#4",1]),
+    bar(CH.Em, ["G4",1],["A4",1],["B4",1],["E5",1],["B4",1],["G4",1],["C5",1],["B4",1],["A4",1]),
+    bar(CH.G,  ["G4",1],["A4",1],["B4",1],["D5",1],["B4",1],["G4",1],["G4",3]),
+  ]},
+};
+
+let bgmBarIndex = 0;
 let bgmNextBarAt = 0;
 
 // 弦らしい音：わずかにデチューンした2つのノコギリ波をローパスで丸め、ゆっくり立ち上げる
@@ -717,30 +819,32 @@ function playStringNote(freq, at, dur, level, cutoff){
     osc.stop(at + dur + release + 0.05);
   }
 }
-function scheduleCanonBar(barIndex, at){
-  const chordIdx = barIndex % 8;
-  const chord = CANON_CHORDS[chordIdx];
-  playStringNote(noteHz(chord.bass), at, CANON_BAR_SEC, 0.16, 300);
-  for(const n of chord.pad) playStringNote(noteHz(n), at, CANON_BAR_SEC, 0.05, 1100);
-  if(barIndex < 8){
-    const half = CANON_BAR_SEC / 2;
-    CANON_THEME[chordIdx].forEach((n, i)=> playStringNote(noteHz(n), at + i*half, half, 0.17, 2600));
-  }else{
-    const eighth = CANON_BAR_SEC / 8;
-    CANON_FIGURE[chordIdx].forEach((n, i)=> playStringNote(noteHz(n), at + i*eighth, eighth, 0.15, 2600));
+function currentPiece(){ return ORCHESTRA_PIECES[bgmStyle] || ORCHESTRA_PIECES.canon; }
+function scheduleOrchestraBar(piece, barIndex, at){
+  const b = piece.bars[barIndex];
+  const beatSec = piece.barSec / piece.beats;
+  playStringNote(noteHz(b.bass), at, piece.barSec, 0.16, 300);
+  for(const n of b.pad) playStringNote(noteHz(n), at, piece.barSec, 0.05, 1100);
+  let t = at;
+  for(const [note, beats] of b.mel){
+    const dur = beats * beatSec;
+    // 短い音ほど粒立ちが要るので、長い音より少しだけ大きくしている
+    if(note) playStringNote(noteHz(note), t, dur, dur < 0.6 ? 0.16 : 0.17, 2600);
+    t += dur;
   }
 }
-function scheduleCanonBars(){
+function scheduleOrchestraBars(){
+  const piece = currentPiece();
   while(bgmNextBarAt < bgmCtx.currentTime + 1.5){
-    scheduleCanonBar(bgmBarIndex, bgmNextBarAt);
-    bgmNextBarAt += CANON_BAR_SEC;
-    bgmBarIndex = (bgmBarIndex + 1) % 16;
+    scheduleOrchestraBar(piece, bgmBarIndex % piece.bars.length, bgmNextBarAt);
+    bgmNextBarAt += piece.barSec;
+    bgmBarIndex = (bgmBarIndex + 1) % piece.bars.length;
   }
 }
 
 // 先読みスケジューラ：setIntervalの揺れに影響されないよう、少し先の音まで予約しておく
 function scheduleBgmNotes(){
-  if(bgmStyle === "canon") scheduleCanonBars();
+  if(ORCHESTRA_PIECES[bgmStyle]) scheduleOrchestraBars();
   else scheduleMusicBoxNotes();
 }
 function startBgm(){
@@ -1331,7 +1435,18 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
   document.getElementById("words3000BgmBtn").classList.toggle("on", bgmOn);
-  document.getElementById("words3000BgmStyleSel").value = bgmStyle;
+  // クラシックの選択肢は曲データから作る（増やすときにHTMLを触らなくて済むように）
+  const styleSel = document.getElementById("words3000BgmStyleSel");
+  const group = document.createElement("optgroup");
+  group.label = "クラシック（弦楽合奏風）";
+  for(const [key, piece] of Object.entries(ORCHESTRA_PIECES)){
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = piece.label;
+    group.appendChild(opt);
+  }
+  styleSel.appendChild(group);
+  styleSel.value = bgmStyle;
   document.getElementById("words3000BgmVolume").value = bgmVolumePct;
   document.getElementById("words3000BgmVolumeVal").textContent = bgmVolumePct + "%";
   if(bgmOn){
