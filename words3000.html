@@ -162,7 +162,7 @@
       <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
       <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
       <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
-      <button class="filter-icon" id="words3000BgmBtn" aria-label="オルゴールBGM" title="オルゴール風のBGMを小さく流す">🎵</button>
+      <button class="filter-icon" id="words3000BgmBtn" aria-label="BGM" title="BGMを小さく流す（種類は詳細設定で選択）">🎵</button>
     </div>
     <button class="w3k-collapse-toggle" id="words3000CollapseToggle" aria-expanded="true">詳細設定 ▾</button>
     <div id="words3000CollapsibleControls">
@@ -174,6 +174,13 @@
         <label>自動再生の読み上げ順</label>
         <select id="words3000ReadOrderSel"></select>
         <label class="w3k-checkbox-label"><input type="checkbox" id="words3000ExampleToggle"> 最後に例文も読む（英文 → 和訳）</label>
+      </div>
+      <div class="field">
+        <label>BGMの種類（🎵で再生）</label>
+        <select id="words3000BgmStyleSel">
+          <option value="musicbox">オルゴール（ゆっくり・不規則）</option>
+          <option value="canon">カノン（弦楽・パッヘルベル）</option>
+        </select>
       </div>
       <div class="w3k-optionrow">
         <button class="chip-toggle" id="words3000UnlearnedBtn" aria-label="未習得のみ表示">未習得のみ</button>
@@ -341,6 +348,7 @@ async function loadW3kPrefs(){
   readExample = !!saved.readExample;
   controlsCollapsed = !!saved.controlsCollapsed;
   bgmOn = !!saved.bgmOn;
+  bgmStyle = saved.bgmStyle === "canon" ? "canon" : "musicbox";
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
 }
@@ -360,7 +368,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn, bgmStyle }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -540,21 +548,35 @@ async function playGeminiTTS(text, rateVal){
   releaseAudioResources(audio);
 }
 
-// --- オルゴール風BGM（Web Audioで合成） ---
+// --- BGM（Web Audioで合成。オルゴール／弦楽カノンの2種類） ---
 // 音源ファイルを置くと著作権の確認とファイルサイズ（数MB）の問題が出るため、音そのものを
-// ブラウザで合成する。オルゴール＝金属の弁を弾く音なので、「ごく短いアタック＋長い減衰」の
-// サイン波に、非整数倍の倍音を1つ重ねて金属的な響きを出している。ペンタトニック音階を
-// ゆっくりランダムウォークさせるので、ループ感が出ない。
+// ブラウザで合成する。カノン（パッヘルベル、1680年頃）は著作権の切れた古典なので、
+// 和音進行と旋律をコードに直接書いても問題ない。
 //
 // 【重要】英語の聞き取り練習と音が競合しないよう、①既定OFF ②音量は小さめ
 // ③読み上げ中はさらに音量を下げる（ダッキング）、の3点を必ず守ること。
-const BGM_SCALE_HZ = [523.25, 587.33, 659.26, 783.99, 880.00, 1046.50, 1174.66, 1318.51, 1568.00, 1760.00];
+// 新しいスタイルを足すときも、この3点と「合計の音量がBGM_VOLUMEを超えない」ことを守る。
 const BGM_VOLUME = 0.10;      // 通常時
 const BGM_DUCK_VOLUME = 0.03; // 読み上げ中
 let bgmOn = false;
+let bgmStyle = "musicbox";
 let bgmCtx = null;
 let bgmGain = null;
 let bgmTimer = null;
+
+// 音名 → 周波数（A4=440Hz）。カノンの譜面を音名のまま書けるようにするためのヘルパー。
+const NOTE_SEMITONE = { C:0, "C#":1, D:2, "D#":3, E:4, F:5, "F#":6, G:7, "G#":8, A:9, "A#":10, B:11 };
+function noteHz(name){
+  const m = /^([A-G]#?)(\d)$/.exec(name);
+  const midi = NOTE_SEMITONE[m[1]] + (Number(m[2]) + 1) * 12;
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+// --- スタイル1：オルゴール ---
+// オルゴール＝金属の弁を弾く音なので、「ごく短いアタック＋長い減衰」のサイン波に、
+// 非整数倍の倍音を1つ重ねて金属的な響きを出している。ペンタトニック音階を
+// ゆっくりランダムウォークさせるので、ループ感が出ない。
+const BGM_SCALE_HZ = [523.25, 587.33, 659.26, 783.99, 880.00, 1046.50, 1174.66, 1318.51, 1568.00, 1760.00];
 let bgmNextNoteAt = 0;
 let bgmScaleIndex = 4;
 
@@ -582,8 +604,7 @@ function playMusicBoxNote(freq, at){
   partial.start(at);
   partial.stop(at + 1.0);
 }
-// 先読みスケジューラ：setIntervalの揺れに影響されないよう、少し先の音まで予約しておく
-function scheduleBgmNotes(){
+function scheduleMusicBoxNotes(){
   while(bgmNextNoteAt < bgmCtx.currentTime + 0.5){
     if(Math.random() > 0.18){ // たまに休符を入れて単調さを避ける
       playMusicBoxNote(BGM_SCALE_HZ[bgmScaleIndex], bgmNextNoteAt);
@@ -592,6 +613,91 @@ function scheduleBgmNotes(){
     bgmScaleIndex = Math.min(BGM_SCALE_HZ.length-1, Math.max(0, bgmScaleIndex + step));
     bgmNextNoteAt += 0.55 + Math.random()*0.35;
   }
+}
+
+// --- スタイル2：カノン（弦楽合奏風） ---
+// パッヘルベルのカノン（ニ長調）の8小節の循環和音を、低音・和音・旋律の3層で鳴らす。
+// 弦の音色は「少しずらした2つのノコギリ波 → ローパスフィルタ → ゆっくり立ち上がる音量」で作る。
+// 1周目は原曲の主題（2分音符）、2周目は8分音符の装飾に変わるので、16小節で一巡する。
+const CANON_BAR_SEC = 3.4; // 1小節＝1和音。ゆっくりめにして学習の邪魔をしない
+const CANON_CHORDS = [
+  { bass:"D3",  pad:["A3","D4","F#4"] },  // D
+  { bass:"A2",  pad:["A3","C#4","E4"] },  // A
+  { bass:"B2",  pad:["B3","D4","F#4"] },  // Bm
+  { bass:"F#2", pad:["A3","C#4","F#4"] }, // F#m
+  { bass:"G2",  pad:["B3","D4","G4"] },   // G
+  { bass:"D3",  pad:["A3","D4","F#4"] },  // D
+  { bass:"G2",  pad:["B3","D4","G4"] },   // G
+  { bass:"A2",  pad:["A3","C#4","E4"] },  // A
+];
+// 1周目：おなじみの主題（1小節に2分音符2つ）
+const CANON_THEME = [
+  ["F#5","E5"], ["D5","C#5"], ["B4","A4"], ["B4","C#5"],
+  ["D5","C#5"], ["B4","A4"], ["G4","F#4"], ["G4","E4"],
+];
+// 2周目：8分音符の装飾。各小節とも和音の構成音から始まり、順次下降して戻る形にしてある
+const CANON_FIGURE = [
+  ["F#5","A5","G5","F#5","E5","D5","E5","F#5"],
+  ["E5","G5","F#5","E5","D5","C#5","D5","E5"],
+  ["D5","F#5","E5","D5","C#5","B4","C#5","D5"],
+  ["C#5","E5","D5","C#5","B4","A4","B4","C#5"],
+  ["B4","D5","C#5","B4","A4","G4","A4","B4"],
+  ["A4","C#5","B4","A4","G4","F#4","G4","A4"],
+  ["G4","B4","A4","G4","F#4","E4","F#4","G4"],
+  ["A4","C#5","E5","C#5","B4","A4","G4","E4"],
+];
+let bgmBarIndex = 0;   // 0〜15（8小節 × 2周）
+let bgmNextBarAt = 0;
+
+// 弦らしい音：わずかにデチューンした2つのノコギリ波をローパスで丸め、ゆっくり立ち上げる
+function playStringNote(freq, at, dur, level, cutoff){
+  const filter = bgmCtx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = cutoff;
+  filter.Q.value = 0.7;
+  const gain = bgmCtx.createGain();
+  const attack = Math.min(0.22, dur * 0.4);
+  const release = 0.4;
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.linearRampToValueAtTime(level, at + attack);
+  gain.gain.setValueAtTime(level, at + dur);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + dur + release);
+  filter.connect(gain).connect(bgmGain);
+  for(const detune of [-6, 6]){
+    const osc = bgmCtx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    osc.connect(filter);
+    osc.start(at);
+    osc.stop(at + dur + release + 0.05);
+  }
+}
+function scheduleCanonBar(barIndex, at){
+  const chordIdx = barIndex % 8;
+  const chord = CANON_CHORDS[chordIdx];
+  playStringNote(noteHz(chord.bass), at, CANON_BAR_SEC, 0.16, 300);
+  for(const n of chord.pad) playStringNote(noteHz(n), at, CANON_BAR_SEC, 0.05, 1100);
+  if(barIndex < 8){
+    const half = CANON_BAR_SEC / 2;
+    CANON_THEME[chordIdx].forEach((n, i)=> playStringNote(noteHz(n), at + i*half, half, 0.17, 2600));
+  }else{
+    const eighth = CANON_BAR_SEC / 8;
+    CANON_FIGURE[chordIdx].forEach((n, i)=> playStringNote(noteHz(n), at + i*eighth, eighth, 0.15, 2600));
+  }
+}
+function scheduleCanonBars(){
+  while(bgmNextBarAt < bgmCtx.currentTime + 1.5){
+    scheduleCanonBar(bgmBarIndex, bgmNextBarAt);
+    bgmNextBarAt += CANON_BAR_SEC;
+    bgmBarIndex = (bgmBarIndex + 1) % 16;
+  }
+}
+
+// 先読みスケジューラ：setIntervalの揺れに影響されないよう、少し先の音まで予約しておく
+function scheduleBgmNotes(){
+  if(bgmStyle === "canon") scheduleCanonBars();
+  else scheduleMusicBoxNotes();
 }
 function startBgm(){
   if(!bgmCtx){
@@ -604,6 +710,8 @@ function startBgm(){
   }
   bgmCtx.resume();
   bgmNextNoteAt = bgmCtx.currentTime + 0.1;
+  bgmNextBarAt = bgmCtx.currentTime + 0.1;
+  bgmBarIndex = 0;
   if(!bgmTimer) bgmTimer = setInterval(scheduleBgmNotes, 250);
   scheduleBgmNotes();
   return true;
@@ -611,6 +719,18 @@ function startBgm(){
 function stopBgm(){
   if(bgmTimer){ clearInterval(bgmTimer); bgmTimer = null; }
   if(bgmCtx) bgmCtx.suspend();
+}
+// 再生中に種類を切り替えたら、予約済みの音が止まるのを待ってから鳴らし直す
+function restartBgmForStyleChange(){
+  if(!bgmOn) return;
+  stopBgm();
+  if(bgmCtx){
+    // suspend中に予約済みの音が残るため、コンテキストごと作り直す
+    bgmCtx.close();
+    bgmCtx = null;
+    bgmGain = null;
+  }
+  startBgm();
 }
 // 読み上げ中はBGMをさらに絞る。英語の音がBGMに埋もれると聞き取り練習にならないため。
 function duckBgm(on){
@@ -1094,6 +1214,11 @@ document.getElementById("words3000BgmBtn").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", bgmOn);
   saveW3kPrefs();
 });
+document.getElementById("words3000BgmStyleSel").addEventListener("change", (e)=>{
+  bgmStyle = e.currentTarget.value;
+  restartBgmForStyleChange();
+  saveW3kPrefs();
+});
 document.getElementById("words3000TestModeBtn").addEventListener("click", ()=>{
   setWords3000Mode(testMode ? 'list' : 'test');
 });
@@ -1133,6 +1258,7 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
   document.getElementById("words3000BgmBtn").classList.toggle("on", bgmOn);
+  document.getElementById("words3000BgmStyleSel").value = bgmStyle;
   if(bgmOn){
     // ブラウザはユーザー操作なしに音を鳴らすことを許さないため、ページを開いた直後は
     // まだ鳴らせない。最初のタップ/クリックの時に一度だけ鳴らし始める。

@@ -334,7 +334,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
-  test.describe('オルゴール風BGM', () => {
+  test.describe('BGM（オルゴール/カノン）', () => {
     // 音源ファイルではなくWeb Audioで合成している（著作権とファイルサイズを避けるため）。
     // 英語の聞き取り練習と競合しないよう、既定OFF・小音量・読み上げ中はさらに絞る、が要件。
     test('is off by default and does not create an audio context until asked', async ({ page }) => {
@@ -408,6 +408,68 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       expect(tone.hz).toBeGreaterThan(500);     // C5 = 523Hz
       expect(tone.hz).toBeLessThan(550);
       expect(tone.mid).toBeLessThan(tone.attack / 10); // plucked: decays away, no sustain
+    });
+
+    test('the canon style plays Pachelbel\'s ground bass at a comparable volume', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const result = await page.evaluate(async () => {
+        const SR = 44100;
+        const NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        // autocorrelation on a sawtooth often locks onto a sub-harmonic, so compare pitch
+        // classes (D, A, B...) rather than exact octaves
+        const pitchClass = (hz) => NAMES[((Math.round(69 + 12 * Math.log2(hz / 440)) % 12) + 12) % 12];
+        const notes = CANON_CHORDS.map((c) => c.bass);
+        const dur = 0.9;
+        const off = new OfflineAudioContext(1, SR * dur * notes.length, SR);
+        bgmCtx = off;
+        bgmGain = off.createGain();
+        bgmGain.gain.value = BGM_VOLUME;
+        bgmGain.connect(off.destination);
+        notes.forEach((n, i) => playStringNote(noteHz(n), i * dur, dur * 0.8, 0.3, 4000));
+        const d = (await off.startRendering()).getChannelData(0);
+
+        let peak = 0;
+        for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+        const heard = notes.map((_, i) => {
+          const a = Math.floor((i * dur + dur * 0.35) * SR);
+          let best = -1, lag0 = 0;
+          for (let lag = 40; lag < 1400; lag++) {
+            let s = 0;
+            for (let k = 0; k < 8192; k++) s += d[a + k] * d[a + k + lag];
+            if (s > best) { best = s; lag0 = lag; }
+          }
+          return pitchClass(SR / lag0);
+        });
+        return { peak, heard: heard.join(' ') };
+      });
+
+      // the 8-bar ground of Canon in D: D A Bm F#m G D G A
+      expect(result.heard).toBe('D A B F# G D G A');
+      expect(result.peak).toBeGreaterThan(0.02); // audible
+      expect(result.peak).toBeLessThan(0.3);     // still background, not competing with speech
+    });
+
+    test('switching style while playing keeps the BGM running and persists the choice', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await page.click('#words3000BgmBtn');
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+
+      await page.selectOption('#words3000BgmStyleSel', 'canon');
+      expect(await page.evaluate(() => bgmStyle)).toBe('canon');
+      // the old context is torn down so its already-scheduled music-box notes stop
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 2);
+
+      const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
+      expect(prefs.bgmStyle).toBe('canon');
+
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000BgmStyleSel')).toHaveValue('canon');
     });
   });
 
