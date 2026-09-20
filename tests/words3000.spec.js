@@ -334,6 +334,83 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('オルゴール風BGM', () => {
+    // 音源ファイルではなくWeb Audioで合成している（著作権とファイルサイズを避けるため）。
+    // 英語の聞き取り練習と競合しないよう、既定OFF・小音量・読み上げ中はさらに絞る、が要件。
+    test('is off by default and does not create an audio context until asked', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000BgmBtn')).not.toHaveClass(/\bon\b/);
+      expect(await page.evaluate(() => bgmCtx)).toBeNull();
+    });
+
+    test('turning it on starts quiet playback and the choice persists', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await page.click('#words3000BgmBtn');
+      await expect(page.locator('#words3000BgmBtn')).toHaveClass(/\bon\b/);
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+      // quiet enough to sit under the speech rather than compete with it
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 2);
+
+      const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
+      expect(prefs.bgmOn).toBe(true);
+
+      await page.click('#words3000BgmBtn'); // off again
+      await expect(page.locator('#words3000BgmBtn')).not.toHaveClass(/\bon\b/);
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+    });
+
+    test('ducks while a word is being read and comes back afterwards', async ({ page }) => {
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.click('#words3000BgmBtn');
+
+      await page.evaluate(() => speakRaw('test', 'en-US', null, null));
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.03, 2);
+
+      // interrupting playback must also restore the volume - stopAllAudio() skips the
+      // finish() callback, so the un-duck has to live there too
+      await page.evaluate(() => stopAllAudio());
+      await page.waitForTimeout(300);
+      expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 2);
+    });
+
+    test('the synthesized note is an audible, correctly pitched, decaying music-box tone', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const tone = await page.evaluate(async () => {
+        const off = new OfflineAudioContext(1, 44100 * 3, 44100);
+        bgmCtx = off;
+        bgmGain = off.createGain();
+        bgmGain.gain.value = 1;
+        bgmGain.connect(off.destination);
+        playMusicBoxNote(523.25, 0); // C5
+        const d = (await off.startRendering()).getChannelData(0);
+        const rms = (from, to) => {
+          let s = 0;
+          for (let i = from; i < to; i++) s += d[i] * d[i];
+          return Math.sqrt(s / (to - from));
+        };
+        let peak = 0;
+        for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+        let zeroCrossings = 0;
+        for (let i = 44100 * 0.05; i < 44100 * 0.25; i++) if ((d[i] >= 0) !== (d[i - 1] >= 0)) zeroCrossings++;
+        return { peak, attack: rms(0, 4410), mid: rms(44100, 48510), hz: zeroCrossings / 2 / 0.2 };
+      });
+
+      expect(tone.peak).toBeGreaterThan(0.2);   // actually audible
+      expect(tone.peak).toBeLessThan(1);        // not clipping
+      expect(tone.hz).toBeGreaterThan(500);     // C5 = 523Hz
+      expect(tone.hz).toBeLessThan(550);
+      expect(tone.mid).toBeLessThan(tone.attack / 10); // plucked: decays away, no sustain
+    });
+  });
+
   test.describe('ランダム再生（シャッフル）', () => {
     test('the shuffle toggle persists across reload via its own storage key', async ({ page }) => {
       await page.goto('/words3000.html');

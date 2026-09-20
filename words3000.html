@@ -162,6 +162,7 @@
       <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
       <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
       <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
+      <button class="filter-icon" id="words3000BgmBtn" aria-label="オルゴールBGM" title="オルゴール風のBGMを小さく流す">🎵</button>
     </div>
     <button class="w3k-collapse-toggle" id="words3000CollapseToggle" aria-expanded="true">詳細設定 ▾</button>
     <div id="words3000CollapsibleControls">
@@ -339,6 +340,7 @@ async function loadW3kPrefs(){
   shuffleListen = !!saved.shuffleListen;
   readExample = !!saved.readExample;
   controlsCollapsed = !!saved.controlsCollapsed;
+  bgmOn = !!saved.bgmOn;
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
 }
@@ -358,7 +360,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -538,7 +540,89 @@ async function playGeminiTTS(text, rateVal){
   releaseAudioResources(audio);
 }
 
+// --- オルゴール風BGM（Web Audioで合成） ---
+// 音源ファイルを置くと著作権の確認とファイルサイズ（数MB）の問題が出るため、音そのものを
+// ブラウザで合成する。オルゴール＝金属の弁を弾く音なので、「ごく短いアタック＋長い減衰」の
+// サイン波に、非整数倍の倍音を1つ重ねて金属的な響きを出している。ペンタトニック音階を
+// ゆっくりランダムウォークさせるので、ループ感が出ない。
+//
+// 【重要】英語の聞き取り練習と音が競合しないよう、①既定OFF ②音量は小さめ
+// ③読み上げ中はさらに音量を下げる（ダッキング）、の3点を必ず守ること。
+const BGM_SCALE_HZ = [523.25, 587.33, 659.26, 783.99, 880.00, 1046.50, 1174.66, 1318.51, 1568.00, 1760.00];
+const BGM_VOLUME = 0.10;      // 通常時
+const BGM_DUCK_VOLUME = 0.03; // 読み上げ中
+let bgmOn = false;
+let bgmCtx = null;
+let bgmGain = null;
+let bgmTimer = null;
+let bgmNextNoteAt = 0;
+let bgmScaleIndex = 4;
+
+function playMusicBoxNote(freq, at){
+  // 基音：5msで立ち上がり、2秒強かけて減衰する
+  const osc = bgmCtx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.value = freq;
+  const gain = bgmCtx.createGain();
+  gain.gain.setValueAtTime(0.0001, at);
+  gain.gain.linearRampToValueAtTime(0.5, at + 0.005);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + 2.2);
+  osc.connect(gain).connect(bgmGain);
+  osc.start(at);
+  osc.stop(at + 2.3);
+  // 非整数倍（2.76倍）の倍音を小さく重ねると、鐘やオルゴールらしい金属的な響きになる
+  const partial = bgmCtx.createOscillator();
+  partial.type = "sine";
+  partial.frequency.value = freq * 2.76;
+  const partialGain = bgmCtx.createGain();
+  partialGain.gain.setValueAtTime(0.0001, at);
+  partialGain.gain.linearRampToValueAtTime(0.09, at + 0.004);
+  partialGain.gain.exponentialRampToValueAtTime(0.0001, at + 0.9);
+  partial.connect(partialGain).connect(bgmGain);
+  partial.start(at);
+  partial.stop(at + 1.0);
+}
+// 先読みスケジューラ：setIntervalの揺れに影響されないよう、少し先の音まで予約しておく
+function scheduleBgmNotes(){
+  while(bgmNextNoteAt < bgmCtx.currentTime + 0.5){
+    if(Math.random() > 0.18){ // たまに休符を入れて単調さを避ける
+      playMusicBoxNote(BGM_SCALE_HZ[bgmScaleIndex], bgmNextNoteAt);
+    }
+    const step = [-2,-1,-1,1,1,2][Math.floor(Math.random()*6)];
+    bgmScaleIndex = Math.min(BGM_SCALE_HZ.length-1, Math.max(0, bgmScaleIndex + step));
+    bgmNextNoteAt += 0.55 + Math.random()*0.35;
+  }
+}
+function startBgm(){
+  if(!bgmCtx){
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(!Ctx) return false;
+    bgmCtx = new Ctx();
+    bgmGain = bgmCtx.createGain();
+    bgmGain.gain.value = BGM_VOLUME;
+    bgmGain.connect(bgmCtx.destination);
+  }
+  bgmCtx.resume();
+  bgmNextNoteAt = bgmCtx.currentTime + 0.1;
+  if(!bgmTimer) bgmTimer = setInterval(scheduleBgmNotes, 250);
+  scheduleBgmNotes();
+  return true;
+}
+function stopBgm(){
+  if(bgmTimer){ clearInterval(bgmTimer); bgmTimer = null; }
+  if(bgmCtx) bgmCtx.suspend();
+}
+// 読み上げ中はBGMをさらに絞る。英語の音がBGMに埋もれると聞き取り練習にならないため。
+function duckBgm(on){
+  if(!bgmGain || !bgmOn) return;
+  const target = on ? BGM_DUCK_VOLUME : BGM_VOLUME;
+  bgmGain.gain.cancelScheduledValues(bgmCtx.currentTime);
+  bgmGain.gain.linearRampToValueAtTime(target, bgmCtx.currentTime + 0.12);
+}
+
 function stopAllAudio(){
+  // 読み上げが中断された時もダッキングを戻す（finishを通らない経路があるため）
+  duckBgm(false);
   if(synth) synth.cancel();
   if(currentTTSAudio){
     currentTTSAudio.onended = null;
@@ -580,7 +664,9 @@ function speakRaw(text, speechLang, btn, onDone, rateOverride){
   const isJapanese = speechLang.toLowerCase().startsWith("ja");
   const rateVal = rateOverride || rate;
   if(btn){ btn.classList.add("playing"); currentPlayingBtn = btn; }
+  duckBgm(true); // 読み上げ中はBGMを絞る（stopAllAudio()側で戻す）
   const finish = ()=>{
+    duckBgm(false);
     if(btn) btn.classList.remove("playing");
     if(currentPlayingBtn === btn) currentPlayingBtn = null;
     if(onDone) onDone();
@@ -1001,6 +1087,13 @@ document.getElementById("words3000ShuffleBtn").addEventListener("click", (e)=>{
   e.currentTarget.classList.toggle("on", shuffleListen);
   saveW3kPrefs();
 });
+document.getElementById("words3000BgmBtn").addEventListener("click", (e)=>{
+  bgmOn = !bgmOn;
+  if(bgmOn && !startBgm()){ bgmOn = false; alert("この端末・ブラウザではBGMを再生できないようです。"); }
+  else if(!bgmOn) stopBgm();
+  e.currentTarget.classList.toggle("on", bgmOn);
+  saveW3kPrefs();
+});
 document.getElementById("words3000TestModeBtn").addEventListener("click", ()=>{
   setWords3000Mode(testMode ? 'list' : 'test');
 });
@@ -1039,6 +1132,12 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
+  document.getElementById("words3000BgmBtn").classList.toggle("on", bgmOn);
+  if(bgmOn){
+    // ブラウザはユーザー操作なしに音を鳴らすことを許さないため、ページを開いた直後は
+    // まだ鳴らせない。最初のタップ/クリックの時に一度だけ鳴らし始める。
+    document.addEventListener("pointerdown", ()=>{ if(bgmOn) startBgm(); }, { once:true });
+  }
   const readOrderSel = document.getElementById("words3000ReadOrderSel");
   readOrderSel.innerHTML = READ_ORDER_PRESETS.map(p=>`<option value="${p.value}">${p.label}</option>`).join('');
   readOrderSel.value = readOrder;
