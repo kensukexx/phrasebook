@@ -495,6 +495,43 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await expect(page.locator('#words3000BgmVolumeVal')).toHaveText('20%');
     });
 
+    test('stops when auto-play stops, and starts again with the next ▶', async ({ page }) => {
+      // otherwise the BGM keeps looping on its own long after the last word was read
+      await mockGoogleTTS(page);
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await page.click('#words3000BgmBtn');
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('■');
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+
+      await page.click('#words3000ListenBtn'); // stop playback
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+      // the 🎵 preference itself is kept, so the next ▶ brings the music back with it
+      await expect(page.locator('#words3000BgmBtn')).toHaveClass(/\bon\b/);
+      expect(await page.evaluate(() => bgmOn)).toBe(true);
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('#words3000ListenBtn')).toHaveText('■');
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+      await page.click('#words3000ListenBtn');
+
+      // pressing 🎵 while it is on-but-silent restarts it, rather than needing two presses
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+      await page.click('#words3000BgmBtn');
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
+      expect(await page.evaluate(() => bgmOn)).toBe(true);
+
+      // and pressing it while it really is playing still turns it off
+      await page.click('#words3000BgmBtn');
+      expect(await page.evaluate(() => bgmOn)).toBe(false);
+      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+    });
+
     test('switching style while playing keeps the BGM running and persists the choice', async ({ page }) => {
       await page.goto('/words3000.html');
       await page.waitForSelector('.w3k-card');

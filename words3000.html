@@ -1073,6 +1073,7 @@ function startWords3000Listening(){
   if(words3000PausedState && words3000PausedState.index < words3000PausedState.list.length){
     words3000ListenState = { active:true, list: words3000PausedState.list, index: words3000PausedState.index };
     words3000PausedState = null;
+    if(bgmOn) startBgm();
     playWords3000Step();
     return;
   }
@@ -1086,13 +1087,18 @@ function startWords3000Listening(){
   if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認するか、すべて覚えた✓済みかもしれません）"); return; }
   if(shuffleListen) list = shuffleArray(list.slice());
   words3000ListenState = { active:true, list, index:0 };
+  if(bgmOn) startBgm();
   playWords3000Step();
 }
+// 自動再生が終わったら（最後まで読み終わっても、■で止めても）BGMも止める。
+// 単語の読み上げが終わったあとBGMだけが延々と鳴り続けるのを防ぐため。
+// 止めるのは音だけで、🎵の設定（bgmOn）は残すので、次に▶を押せばまた一緒に鳴り始める。
 function stopWords3000Listening(){
   if(!words3000ListenState.active) return;
   words3000ListenState.active = false;
   words3000PausedState = { list: words3000ListenState.list, index: words3000ListenState.index };
   stopAllAudio();
+  stopBgm();
   document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
   updateWords3000ListenButton();
 }
@@ -1235,9 +1241,17 @@ document.getElementById("words3000ShuffleBtn").addEventListener("click", (e)=>{
   saveW3kPrefs();
 });
 document.getElementById("words3000BgmBtn").addEventListener("click", (e)=>{
-  bgmOn = !bgmOn;
-  if(bgmOn && !startBgm()){ bgmOn = false; alert("この端末・ブラウザではBGMを再生できないようです。"); }
-  else if(!bgmOn) stopBgm();
+  // 自動再生の終了でBGMだけ止まっている（設定はONのまま音は止まっている）状態があるため、
+  // 単純なトグルにはしない。鳴っていれば止める／鳴っていなければ鳴らす、という判定にして、
+  // 「ONなのに無音」の時にOFF→ONの2回押しを強いられないようにする。
+  const playing = bgmOn && bgmCtx && bgmCtx.state === "running";
+  if(playing){
+    bgmOn = false;
+    stopBgm();
+  }else{
+    bgmOn = true;
+    if(!startBgm()){ bgmOn = false; alert("この端末・ブラウザではBGMを再生できないようです。"); }
+  }
   e.currentTarget.classList.toggle("on", bgmOn);
   saveW3kPrefs();
 });
