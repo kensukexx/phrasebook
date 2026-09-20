@@ -46,6 +46,17 @@
      上部コントロールも一緒に画面外へ流れてしまい操作できなくなる、という指摘を受けて追加。
      一覧・テストモードの表示領域だけがスクロールし、この操作パネルは常に画面上部に残る。 */
   .w3k-sticky{ position:sticky; top:0; z-index:5; background:var(--paper); padding-top:16px; margin:-16px -16px 14px; padding-left:16px; padding-right:16px; padding-bottom:14px; box-shadow:0 8px 10px -8px rgba(47,53,66,0.15); }
+  /* 詳細設定を開いたままスクロールすると、固定パネルがスマホの画面をほぼ埋めてしまい、
+     単語カードがパネルの裏に隠れてタップもできなくなる（実際にBGMの行を足して顕在化した）。
+     詳細設定の中身だけ高さを制限して内部スクロールさせることで、範囲・再生ボタンは常に
+     見えたまま、カードを表示する領域が必ず残るようにする。
+     下端をぼかしているのは、切れているのではなく「続きがある（スクロールできる）」ことを
+     見た目で示すため。スマホではスクロールバーが触るまで出ないので、これが唯一の手がかりになる。 */
+  #words3000CollapsibleControls{ max-height:42vh; overflow-y:auto; overscroll-behavior:contain;
+    -webkit-mask-image:linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+    mask-image:linear-gradient(to bottom, #000 calc(100% - 22px), transparent); }
+  /* 中身が収まりきっている時は、最後の行が意味もなく薄くなるだけなのでぼかさない（JSで付け外し） */
+  #words3000CollapsibleControls.fits{ -webkit-mask-image:none; mask-image:none; }
   .field{ margin-bottom:14px; }
   .field label{ display:block; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11.5px; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-soft); margin-bottom:6px; }
   .field select{ width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
@@ -332,7 +343,21 @@ function applyControlsCollapsed(){
   const btn = document.getElementById("words3000CollapseToggle");
   btn.textContent = controlsCollapsed ? "詳細設定 ▸" : "詳細設定 ▾";
   btn.setAttribute("aria-expanded", String(!controlsCollapsed));
+  updateScrollPadding();
 }
+
+// ブラウザ標準のscrollIntoView（アンカー移動や自動化ツールの自動スクロールを含む）は
+// sticky要素の存在を知らないため、そのままだと対象が固定パネルの裏に着地してしまう。
+// scroll-padding-topにパネルの高さを入れておくと、その種のスクロールが必ずパネルの
+// 下に着地する。自前のscrollBelowSticky()と同じ補正を、標準の仕組み側にも効かせるもの。
+function updateScrollPadding(){
+  const el = document.querySelector(".w3k-sticky");
+  document.documentElement.style.scrollPaddingTop = (el ? el.offsetHeight + 12 : 0) + "px";
+  // 詳細設定が高さ制限に当たっていない（全部見えている）ときは、下端をぼかす必要がない
+  const box = document.getElementById("words3000CollapsibleControls");
+  if(box) box.classList.toggle("fits", box.scrollHeight <= box.clientHeight + 1);
+}
+window.addEventListener("resize", updateScrollPadding);
 
 // --- 自動再生の読み上げ順 ---
 // 元は「英語×N回」「日本語×M回」という2つの数値で指定していたが、実際にどの順番で読まれるか

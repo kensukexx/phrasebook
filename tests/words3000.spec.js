@@ -41,6 +41,32 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     await expect(backLink).toBeVisible(); // still reachable, inside .w3k-sticky
   });
 
+  test('the sticky panel never swallows the screen: cards stay visible and tappable after scrolling', async ({ page }) => {
+    // Regression guard. Adding the BGM rows to 詳細設定 pushed the panel to 600px on a 664px
+    // phone viewport - scrolling then put the cards behind it, and a tap aimed at a card
+    // landed on a control inside the panel instead. The panel's detail area is now height
+    // capped (and scroll-padding-top keeps scrollIntoView landing below the panel), so this
+    // checks the outcome that actually matters rather than the specific pixel values.
+    await page.goto('/words3000.html');
+    await page.waitForSelector('.w3k-card');
+    await page.locator('.w3k-card').first().locator('.w3k-front').scrollIntoViewIfNeeded();
+
+    const geometry = await page.evaluate(() => {
+      const sticky = document.querySelector('.w3k-sticky').getBoundingClientRect();
+      const card = document.querySelector('.w3k-card').getBoundingClientRect();
+      const hit = document.elementFromPoint(card.left + card.width / 2, card.top + card.height / 2);
+      return {
+        hiddenBehindPanel: Math.max(0, sticky.bottom - card.top),
+        roomLeftForCards: window.innerHeight - sticky.height,
+        tapLandsOnCard: !!(hit && hit.closest('.w3k-card')),
+      };
+    });
+
+    expect(geometry.hiddenBehindPanel).toBe(0);
+    expect(geometry.tapLandsOnCard).toBe(true);
+    expect(geometry.roomLeftForCards).toBeGreaterThan(150); // a couple of cards' worth
+  });
+
   test('tapping a card reveals the meaning and example sentence, tapping again hides it', async ({ page }) => {
     await mockGoogleTTS(page);
     await page.goto('/words3000.html');
@@ -452,7 +478,6 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
 
     test('the volume slider changes the level live, persists, and keeps ducking proportional', async ({ page }) => {
-      await mockGoogleTTS(page);
       await page.goto('/words3000.html');
       await page.waitForSelector('.w3k-card');
       await expect(page.locator('#words3000BgmVolumeVal')).toHaveText('50%');
@@ -468,20 +493,23 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.waitForTimeout(200);
       expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.20, 3);
 
-      // ducking is a ratio of the chosen volume, not a fixed level - otherwise turning the
-      // BGM down below the old duck level would make speech *raise* it
-      await page.evaluate(() => speakRaw('test', 'en-US', null, null));
-      await page.waitForTimeout(300);
+      // Ducking is a ratio of the chosen volume, not a fixed level - otherwise turning the
+      // BGM down below the old fixed duck level would make speech *raise* it.
+      // That ducking is triggered by real speech has its own test above; here it is driven
+      // directly, so these ratio assertions don't depend on how long the mock audio happens
+      // to run (relying on that made this test fail on CI, where the mock finishes sooner).
+      await page.evaluate(() => duckBgm(true));
+      await page.waitForTimeout(200);
       expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.06, 3);
 
-      // moving the slider mid-speech must stay ducked, not jump back to full volume
+      // moving the slider while ducked must stay ducked, not jump back to full volume
       await page.locator('#words3000BgmVolume').fill('50');
       await page.dispatchEvent('#words3000BgmVolume', 'input');
       await page.waitForTimeout(200);
       expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.03, 3);
 
-      await page.evaluate(() => stopAllAudio());
-      await page.waitForTimeout(300);
+      await page.evaluate(() => duckBgm(false));
+      await page.waitForTimeout(200);
       expect(await page.evaluate(() => bgmGain.gain.value)).toBeCloseTo(0.10, 3);
 
       const prefs = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-words3000-prefs')));
