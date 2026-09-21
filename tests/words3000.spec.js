@@ -104,6 +104,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       '1〜500語', '501〜1000語', '1001〜1500語', '1501〜2000語', '2001〜2500語', '2501〜3000語',
       '全3000語（1〜3000語）',
       '🔁 今日の復習（0語）',
+      '⚠️ 苦手な単語（0語）',
     ]);
     await expect(page.locator('.w3k-card')).toHaveCount(500);
     await page.selectOption('#words3000TierSel', '501-1000');
@@ -360,6 +361,143 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('4択クイズ・苦手リスト・継続の記録', () => {
+    test('the quiz hides the answer until you pick, then marks both the right one and your mistake', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TestFormatSel', 'choice');
+      await page.click('#words3000TestModeBtn');
+      await page.waitForSelector('.w3k-choice');
+
+      await expect(page.locator('.w3k-choice')).toHaveCount(4);
+      await expect(page.locator('.w3k-testanswer')).toHaveCount(0); // no peeking
+      // exactly one of the four is the real meaning, and no two options repeat
+      const options = await page.locator('.w3k-choice').evaluateAll((els) => els.map((e) => e.dataset.ja));
+      expect(new Set(options).size).toBe(4);
+      const answer = await page.evaluate(() => WORDS3000.find((x) => x.word === document.querySelector('.w3k-testword').textContent).ja);
+      expect(options.filter((o) => o === answer)).toHaveLength(1);
+
+      const wrongIndex = options.findIndex((o) => o !== answer);
+      await page.locator('.w3k-choice').nth(wrongIndex).click();
+
+      await expect(page.locator('.w3k-choice.correct')).toHaveCount(1);
+      await expect(page.locator('.w3k-choice.correct')).toHaveAttribute('data-ja', answer);
+      await expect(page.locator('.w3k-choice.wrong')).toHaveCount(1);
+      await expect(page.locator('.w3k-testanswer')).toBeVisible(); // now the example is shown
+      await expect(page.locator('.w3k-choice').first()).toBeDisabled(); // no changing your mind
+
+      await page.click('#testContinueBtn');
+      await expect(page.locator('.w3k-choice.correct')).toHaveCount(0); // fresh question
+      await expect(page.locator('.w3k-testanswer')).toHaveCount(0);
+    });
+
+    test('a right answer advances the review schedule, a wrong one sends the word back to unlearned', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TestFormatSel', 'choice');
+      await page.click('#words3000TestModeBtn');
+      await page.waitForSelector('.w3k-choice');
+
+      const answer = await page.evaluate(() => WORDS3000.find((x) => x.word === document.querySelector('.w3k-testword').textContent).ja);
+      const word = await page.locator('.w3k-testword').textContent();
+      await page.locator(`.w3k-choice[data-ja="${answer.replace(/"/g, '\\"')}"]`).click();
+
+      const state = await page.evaluate((w) => ({
+        learned: JSON.parse(localStorage.getItem('phrasebook-words-learned'))[w],
+        stats: JSON.parse(localStorage.getItem('phrasebook-word-stats'))[w],
+      }), word);
+      expect(state.learned).toBeTruthy();          // scheduled for review
+      expect(state.stats).toEqual({ miss: 0, ok: 1 });
+    });
+
+    test('the weak list holds only words you still get wrong more often than right, hardest first', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-word-stats', JSON.stringify({
+          water: { miss: 4, ok: 1 },  // score 3
+          air: { miss: 2, ok: 0 },    // score 2
+          time: { miss: 3, ok: 2 },   // score 1
+          the: { miss: 0, ok: 5 },    // mastered - must not appear
+          people: { miss: 2, ok: 2 }, // drawn level - must not appear
+        }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await expect(page.locator('#words3000TierSel option[value="weak"]')).toHaveText('⚠️ 苦手な単語（3語）');
+      await page.selectOption('#words3000TierSel', 'weak');
+      await expect(page.locator('.w3k-word')).toHaveText(['water', 'air', 'time']);
+      await expect(page.locator('#words3000Progress')).toContainText('苦手な単語 3語');
+    });
+
+    test('getting a weak word right repeatedly drops it off the list', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-word-stats', JSON.stringify({ water: { miss: 2, ok: 1 } }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000TierSel option[value="weak"]')).toHaveText(/1語/);
+
+      await page.evaluate(() => recordAnswer('water', true)); // now 2-2, no longer losing
+      await page.evaluate(() => renderWords3000List());
+      await expect(page.locator('#words3000TierSel option[value="weak"]')).toHaveText(/0語/);
+    });
+
+    test('the streak counts consecutive days and shows today\'s total', async ({ page }) => {
+      await page.addInitScript(() => {
+        const day = (back) => { const d = new Date(); d.setDate(d.getDate() - back); return d.toISOString().slice(0, 10); };
+        localStorage.setItem('phrasebook-study-log', JSON.stringify({ [day(0)]: 7, [day(1)]: 20, [day(2)]: 12 }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000Progress')).toContainText('🔥 3日連続');
+      await expect(page.locator('#words3000Progress')).toContainText('今日 7語');
+    });
+
+    test('a gap breaks the streak, and yesterday-only still counts so the morning does not read as zero', async ({ page }) => {
+      await page.addInitScript(() => {
+        const day = (back) => { const d = new Date(); d.setDate(d.getDate() - back); return d.toISOString().slice(0, 10); };
+        // studied yesterday and the day before, nothing yet today; the day 4 back is orphaned
+        localStorage.setItem('phrasebook-study-log', JSON.stringify({ [day(1)]: 5, [day(2)]: 5, [day(4)]: 5 }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000Progress')).toContainText('🔥 2日連続');
+      await expect(page.locator('#words3000Progress')).not.toContainText('今日');
+    });
+
+    test('nothing is shown before the first answer, rather than a discouraging zero', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000Progress')).not.toContainText('🔥');
+      await expect(page.locator('#words3000Progress')).not.toContainText('今日');
+    });
+
+    test('the new records survive a sync round trip through either page', async ({ page }) => {
+      // index.html pushes with a full-document setDoc (no merge), so anything words3000.html
+      // writes has to be part of index.html's syncable state too or it is wiped on the next
+      // push from the phrase deck. Both pages also have to merge, not overwrite.
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      const fromWords = await page.evaluate(() => ({
+        stats: mergeWordStats({ water: { miss: 5, ok: 0 } }, { water: { miss: 2, ok: 3 }, air: { miss: 1, ok: 0 } }),
+        log: mergeStudyLog({ '2026-09-20': 10 }, { '2026-09-20': 4, '2026-09-21': 7 }),
+      }));
+      expect(fromWords.stats).toEqual({ water: { miss: 5, ok: 3 }, air: { miss: 1, ok: 0 } });
+      expect(fromWords.log).toEqual({ '2026-09-20': 10, '2026-09-21': 7 });
+
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      const carried = await page.evaluate(async () => {
+        await window.applyCloudState({ wordStats: { air: { miss: 3, ok: 0 } }, studyLog: { '2026-09-19': 2 } });
+        const state = window.getSyncableState();
+        return { stats: state.wordStats, log: state.studyLog, stored: localStorage.getItem('phrasebook-word-stats') };
+      });
+      expect(carried.stats).toEqual({ air: { miss: 3, ok: 0 } }); // kept in the phrase deck's state
+      expect(carried.log).toEqual({ '2026-09-19': 2 });
+      expect(JSON.parse(carried.stored)).toEqual({ air: { miss: 3, ok: 0 } });
+    });
+  });
+
   test.describe('BGM（オルゴール／クラシック）', () => {
     // 音源ファイルではなくWeb Audioで合成している（著作権とファイルサイズを避けるため）。
     // 英語の聞き取り練習と競合しないよう、既定OFF・小音量・読み上げ中はさらに絞る、が要件。
@@ -385,7 +523,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
       await page.click('#words3000BgmBtn'); // off again
       await expect(page.locator('#words3000BgmBtn')).not.toHaveClass(/\bon\b/);
-      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+      await expect.poll(() => page.evaluate(() => bgmCtx.state)).toBe('suspended');
     });
 
     test('ducks while a word is being read and comes back afterwards', async ({ page }) => {
@@ -558,7 +696,9 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
       await page.click('#words3000ListenBtn'); // stop playback
       await expect(page.locator('#words3000ListenBtn')).toHaveText('▶');
-      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+      // AudioContext.suspend() is asynchronous, so the state flips a tick later - polling
+      // instead of reading it straight away (this was an intermittent failure under load)
+      await expect.poll(() => page.evaluate(() => bgmCtx.state)).toBe('suspended');
       // the 🎵 preference itself is kept, so the next ▶ brings the music back with it
       await expect(page.locator('#words3000BgmBtn')).toHaveClass(/\bon\b/);
       expect(await page.evaluate(() => bgmOn)).toBe(true);
@@ -569,7 +709,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#words3000ListenBtn');
 
       // pressing 🎵 while it is on-but-silent restarts it, rather than needing two presses
-      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+      await expect.poll(() => page.evaluate(() => bgmCtx.state)).toBe('suspended');
       await page.click('#words3000BgmBtn');
       expect(await page.evaluate(() => bgmCtx.state)).toBe('running');
       expect(await page.evaluate(() => bgmOn)).toBe(true);
@@ -577,7 +717,7 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       // and pressing it while it really is playing still turns it off
       await page.click('#words3000BgmBtn');
       expect(await page.evaluate(() => bgmOn)).toBe(false);
-      expect(await page.evaluate(() => bgmCtx.state)).toBe('suspended');
+      await expect.poll(() => page.evaluate(() => bgmCtx.state)).toBe('suspended');
     });
 
     test('every classical piece is well-formed and none is louder than the others', async ({ page }) => {

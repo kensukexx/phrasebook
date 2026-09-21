@@ -85,6 +85,15 @@
     letter-spacing:normal; text-transform:none; color:var(--ink); }
   .w3k-checkbox-label input{ width:16px; height:16px; flex:0 0 auto; }
 
+  /* 4択クイズ。自己採点だと「わかったつもり」で通してしまうので、○×が機械的に決まる形も選べる。 */
+  .w3k-choices{ display:grid; gap:8px; margin-top:14px; }
+  .w3k-choice{ padding:12px 14px; border:1.5px solid var(--line); border-radius:10px;
+    background:#fff; font-size:15px; line-height:1.5; color:var(--ink); text-align:left; cursor:pointer; }
+  .w3k-choice.correct{ border-color:var(--green); background:rgba(32,191,107,0.14); font-weight:700; }
+  .w3k-choice.wrong{ border-color:var(--red); background:rgba(255,107,107,0.14); }
+  .w3k-choice:disabled{ cursor:default; opacity:1; }
+  .w3k-choice-mark{ float:right; margin-left:10px; }
+
   /* BGMの音量スライダー。.field label の見出し指定を打ち消すのは上と同じ理由。 */
   .w3k-range-row{ display:flex; align-items:center; gap:8px; margin-top:8px; }
   .w3k-range-row label{ flex:0 0 auto; margin:0; font-size:12.5px;
@@ -195,6 +204,13 @@
         <label class="w3k-checkbox-label"><input type="checkbox" id="words3000ExampleToggle"> 最後に例文も読む（英文 → 和訳）</label>
       </div>
       <div class="field">
+        <label>テストの出題形式</label>
+        <select id="words3000TestFormatSel">
+          <option value="self">自己採点（こたえを見て ✓／❌）</option>
+          <option value="choice">4択クイズ（○×が自動で決まる）</option>
+        </select>
+      </div>
+      <div class="field">
         <label>BGMの種類（🎵で再生）</label>
         <select id="words3000BgmStyleSel">
           <option value="musicbox">オルゴール（ゆっくり・不規則）</option>
@@ -263,6 +279,14 @@ async function loadState(){
     const wl = await store.get('phrasebook-words-learned');
     if(wl && wl.value){ wordsLearned = JSON.parse(wl.value); }
   }catch(e){}
+  try{
+    const ws = await store.get('phrasebook-word-stats');
+    if(ws && ws.value){ wordStats = JSON.parse(ws.value); }
+  }catch(e){}
+  try{
+    const sl = await store.get('phrasebook-study-log');
+    if(sl && sl.value){ studyLog = JSON.parse(sl.value); }
+  }catch(e){}
 }
 async function saveSharedSetting(fields){
   let current = {};
@@ -273,6 +297,71 @@ async function saveSharedSetting(fields){
   await safeSet('phrasebook-settings', JSON.stringify({ ...current, ...fields }));
 }
 async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
+
+// --- 苦手リストと継続の記録 ---
+// wordsLearnedの値に相乗りさせることはできない。あの値は「truthyなら覚えた」という判定に
+// アプリ全体が依存しているため、間違えただけの未習得語を入れると「覚えた」扱いになってしまう。
+// そのため別キーにするが、**index.htmlのpushはmerge無しの全体上書き**なので、向こうにも
+// 同じフィールドを持たせておかないとフレーズ帳を開いた瞬間に消える（getSyncableState参照）。
+//
+// どちらの値も増える一方にしてある。これは同期のマージを「大きいほうを採用」で済ませるため。
+// 端末ごとに別々に数えた分は合算されず取りこぼすが、順位づけが目的なので実害がない。
+// 逆に合計すると、同じ回答が両端末に伝わったときに二重に数えてしまう。
+let wordStats = {};   // { 単語: {miss, ok} }
+let studyLog = {};    // { "YYYY-MM-DD": その日に答えた語数 }
+async function saveWordStats(){ await safeSet('phrasebook-word-stats', JSON.stringify(wordStats)); }
+async function saveStudyLog(){ await safeSet('phrasebook-study-log', JSON.stringify(studyLog)); }
+
+// ✓/❌・4択の正誤を1件記録する。苦手リストと「今日やった語数」の両方がここを通る。
+function recordAnswer(word, correct){
+  const s = wordStats[word] || { miss:0, ok:0 };
+  if(correct) s.ok++; else s.miss++;
+  wordStats[word] = s;
+  const today = dateKey(new Date());
+  studyLog[today] = (studyLog[today] || 0) + 1;
+  saveWordStats();
+  saveStudyLog();
+}
+// 苦手＝間違えた回数が正解した回数を上回っている単語。正解を重ねれば自然に外れる。
+function isWeakWord(word){ const s = wordStats[word]; return !!s && s.miss > s.ok; }
+function weakScore(word){ const s = wordStats[word]; return s ? (s.miss - s.ok) : 0; }
+function countWeakWords(){ return WORDS3000.reduce((n,w)=> n + (isWeakWord(w.word) ? 1 : 0), 0); }
+
+// 連続学習日数。今日まだ何もしていない場合は昨日から数える（朝ひらいた時に
+// 「0日」と出てせっかくの連続が途切れたように見えるのを避けるため）。
+function studyStreak(){
+  const d = new Date();
+  if(!studyLog[dateKey(d)]) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while(studyLog[dateKey(d)]){ n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+function todayStudyCount(){ return studyLog[dateKey(new Date())] || 0; }
+// 進捗行の末尾に足す継続の表示。まだ一度も答えていないうちは何も出さない
+// （0日・0語と出ても励みにならないため）。
+function studyStatusText(){
+  const streak = studyStreak();
+  const today = todayStudyCount();
+  const parts = [];
+  if(streak > 0) parts.push(`🔥 ${streak}日連続`);
+  if(today > 0) parts.push(`今日 ${today}語`);
+  return parts.length ? `　・　${parts.join('　・　')}` : "";
+}
+
+// 同期のマージ：どちらも増える一方なので、キーごとに大きいほうを採る。
+function mergeWordStats(cloud, local){
+  const merged = {};
+  for(const key of new Set([...Object.keys(cloud || {}), ...Object.keys(local || {})])){
+    const c = (cloud || {})[key] || {}, l = (local || {})[key] || {};
+    merged[key] = { miss: Math.max(c.miss || 0, l.miss || 0), ok: Math.max(c.ok || 0, l.ok || 0) };
+  }
+  return merged;
+}
+function mergeStudyLog(cloud, local){
+  const merged = { ...(cloud || {}) };
+  for(const [day, n] of Object.entries(local || {})) merged[day] = Math.max(merged[day] || 0, n || 0);
+  return merged;
+}
 
 // --- 間隔反復（忘れかけた頃に復習する）---
 // 「覚えても定着しない」という相談を受けて追加。覚えた直後ではなく、少しずつ間隔を空けて
@@ -338,14 +427,29 @@ function advanceSrs(word){
 // 一切クラウドに届かない（index.html側の保存関数を一切経由しないため）——実際に
 // 「スマホとPCで同期されてない」という報告のもう一つの原因だった。
 function getWordsLearnedSnapshot(){ return wordsLearned; }
-async function applyCloudWordsLearned(cloudWordsLearned){
+async function applyCloudWordsLearned(cloudWordsLearned, cloudWordStats, cloudStudyLog){
   const merged = mergeWordsLearned(cloudWordsLearned, wordsLearned);
-  const needsPush = wordsLearnedDiffers(merged, cloudWordsLearned);
+  let needsPush = wordsLearnedDiffers(merged, cloudWordsLearned);
   wordsLearned = merged;
   await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned));
+
+  if(cloudWordStats){
+    const mergedStats = mergeWordStats(cloudWordStats, wordStats);
+    if(JSON.stringify(mergedStats) !== JSON.stringify(cloudWordStats)) needsPush = true;
+    wordStats = mergedStats;
+    await saveWordStats();
+  }
+  if(cloudStudyLog){
+    const mergedLog = mergeStudyLog(cloudStudyLog, studyLog);
+    if(JSON.stringify(mergedLog) !== JSON.stringify(cloudStudyLog)) needsPush = true;
+    studyLog = mergedLog;
+    await saveStudyLog();
+  }
   renderWords3000List();
   return needsPush;
 }
+function getWordStatsSnapshot(){ return wordStats; }
+function getStudyLogSnapshot(){ return studyLog; }
 
 // --- このページ独自の表示設定（品詞フィルタ・未習得のみ・ランダム再生・自動再生の
 // 英語/日本語くり返し回数）。フレーズ帳本体は関知しない項目のため、共有のphrasebook-settingsとは
@@ -353,6 +457,7 @@ async function applyCloudWordsLearned(cloudWordsLearned){
 // フィールドごと書き換えて消してしまう）。テストモードかどうかは永続化しない（開くたびに
 // 一覧モードから始まる方がわかりやすいため）。 ---
 let unlearnedOnly = false;
+let testFormat = "self";   // "self"（自己採点）か "choice"（4択）
 let shuffleListen = false;
 let testMode = false;
 let readExample = false;
@@ -409,6 +514,7 @@ async function loadW3kPrefs(){
   bgmOn = !!saved.bgmOn;
   bgmStyle = ORCHESTRA_PIECES[saved.bgmStyle] ? saved.bgmStyle : "musicbox";
   bgmVolumePct = Number.isFinite(saved.bgmVolumePct) ? Math.min(100, Math.max(0, saved.bgmVolumePct)) : 50;
+  testFormat = saved.testFormat === "choice" ? "choice" : "self";
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
 }
@@ -428,7 +534,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn, bgmStyle, bgmVolumePct }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, bgmOn, bgmStyle, bgmVolumePct, testFormat }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -1031,11 +1137,16 @@ function populateWords3000TierSelect(){
   sel.innerHTML = words3000TierRanges().map(r=>{
     const label = r.all ? `全${r.to}語（1〜${r.to}語）` : `${r.from}〜${r.to}語`;
     return `<option value="${r.from}-${r.to}">${label}</option>`;
-  }).join('') + `<option value="review">🔁 今日の復習（${countDueWords()}語）</option>`;
+  }).join('')
+    + `<option value="review">🔁 今日の復習（${countDueWords()}語）</option>`
+    + `<option value="weak">⚠️ 苦手な単語（${countWeakWords()}語）</option>`;
   if(prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
 }
 function isReviewTier(){
   return document.getElementById("words3000TierSel").value === "review";
+}
+function isWeakTier(){
+  return document.getElementById("words3000TierSel").value === "weak";
 }
 // 復習の残り語数は覚えた✓を付けるたびに変わるので、選択状態を壊さずラベルだけ差し替える。
 // あわせて、別の範囲を選んでいると件数に気づけないため、溜まっている時だけ誘導ボタンを出す。
@@ -1043,6 +1154,8 @@ function refreshReviewOptionLabel(){
   const due = countDueWords();
   const opt = document.querySelector('#words3000TierSel option[value="review"]');
   if(opt) opt.textContent = `🔁 今日の復習（${due}語）`;
+  const weakOpt = document.querySelector('#words3000TierSel option[value="weak"]');
+  if(weakOpt) weakOpt.textContent = `⚠️ 苦手な単語（${countWeakWords()}語）`;
   const prompt = document.getElementById("words3000ReviewPrompt");
   if(prompt){
     const show = due > 0 && !isReviewTier();
@@ -1072,6 +1185,10 @@ function words3000FilteredList(){
   let items;
   if(tierValue === "review"){
     items = WORDS3000.filter(w=>isDueForReview(w.word));
+  } else if(tierValue === "weak"){
+    // 苦手な順（間違い超過が大きい順）に並べる。頻度順のままだと、いちばん苦戦している
+    // 単語が後ろに埋もれてしまい、絞り込んだ意味が薄れるため。
+    items = WORDS3000.filter(w=>isWeakWord(w.word)).sort((a,b)=> weakScore(b.word) - weakScore(a.word));
   } else {
     const [tierFromStr, tierToStr] = tierValue.split('-');
     const tierFrom = parseInt(tierFromStr, 10) || 1;
@@ -1082,7 +1199,7 @@ function words3000FilteredList(){
   if(q) items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
   // 復習対象は定義上すべて✓済みなので、「未習得のみ」をそのまま適用すると必ず0件になる。
   // 復習の範囲を選んでいる間はこの絞り込みを無視する。
-  if(unlearnedOnly && tierValue !== "review") items = items.filter(w=>!wordsLearned[w.word]);
+  if(unlearnedOnly && tierValue !== "review" && tierValue !== "weak") items = items.filter(w=>!wordsLearned[w.word]);
   return items;
 }
 function shuffleArray(arr){
@@ -1098,9 +1215,10 @@ function renderWords3000List(){
   const items = words3000FilteredList();
   refreshReviewOptionLabel();
   const doneCount = items.filter(w=>wordsLearned[w.word]).length;
-  document.getElementById("words3000Progress").textContent = isReviewTier()
-    ? `今日の復習 ${items.length}語`
+  const head = isReviewTier() ? `今日の復習 ${items.length}語`
+    : isWeakTier() ? `苦手な単語 ${items.length}語`
     : `覚えた ${doneCount} / ${items.length}`;
+  document.getElementById("words3000Progress").textContent = head + studyStatusText();
   if(items.length === 0){
     wrap.innerHTML = isReviewTier()
       ? '<p class="hint">🎉 今日の復習は完了しています。また明日、忘れかけた頃に出題されます。</p>'
@@ -1295,7 +1413,31 @@ function stopWords3000Listening(){
 // --- テストモード：意味を隠したフラッシュカードを1問ずつ出題し、タップで答え合わせをする
 // 能動的な復習モード。「✓ わかった」は覚えた扱いに、「❌ もう一度」は未習得のまま
 // （既に覚えた✓が付いていても外す）にしてから次の問題に進む。対象は一覧と同じ絞り込み結果。 ---
-let testState = { list:[], index:0, revealed:false };
+let testState = { list:[], index:0, revealed:false, choices:null, picked:null };
+
+// 4択の選択肢。誤答は同じ品詞から選ぶ（品詞が違うと意味を読まなくても消去法で当たるため）。
+// 同じ意味の文字列は除く（正解と見分けがつかない選択肢ができてしまう）。
+function buildTestChoices(w){
+  const samePos = WORDS3000.filter(x => x.pos === w.pos && x.ja !== w.ja);
+  const pool = samePos.length >= 3 ? samePos : WORDS3000.filter(x => x.ja !== w.ja);
+  const used = new Set([w.ja]);
+  const picked = [];
+  for(let guard = 0; guard < 300 && picked.length < 3; guard++){
+    const c = pool[Math.floor(Math.random() * pool.length)];
+    if(!c || used.has(c.ja)) continue;
+    used.add(c.ja);
+    picked.push(c.ja);
+  }
+  return shuffleArray([w.ja, ...picked]);
+}
+// 次の問題へ。4択の状態も必ずここで捨てる（残ると前の問題の選択肢が出る）。
+function goToTestIndex(index){
+  testState.index = index;
+  testState.revealed = false;
+  testState.choices = null;
+  testState.picked = null;
+  renderTestCard(true);
+}
 function setWords3000Mode(mode){
   testMode = (mode === 'test');
   document.getElementById("words3000TestModeBtn").classList.toggle("on", testMode);
@@ -1317,7 +1459,7 @@ function startTestMode(){
   stopWords3000Listening();
   let list = words3000FilteredList();
   if(shuffleListen) list = shuffleArray(list.slice());
-  testState = { list, index:0, revealed:false };
+  testState = { list, index:0, revealed:false, choices:null, picked:null };
   renderTestCard(true);
 }
 function renderTestCard(autoSpeak){
@@ -1333,11 +1475,13 @@ function renderTestCard(autoSpeak){
         <button id="testRestartBtn">もう一度</button>
       </div>
     </div>`;
-    document.getElementById("testRestartBtn").addEventListener("click", ()=>{ testState.index = 0; renderTestCard(true); });
+    document.getElementById("testRestartBtn").addEventListener("click", ()=> goToTestIndex(0));
     return;
   }
   const w = testState.list[testState.index];
   const isLearned = !!wordsLearned[w.word];
+  const choiceMode = testFormat === "choice";
+  if(choiceMode && !testState.choices) testState.choices = buildTestChoices(w);
   area.innerHTML = `
     <p class="hint">${testState.index+1} / ${testState.list.length}</p>
     <div class="w3k-testcard">
@@ -1346,7 +1490,7 @@ function renderTestCard(autoSpeak){
       <div class="w3k-testpos">${esc(w.pos||"")}</div>
       <div class="w3k-testkana">${esc(w.kana)}</div>
       <button class="mini-btn ${isLearned?'done':''}" id="testSpeakBtn" aria-label="発音を聞く">🔊</button>
-      ${testState.revealed ? `
+      ${(choiceMode ? !!testState.picked : testState.revealed) ? `
       <div class="w3k-testanswer">
         <div class="w3k-ja">${esc(w.ja)}</div>
         <div class="w3k-ex">
@@ -1359,29 +1503,56 @@ function renderTestCard(autoSpeak){
         </div>
       </div>` : ''}
     </div>
+    ${choiceMode ? `
+    <div class="w3k-choices">
+      ${testState.choices.map(ja=>{
+        const isAnswer = ja === w.ja;
+        const isPicked = testState.picked === ja;
+        const cls = !testState.picked ? '' : (isAnswer ? ' correct' : (isPicked ? ' wrong' : ''));
+        const mark = !testState.picked ? '' : (isAnswer ? '<span class="w3k-choice-mark">✓</span>' : (isPicked ? '<span class="w3k-choice-mark">✗</span>' : ''));
+        return `<button class="w3k-choice${cls}" data-ja="${esc(ja)}" ${testState.picked ? 'disabled' : ''}>${mark}${esc(ja)}</button>`;
+      }).join('')}
+    </div>
+    <div class="w3k-testbtns">
+      ${testState.picked ? '<button id="testContinueBtn">次へ →</button>' : ''}
+    </div>` : `
     <div class="w3k-testbtns">
       ${testState.revealed
         ? '<button id="testWrongBtn">❌ もう一度</button><button id="testRightBtn">✓ わかった</button>'
         : '<button id="testShowBtn">こたえを見る</button>'}
-    </div>
+    </div>`}
     <div class="w3k-testnav">
       <button id="testPrevBtn" ${testState.index===0 ? 'disabled' : ''}>← 前へ</button>
       <button id="testNextBtn">スキップ →</button>
     </div>
   `;
   document.getElementById("testSpeakBtn").addEventListener("click", (e)=> speakRaw(w.word, "en-US", e.currentTarget, null));
-  if(testState.revealed){
+  // 正解/不正解の扱いは自己採点でも4択でも同じ：正解なら復習日を先へ、不正解なら未習得に戻す。
+  // どちらの場合も苦手リストと「今日やった語数」に1件記録する。
+  const answerWord = (correct)=>{
+    recordAnswer(w.word, correct);
+    if(correct) advanceSrs(w.word); else delete wordsLearned[w.word];
+    saveWordsLearned();
+  };
+  if(choiceMode){
+    area.querySelectorAll('.w3k-choice').forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        if(testState.picked) return;
+        testState.picked = btn.dataset.ja;
+        answerWord(testState.picked === w.ja);
+        renderTestCard(false); // 正解を見せるためその場に留まる（「次へ」で進む）
+      });
+    });
+    const cont = document.getElementById("testContinueBtn");
+    if(cont) cont.addEventListener("click", ()=> goToTestIndex(testState.index + 1));
+  } else if(testState.revealed){
     document.getElementById("testWrongBtn").addEventListener("click", ()=>{
-      delete wordsLearned[w.word]; // 不正解：覚えた✓ごと外して未習得に戻す（復習日もリセットされる）
-      saveWordsLearned();
-      testState.index++; testState.revealed = false;
-      renderTestCard(true);
+      answerWord(false); // 不正解：覚えた✓ごと外して未習得に戻す（復習日もリセットされる）
+      goToTestIndex(testState.index + 1);
     });
     document.getElementById("testRightBtn").addEventListener("click", ()=>{
-      advanceSrs(w.word); // 正解：次の復習日を1段階先へ延ばす
-      saveWordsLearned();
-      testState.index++; testState.revealed = false;
-      renderTestCard(true);
+      answerWord(true); // 正解：次の復習日を1段階先へ延ばす
+      goToTestIndex(testState.index + 1);
     });
   } else {
     document.getElementById("testShowBtn").addEventListener("click", ()=>{
@@ -1390,10 +1561,10 @@ function renderTestCard(autoSpeak){
     });
   }
   document.getElementById("testPrevBtn").addEventListener("click", ()=>{
-    if(testState.index > 0){ testState.index--; testState.revealed = false; renderTestCard(true); }
+    if(testState.index > 0) goToTestIndex(testState.index - 1);
   });
   document.getElementById("testNextBtn").addEventListener("click", ()=>{
-    testState.index++; testState.revealed = false; renderTestCard(true);
+    goToTestIndex(testState.index + 1); // スキップ：記録も復習日も動かさない
   });
   if(autoSpeak){
     // 新しい問題に進んだ時だけ、カードの先頭がsticky領域の裏に隠れない位置へ戻す。
@@ -1507,6 +1678,13 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   }
   styleSel.appendChild(group);
   styleSel.value = bgmStyle;
+  const testFormatSel = document.getElementById("words3000TestFormatSel");
+  testFormatSel.value = testFormat;
+  testFormatSel.addEventListener("change", (e)=>{
+    testFormat = e.currentTarget.value;
+    saveW3kPrefs();
+    if(testMode) startTestMode(); // 形式を変えたらその場で出題し直す
+  });
   document.getElementById("words3000BgmVolume").value = bgmVolumePct;
   document.getElementById("words3000BgmVolumeVal").textContent = bgmVolumePct + "%";
   if(bgmOn){
@@ -1578,7 +1756,12 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
       pushTimer = null;
       if(!currentUser) return;
       try{
-        await setDoc(userDocRef(currentUser.uid), { wordsLearned: window.getWordsLearnedSnapshot(), updatedAt: Date.now() }, { merge: true });
+        await setDoc(userDocRef(currentUser.uid), {
+          wordsLearned: window.getWordsLearnedSnapshot(),
+          wordStats: window.getWordStatsSnapshot(),
+          studyLog: window.getStudyLogSnapshot(),
+          updatedAt: Date.now(),
+        }, { merge: true });
       }catch(e){ console.error("words3000 cloud push error:", e); }
     }
     function scheduleWordsLearnedPush(){
@@ -1597,12 +1780,17 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
     });
 
     // 「覚えた✓」がローカルに保存されるたびに（saveWordsLearned()呼び出しのたび）pushを予約する。
-    const origSaveWordsLearned = window.saveWordsLearned;
-    window.saveWordsLearned = async function(...args){
-      const result = await origSaveWordsLearned.apply(this, args);
-      scheduleWordsLearnedPush();
-      return result;
-    };
+    // 苦手リスト(wordStats)・継続の記録(studyLog)も同じドキュメントに入れるので、
+    // それぞれの保存関数もラップしてpushを予約する。ラップし忘れると、その項目だけが
+    // 「ローカルには増えるのにクラウドへ一度も届かない」状態になる（分離直後に実際に起きた）。
+    for(const name of ["saveWordsLearned", "saveWordStats", "saveStudyLog"]){
+      const orig = window[name];
+      window[name] = async function(...args){
+        const result = await orig.apply(this, args);
+        scheduleWordsLearnedPush();
+        return result;
+      };
+    }
 
     onAuthStateChanged(auth, async (user)=>{
       currentUser = user;
@@ -1611,8 +1799,9 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
       // エントリ（このページで新しく覚えたがまだ届いていない分）が見つかれば、その場でpushする。
       try{
         const snap = await getDoc(userDocRef(user.uid));
-        const cloudWordsLearned = (snap.exists() && snap.data().wordsLearned) || {};
-        const hadLocalOnly = await window.applyCloudWordsLearned(cloudWordsLearned);
+        const data = snap.exists() ? snap.data() : {};
+        const hadLocalOnly = await window.applyCloudWordsLearned(
+          data.wordsLearned || {}, data.wordStats || {}, data.studyLog || {});
         if(hadLocalOnly) scheduleWordsLearnedPush();
       }catch(e){ console.error("words3000 initial cloud pull error:", e); }
     });
