@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { mockGemini, mockGeminiError, setGeminiKey } = require('./helpers');
+const { mockGemini, mockGeminiError, setGeminiKey, mockGoogleTTS } = require('./helpers');
 
 test.describe('practice notes / 学習ラウンジ (📝例文セット mode)', () => {
   test('list starts empty with a helpful message', async ({ page }) => {
@@ -328,7 +328,7 @@ test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
     await setGeminiKey(page, 'FAKE_KEY');
     await mockGemini(page, {
       reply: 'おすすめを尋ねるときはこう言います。',
-      phrase: { text: 'What do you recommend?', kana: 'ワット ドゥー ユー レコメンド', ja: 'おすすめは何ですか？' },
+      phrases: [{ text: 'What do you recommend?', kana: 'ワット ドゥー ユー レコメンド', ja: 'おすすめは何ですか？', gloss: 'What(何を) do you(あなたは) recommend(おすすめする)?' }],
     });
 
     await page.click('#toolsBtn');
@@ -352,7 +352,7 @@ test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
     await page.click('.practice-card >> nth=0');
     await mockGemini(page, {
       reply: '他にもこんな聞き方があります。',
-      phrase: { text: 'Any recommendations?', kana: 'エニー レコメンデーションズ', ja: 'おすすめはありますか？' },
+      phrases: [{ text: 'Any recommendations?', kana: 'エニー レコメンデーションズ', ja: 'おすすめはありますか？', gloss: 'Any(何か) recommendations(おすすめ)?' }],
     });
     await page.fill('#pdChatInput', '他の言い方も知りたい');
     await page.click('#pdChatSendBtn');
@@ -362,18 +362,70 @@ test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
 
     // saving a phrase card from the chat feeds the add-phrase panel just like example-set cards do,
     // and - like a normal (built-in) phrase - arrives with a 解説 already filled in: the AI's own
-    // explanatory reply for that phrase, not left blank
+    // explanatory reply for that phrase plus its 🔤 word-by-word gloss, not left blank
     await page.locator('.chat-phrase-card').nth(1).locator('.cp-save').click();
     await expect(page.locator('#addOverlay')).toHaveClass(/open/);
     await expect(page.locator('#addJa')).toHaveValue('おすすめはありますか？');
     await expect(page.locator('#add_en')).toHaveValue('Any recommendations?');
-    await expect(page.locator('#addNote')).toHaveValue('他にもこんな聞き方があります。');
+    await expect(page.locator('#addNote')).toHaveValue('他にもこんな聞き方があります。\n🔤 Any(何か) recommendations(おすすめ)?');
 
     // still exactly one list entry (the follow-up appended to it, it didn't create a second one)
     const stored = JSON.parse(await page.evaluate(() => localStorage.getItem('phrasebook-practice-custom')));
     expect(stored).toHaveLength(1);
     expect(stored[0].type).toBe('chat');
     expect(stored[0].messages).toHaveLength(4);
+  });
+
+  test('a reply can carry several phrases, each with its own 🔤 gloss and working 🔊', async ({ page, browserName }) => {
+    // Reported as "I asked the AI, got an answer, went to play it and there was no sound".
+    // The schema allowed a single phrase and the prompt told the model to leave it blank
+    // whenever the question was not strictly phrase-shaped - so a reply often had no 🔊 at all.
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGoogleTTS(page, { seconds: 1 });
+    await mockGemini(page, {
+      reply: 'おすすめを尋ねる言い方です。',
+      phrases: [
+        { text: 'What do you recommend?', kana: 'ワット', ja: 'おすすめは何ですか？', gloss: 'What(何を) do you(あなたは) recommend(おすすめする)?' },
+        { text: "What's popular here?", kana: 'ワッツ', ja: 'ここで人気なのは？', gloss: "What's(何が) popular(人気) here(ここで)?" },
+      ],
+    });
+
+    await page.click('#toolsBtn');
+    await page.click('#menuPractice');
+    await page.click('#practiceModeChatBtn');
+    await page.fill('#chatGenQuestion', 'おすすめの聞き方は？');
+    await page.click('#chatGenBtn');
+    await page.waitForSelector('.chat-phrase-card', { timeout: 8000 });
+
+    await expect(page.locator('.chat-phrase-card')).toHaveCount(2);
+    await expect(page.locator('.cp-gloss')).toHaveText([
+      '🔤 What(何を) do you(あなたは) recommend(おすすめする)?',
+      "🔤 What's(何が) popular(人気) here(ここで)?",
+    ]);
+
+    // the second card must play its own phrase, not the first one - the cards used to be
+    // paired to their data by render order, which cannot work once one reply has several
+    const spoken = page.waitForRequest(r => r.url().includes('translate_tts'), { timeout: 8000 });
+    await page.locator('.chat-phrase-card').nth(1).locator('.cp-speak').click();
+    expect(new URL((await spoken).url()).searchParams.get('q')).toBe("What's popular here?");
+  });
+
+  test('conversations saved in the old one-phrase-per-reply format still open', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    const cards = await page.evaluate(() => {
+      customPracticePacks.push({
+        id: 'legacy', type: 'chat', lang: 'en', word: '旧形式', meaning: '', custom: true,
+        messages: [{ role: 'user', text: 'q' }, { role: 'ai', text: 'a', phrase: { text: 'Old format', kana: 'オールド', ja: '旧形式' } }],
+      });
+      renderChatDetail(allPracticePacks().length - 1);
+      return document.querySelectorAll('.chat-phrase-card').length;
+    });
+    expect(cards).toBe(1);
+    await expect(page.locator('.chat-phrase-card .cp-text')).toHaveText('Old format');
   });
 
   test('a question with no specific phrase to suggest shows only the reply bubble, no phrase card', async ({ page, browserName }) => {
@@ -383,7 +435,7 @@ test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
     await setGeminiKey(page, 'FAKE_KEY');
     await mockGemini(page, {
       reply: '一般的には、笑顔でうなずくのが良いリアクションです。',
-      phrase: { text: '', kana: '', ja: '' },
+      phrases: [],
     });
 
     await page.click('#toolsBtn');

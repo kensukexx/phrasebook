@@ -262,6 +262,7 @@
   .chat-phrase-card .cp-text{ font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:14.5px; }
   .chat-phrase-card .cp-kana{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
   .chat-phrase-card .cp-ja{ font-size:12.5px; color:var(--ink); margin-top:4px; }
+  .chat-phrase-card .cp-gloss{ font-size:11.5px; color:var(--ink-soft); margin-top:8px; padding-top:8px; border-top:1px dashed var(--line); }
   .chat-phrase-card .cp-btns{ display:flex; gap:8px; margin-top:8px; }
   .pd-chat-input-row{ display:flex; gap:8px; margin-top:14px; position:sticky; bottom:0; background:var(--paper); padding-top:8px; }
   .pd-chat-input-row input{ flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); }
@@ -505,7 +506,7 @@
 
     <div class="manual-section">
       <h3>🎓 学習ラウンジ</h3>
-      <p>AIと一緒に言い回しを深掘りするための機能で、2つのモードがあります（いずれも設定でGeminiキーの登録が必要）。<b>📝 例文セット</b>は覚えたい単語を入力すると、その単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます。各例文には🔤で単語ごとの意味対応も表示され、どの単語がどの日本語に当たるか一目でわかります。<b>💬 AIに質問</b>は「おすすめを聞く時の質問文は？」のような、単語1つに収まらない質問を自由に投げかけられるチャットで、回答に具体的なフレーズが含まれる場合はカード形式で表示され、続けてフォローアップの質問もできます。どちらのモードで作った項目も自動で保存され、新しいものから順に1つの一覧に並びます（💬のバッジでチャットの項目と見分けられます。タップすればいつでも見返せます）。表示件数は既定20件で、それより多い分は設定画面の「学習ラウンジ一覧の表示件数」で増やせます。自分で作った項目は✕で削除できます。気に入ったフレーズは★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
+      <p>AIと一緒に言い回しを深掘りするための機能で、2つのモードがあります（いずれも設定でGeminiキーの登録が必要）。<b>📝 例文セット</b>は覚えたい単語を入力すると、その単語を使った例文セット（用法パターン別に発音・訳付きの例文）を作ってくれます。各例文には🔤で単語ごとの意味対応も表示され、どの単語がどの日本語に当たるか一目でわかります。<b>💬 AIに質問</b>は「おすすめを聞く時の質問文は？」のような、単語1つに収まらない質問を自由に投げかけられるチャットです。回答には関連するフレーズが最大3つカード形式で付き、それぞれに発音（🔊）と🔤単語ごとの意味が表示されるので、その場で聞いて練習できます。続けてフォローアップの質問もできます。どちらのモードで作った項目も自動で保存され、新しいものから順に1つの一覧に並びます（💬のバッジでチャットの項目と見分けられます。タップすればいつでも見返せます）。表示件数は既定20件で、それより多い分は設定画面の「学習ラウンジ一覧の表示件数」で増やせます。自分で作った項目は✕で削除できます。気に入ったフレーズは★でフレーズ帳に追加でき、追加先のカテゴリはその場で選べます（他の言語欄は空欄のままなので、必要なら🌐自動翻訳で埋められます）。</p>
     </div>
 
     <div class="manual-section">
@@ -2306,6 +2307,11 @@ const CHANGELOG = [
     "進捗の行に「🔥 ◯日連続」「今日 ◯語」が出るようになりました。",
     "苦手の記録と学習の記録も、覚えた状態と同じように端末間で同期されます。",
   ]},
+  { id: 19, date: "2026-09-21", title: "AIに質問の回答にフレーズと単語の意味が付くようになりました", items: [
+    "回答に関連するフレーズが最大3つカードで付き、それぞれ🔊で発音を聞けるようになりました（これまでは1つだけ、しかも付かないことがあり、音声を聞けない回答がありました）。",
+    "各フレーズに🔤で単語ごとの意味が表示されるようになりました（例文セットと同じ形式です）。",
+    "★でフレーズ帳に追加すると、AIの回答文と🔤単語対応がそのまま解説欄に入ります。",
+  ]},
 ];
 
 function checkWhatsNew(){
@@ -2540,30 +2546,40 @@ function openPracticeDetail(idx){
 // AIチャット詳細（openPracticeDetail(idx)がpack.type==="chat"の時に呼ぶ）。
 // pdChatSendBtnのハンドラがどのpackに続きを送るか分かるよう、moduleスコープにidxを控える。
 let openChatIdx = null;
+// AIの1発言が持つフレーズの一覧。以前は1発言＝最大1フレーズ（m.phrase）だったので、
+// 保存済みの会話をそのまま開けるように両方の形を受ける。
+function chatPhrasesOf(m){
+  const list = Array.isArray(m.phrases) ? m.phrases : (m.phrase ? [m.phrase] : []);
+  return list.filter(p => p && p.text);
+}
 function renderChatDetail(idx){
   openChatIdx = idx;
   const pack = allPracticePacks()[idx];
   const meta = LANGS.find(l=>l.key===pack.lang);
   document.getElementById("pdChatTitle").textContent = pack.word;
   const wrap = document.getElementById("pdChatMessages");
-  wrap.innerHTML = pack.messages.map(m=>{
+  wrap.innerHTML = pack.messages.map((m, mi)=>{
     if(m.role === "user") return `<div class="chat-bubble user">${esc(m.text)}</div>`;
-    const hasPhrase = m.phrase && m.phrase.text;
-    const phraseHtml = hasPhrase ? `
-      <div class="chat-phrase-card">
-        <div class="cp-text">${esc(m.phrase.text)}</div>
-        ${m.phrase.kana ? `<div class="cp-kana">${esc(m.phrase.kana)}</div>` : ''}
-        ${m.phrase.ja ? `<div class="cp-ja">${esc(m.phrase.ja)}</div>` : ''}
+    const phraseHtml = chatPhrasesOf(m).map((ph, pi)=> `
+      <div class="chat-phrase-card" data-mi="${mi}" data-pi="${pi}">
+        <div class="cp-text">${esc(ph.text)}</div>
+        ${ph.kana ? `<div class="cp-kana">${esc(ph.kana)}</div>` : ''}
+        ${ph.ja ? `<div class="cp-ja">${esc(ph.ja)}</div>` : ''}
+        ${ph.gloss ? `<div class="cp-gloss">🔤 ${esc(ph.gloss)}</div>` : ''}
         <div class="cp-btns">
           <button class="mini-btn cp-speak" aria-label="発音を聞く">🔊</button>
           <button class="mini-btn cp-save" aria-label="フレーズ帳に追加">★</button>
         </div>
-      </div>` : '';
+      </div>`).join('');
     return `<div class="chat-bubble ai">${esc(m.text)}</div>${phraseHtml}`;
   }).join('');
-  const aiWithPhrase = pack.messages.filter(m=>m.role==="ai" && m.phrase && m.phrase.text);
-  wrap.querySelectorAll('.chat-phrase-card').forEach((card, i)=>{
-    const ph = aiWithPhrase[i].phrase;
+  // カードとデータの対応は、並び順ではなくdata属性で引く。以前は「フレーズを持つAI発言」を
+  // 別途フィルタした配列と描画順を突き合わせていたが、1発言が複数フレーズを持てるように
+  // なると成立しない。
+  wrap.querySelectorAll('.chat-phrase-card').forEach((card)=>{
+    const msg = pack.messages[Number(card.dataset.mi)];
+    const ph = chatPhrasesOf(msg)[Number(card.dataset.pi)];
+    if(!ph) return;
     card.querySelector('.cp-speak').addEventListener('click', (e)=>{
       speakRaw(ph.text, meta ? meta.speech : "en-US", e.currentTarget, null, pack.lang);
     });
@@ -2573,9 +2589,10 @@ function renderChatDetail(idx){
       document.getElementById("addJa").value = ph.ja || "";
       document.getElementById(`add_${pack.lang}`).value = ph.text;
       document.getElementById(`add_${pack.lang}_kana`).value = ph.kana || "";
-      // 通常のフレーズと同じく解説付きで保存されるよう、AIの回答文（このフレーズの説明）を
-      // 解説欄にそのまま引き継ぐ。
-      document.getElementById("addNote").value = aiWithPhrase[i].text || "";
+      // 通常のフレーズと同じく解説付きで保存されるよう、AIの回答文と🔤単語対応を
+      // 解説欄に引き継ぐ（例文セットの★保存と同じ扱い）。
+      document.getElementById("addNote").value = [msg.text || "", ph.gloss ? `🔤 ${ph.gloss}` : ""]
+        .filter(Boolean).join("\n");
     });
   });
   wrap.scrollTop = wrap.scrollHeight;
@@ -2596,7 +2613,7 @@ document.getElementById("pdChatSendBtn").addEventListener("click", async ()=>{
   btn.disabled = true;
   try{
     const reply = await generateChatReply(pack.lang, history, question);
-    pack.messages.push({role:"ai", text: reply.reply, phrase: reply.phrase});
+    pack.messages.push({role:"ai", text: reply.reply, phrases: reply.phrases || []});
     pack.meaning = reply.reply.length > 40 ? reply.reply.slice(0,40) + "…" : reply.reply;
     await savePracticePacks();
     renderChatDetail(openChatIdx);
@@ -2718,21 +2735,28 @@ async function generatePracticePack(langKey, word){
 // 💬AIに質問モード：単語1つに収まらない自由な質問（「おすすめを聞く時の質問文は？」等）に、
 // 日本語での説明（reply）＋（該当があれば）対象言語のフレーズ（phrase）を返させる。
 // phraseの3項目は「該当なし」の時は空文字列にする方針（PRACTICE_PACK_SCHEMAのwordKana等と同じ、必須フィールドを空文字で許容するスタイル）。
+// 1回答につきフレーズは複数返せる。以前は1つだけで、しかも「フレーズを提案する内容でない
+// 質問なら空文字列に」と指示していたため、回答に🔊が1つも付かないことがよくあった
+// （「音声が出ない」という報告の原因）。glossは例文セットと同じ「単語(意味)」の形式。
 const CHAT_REPLY_SCHEMA = {
   type: "object",
   properties: {
     reply: { type: "string" },
-    phrase: {
-      type: "object",
-      properties: {
-        text: { type: "string" },
-        kana: { type: "string" },
-        ja: { type: "string" },
+    phrases: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          kana: { type: "string" },
+          ja: { type: "string" },
+          gloss: { type: "string" },
+        },
+        required: ["text","kana","ja","gloss"],
       },
-      required: ["text","kana","ja"],
     },
   },
-  required: ["reply","phrase"],
+  required: ["reply","phrases"],
 };
 
 async function generateChatReply(langKey, history, question){
@@ -2742,8 +2766,16 @@ async function generateChatReply(langKey, history, question){
 ${historyText ? 'これまでの会話：\n' + historyText + '\n\n' : ''}新しい質問：「${question}」
 
 日本語で分かりやすく答えてください（reply）。
-質問に対して提案できる、${meta ? meta.label : langKey}の具体的なフレーズが1つある場合は、phraseに文（text）・カタカナでの発音表記（kana）・日本語訳（ja）を入れてください。
-特定のフレーズを提案する内容でない質問（雑談的な質問など）の場合は、phraseの各項目を空文字列にしてください。`;
+そのうえで、質問に関係する${meta ? meta.label : langKey}の具体的なフレーズを phrases に1〜3つ入れてください。
+言い回しに関わる質問であれば、必ず1つ以上入れてください（読み上げて練習できるようにするためです）。
+本当にフレーズが関係しない質問（雑談など）のときだけ、phrases を空の配列にしてください。
+各フレーズには次の4つを必ず入れてください。
+- text: ${meta ? meta.label : langKey}の文
+- kana: カタカナでの発音表記
+- ja: 日本語訳
+- gloss: 文を単語・意味のまとまりごとに区切り、直後の丸括弧に日本語の意味を書いたもの。
+  例：「Bon(良い)jour(日)」「What(何を) do you(あなたは) recommend(おすすめする)?」
+  textに書いた語だけを使い、語順も変えないでください。`;
   return callGeminiJSON(prompt, CHAT_REPLY_SCHEMA);
 }
 
@@ -2938,7 +2970,7 @@ document.getElementById("chatGenBtn").addEventListener("click", async ()=>{
       meaning: reply.reply.length > 40 ? reply.reply.slice(0,40) + "…" : reply.reply,
       messages: [
         {role:"user", text: question},
-        {role:"ai", text: reply.reply, phrase: reply.phrase},
+        {role:"ai", text: reply.reply, phrases: reply.phrases || []},
       ],
       custom: true,
     };
