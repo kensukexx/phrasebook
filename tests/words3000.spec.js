@@ -932,6 +932,86 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       expect(stored.water).toBeUndefined();
     });
 
+    test('✓ in the review list pushes the next review out instead of un-learning the word', async ({ page }) => {
+      // The reported bug: "the same words show up every day". In the review range the plain
+      // list ✓ was still the learned/not-learned toggle, so tapping it on an already-learned
+      // word DELETED the entry instead of advancing the schedule - nothing moved forward
+      // unless you went through テストモード, which nothing told you to do.
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words-learned', JSON.stringify({
+          water: { step: 1, due: '2020-01-01' },
+          air: { step: 0, due: '2020-01-01' },
+        }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TierSel', 'review');
+      await expect(page.locator('.w3k-card')).toHaveCount(2);
+
+      await page.locator('.w3k-card[data-word="water"] [data-role="learn"]').click();
+
+      const after = await page.evaluate(() => JSON.parse(localStorage.getItem('phrasebook-words-learned')));
+      expect(after.water, 'the word must stay learned').toBeTruthy();
+      expect(after.water.step).toBe(2);                    // advanced, not reset
+      expect(after.water.due > new Date().toISOString().slice(0, 10)).toBe(true); // not due again today
+      // done words leave today's batch, so the list shrinks as you work through it
+      await expect(page.locator('.w3k-card')).toHaveCount(1);
+      await expect(page.locator('#words3000TierSel option[value="review"]')).toHaveText(/1語/);
+    });
+
+    test('↺ in the review list drops a shaky word back to unlearned', async ({ page }) => {
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words-learned', JSON.stringify({ water: { step: 3, due: '2020-01-01' } }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TierSel', 'review');
+
+      await page.locator('.w3k-card[data-word="water"] [data-role="forget"]').click();
+      const after = await page.evaluate(() => JSON.parse(localStorage.getItem('phrasebook-words-learned')));
+      expect(after.water).toBeUndefined();
+    });
+
+    test('outside the review range ✓ is still the plain learned/not-learned toggle', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      const card = page.locator('.w3k-card').first();
+      await expect(card.locator('[data-role="forget"]')).toHaveCount(0);
+
+      await card.locator('[data-role="learn"]').click();
+      await expect(card).toHaveClass(/learned/);
+      await card.locator('[data-role="learn"]').click();
+      await expect(card).not.toHaveClass(/learned/);
+    });
+
+    test('syncing keeps whichever device has the more advanced review schedule', async ({ page }) => {
+      // The other half of "the same words every day": a plain local-wins union merge let a
+      // stale entry on this device overwrite a schedule another device had already pushed
+      // forward, so the word kept coming due. Reviews only ever move forward, so the later
+      // due date is the newer one.
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      const result = await page.evaluate(() => {
+        const cloud = { the: { step: 2, due: '2030-01-01' }, cat: { step: 0, due: '2020-01-02' } };
+        const local = { the: { step: 0, due: '2020-01-01' }, cat: { step: 1, due: '2030-06-01' }, own: true };
+        const merged = mergeWordsLearned(cloud, local);
+        return {
+          cloudAhead: merged.the,
+          localAhead: merged.cat,
+          localOnlyKept: merged.own,
+          pushNeeded: wordsLearnedDiffers(merged, cloud),
+          noPushWhenSame: wordsLearnedDiffers(cloud, cloud),
+        };
+      });
+
+      expect(result.cloudAhead).toEqual({ step: 2, due: '2030-01-01' });
+      expect(result.localAhead).toEqual({ step: 1, due: '2030-06-01' });
+      expect(result.localOnlyKept).toBe(true);
+      expect(result.pushNeeded).toBe(true);
+      expect(result.noPushWhenSame).toBe(false);
+    });
+
     test('the review range ignores 未習得のみ and the auto-play skip, which would otherwise empty it (review words are all learned)', async ({ page }) => {
       await mockGoogleTTS(page);
       await page.addInitScript(() => {
@@ -1162,8 +1242,15 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       expect(stored.the).toBeTruthy();
       expect(stored.water).toBeTruthy();
 
+      // Both sides now know "the", but the local entry carries a real review schedule while the
+      // cloud still holds the legacy `true`, which means "due every day". That difference is
+      // worth pushing, so this is true rather than false.
       const hadLocalOnly2 = await page.evaluate(() => window.applyCloudWordsLearned({ water: true, the: true }));
-      expect(hadLocalOnly2).toBe(false); // nothing local-only left to push
+      expect(hadLocalOnly2).toBe(true);
+
+      // once the cloud holds exactly what this device holds, there is nothing left to push
+      const hadLocalOnly3 = await page.evaluate(() => window.applyCloudWordsLearned(window.getWordsLearnedSnapshot()));
+      expect(hadLocalOnly3).toBe(false);
     });
   });
 });

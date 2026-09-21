@@ -301,6 +301,27 @@ function isDueForReview(word){
 function countDueWords(){
   return WORDS3000.reduce((n,w)=> n + (isDueForReview(w.word) ? 1 : 0), 0);
 }
+// --- クラウドとローカルで「覚えた」状態を突き合わせる ---
+// 単純な和集合（{...cloud, ...local}＝ローカル優先）では駄目だった。同じ単語について、
+// 別の端末で復習して先に延びた予定を、この端末に残っていた古い予定が上書きしてしまい、
+// **その単語が毎日「今日の復習」に出続ける**（実際に報告された不具合）。
+// 復習は先へ進む方向にしか動かないので、予定日が後のほう＝進んでいるほうを採用する。
+// なお削除（未習得に戻す）は和集合では伝わらない。これは分離前からの仕様上の制約。
+function srsDueOf(v){ return v === true ? "1970-01-01" : ((v && v.due) || "1970-01-01"); }
+function mergeWordsLearned(cloud, local){
+  const merged = { ...(cloud || {}) };
+  for(const [word, localVal] of Object.entries(local || {})){
+    const cloudVal = merged[word];
+    if(!cloudVal || srsDueOf(localVal) >= srsDueOf(cloudVal)) merged[word] = localVal;
+  }
+  return merged;
+}
+function wordsLearnedDiffers(a, b){
+  const ka = Object.keys(a || {}), kb = Object.keys(b || {});
+  if(ka.length !== kb.length) return true;
+  return ka.some(k => JSON.stringify(a[k]) !== JSON.stringify((b || {})[k]));
+}
+
 // 正解した時：1段階進めて、次の復習日を先に延ばす（1日→3日→7日→14日→30日→60日）。
 function advanceSrs(word){
   const prev = srsEntryFor(word);
@@ -318,11 +339,12 @@ function advanceSrs(word){
 // 「スマホとPCで同期されてない」という報告のもう一つの原因だった。
 function getWordsLearnedSnapshot(){ return wordsLearned; }
 async function applyCloudWordsLearned(cloudWordsLearned){
-  const hadLocalOnly = Object.keys(wordsLearned).some(k => !cloudWordsLearned[k]);
-  wordsLearned = { ...cloudWordsLearned, ...wordsLearned };
+  const merged = mergeWordsLearned(cloudWordsLearned, wordsLearned);
+  const needsPush = wordsLearnedDiffers(merged, cloudWordsLearned);
+  wordsLearned = merged;
   await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned));
   renderWords3000List();
-  return hadLocalOnly;
+  return needsPush;
 }
 
 // --- このページ独自の表示設定（品詞フィルタ・未習得のみ・ランダム再生・自動再生の
@@ -1085,6 +1107,9 @@ function renderWords3000List(){
       : '<p class="hint">該当する単語がありません。</p>';
     return;
   }
+  // 「今日の復習」では✓の意味が変わる。一覧のふつうの✓は「覚えた／取り消し」のトグルなので、
+  // 復習中に押すと復習日が延びるどころか未習得へ戻ってしまい、同じ単語が毎日出続けていた。
+  const reviewing = isReviewTier();
   wrap.innerHTML = items.map(w=>{
     const isLearned = !!wordsLearned[w.word];
     return `<div class="w3k-card ${isLearned?'learned':''}" data-word="${esc(w.word)}">
@@ -1102,7 +1127,10 @@ function renderWords3000List(){
           </span>
         </span>
         <span class="w3k-btns">
-          <button class="mini-btn ${isLearned?'done':''}" aria-label="覚えた" data-role="learn">✓</button>
+          ${reviewing
+            ? `<button class="mini-btn" aria-label="思い出せた（次の復習日へ）" title="思い出せた：次の復習日を先へ延ばす" data-role="learn">✓</button>
+               <button class="mini-btn" aria-label="あやふや（未習得に戻す）" title="あやふや：覚えた✓を外して未習得に戻す" data-role="forget">↺</button>`
+            : `<button class="mini-btn ${isLearned?'done':''}" aria-label="覚えた" data-role="learn">✓</button>`}
           <button class="mini-btn" aria-label="発音を聞く" data-role="speak-word">🔊</button>
         </span>
       </div>
@@ -1137,7 +1165,18 @@ function renderWords3000List(){
     });
     card.querySelector('[data-role="learn"]').addEventListener('click', (e)=>{
       e.stopPropagation();
-      if(wordsLearned[w.word]) delete wordsLearned[w.word]; else advanceSrs(w.word);
+      // 復習中は✓＝「思い出せた」。必ず次の復習日へ延ばす（テストモードを使わなくても
+      // 一覧を見るだけで復習が完了するように）。ふつうの範囲では従来どおりのトグル。
+      if(reviewing) advanceSrs(w.word);
+      else if(wordsLearned[w.word]) delete wordsLearned[w.word];
+      else advanceSrs(w.word);
+      saveWordsLearned();
+      renderWords3000List();
+    });
+    const forgetBtn = card.querySelector('[data-role="forget"]');
+    if(forgetBtn) forgetBtn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      delete wordsLearned[w.word];
       saveWordsLearned();
       renderWords3000List();
     });

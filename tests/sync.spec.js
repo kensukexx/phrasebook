@@ -194,6 +194,34 @@ test.describe('syncable state (catOrder / langOrder / phraseOrder included)', ()
     expect(result2.localOnlyWordsLearned).toBe(false);
   });
 
+  test('a review schedule already pushed forward by another device is not reverted by a stale local copy', async ({ page }) => {
+    // Reported as "the same words come up every day". wordsLearned values carry the spaced
+    // repetition schedule ({step, due}), and the old union merge was local-wins per key, so a
+    // stale entry here overwrote a schedule another device had already advanced - the word
+    // stayed due forever. Reviews only move forward, so the later due date is the newer one.
+    // words3000.html has its own copy of this merge; both must behave the same.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.evaluate(() => localStorage.setItem('phrasebook-words-learned', JSON.stringify({
+      the: { step: 0, due: '2020-01-01' },   // stale here
+      cat: { step: 3, due: '2030-06-01' },   // newer here
+    })));
+    await page.reload();
+    await page.waitForSelector('#deck .ticket');
+
+    const result = await page.evaluate(() => window.applyCloudState({
+      wordsLearned: {
+        the: { step: 2, due: '2030-01-01' }, // the cloud is ahead for this one
+        cat: { step: 0, due: '2020-01-02' },
+      },
+    }));
+    const state = await page.evaluate(() => window.getSyncableState());
+
+    expect(state.wordsLearned.the).toEqual({ step: 2, due: '2030-01-01' });
+    expect(state.wordsLearned.cat).toEqual({ step: 3, due: '2030-06-01' });
+    expect(result.localOnlyWordsLearned).toBe(true); // this device is ahead for `cat`, so push
+  });
+
   test('a duplicate entry in a persisted catOrder/langOrder does not render as two tabs/rows', async ({ page }) => {
     // Regression test: orderedCats()/orderedLangs() used to map catOrder/langOrder directly to
     // rendered tabs, so if that array ever ended up with a duplicate key (old app version, a
