@@ -34,8 +34,8 @@ function silentWav(seconds, sampleRate = 8000) {
 // `seconds` makes the mock return audio that really plays for that long. Without it the
 // response is 4 bytes that no decoder accepts, so playback ends (with an error) almost
 // immediately - fine when a test only checks that the request was made, but it makes any
-// test that observes state *during* playback depend on machine load. Two BGM tests failed
-// exactly that way under parallel execution before this option existed.
+// test that observes state *during* playback depend on machine load, which showed up as
+// tests that passed alone and failed under parallel execution.
 async function mockGoogleTTS(page, { seconds } = {}) {
   const body = seconds ? silentWav(seconds) : Buffer.from([0xff, 0xfb, 0x90, 0x00]);
   const contentType = seconds ? 'audio/wav' : 'audio/mpeg';
