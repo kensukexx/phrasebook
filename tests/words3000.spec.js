@@ -961,10 +961,66 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await page.click('#words3000TestModeBtn');
       await expect(page.locator('#words3000List')).toBeHidden();
 
-      await page.click('#words3000TestModeBtn');
+      // the 📝テストモード toggle is part of the setup panel, which is folded away while a
+      // test is running - the way out is the exit button in the test bar
+      await page.click('#words3000TestExitBtn');
       await expect(page.locator('#words3000TestModeBtn')).not.toHaveClass(/on/);
       await expect(page.locator('#words3000List')).toBeVisible();
       await expect(page.locator('.w3k-card')).toHaveCount(500);
+    });
+
+    test('the setup controls fold away during a test, so the question fits on one phone screen', async ({ page }) => {
+      // Reported as "the test screen is hard to read". 範囲・再生ボタン・品詞・読み上げ順・
+      // 出題形式 are all decided *before* a test and are useless while answering one, but they
+      // took ~460px of a 664px phone viewport - the question sat below the fold.
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TestFormatSel', 'choice');
+      await page.click('#words3000TestModeBtn');
+      await page.waitForSelector('.w3k-choice');
+      await page.waitForTimeout(700); // let the scroll-below-sticky settle
+
+      await expect(page.locator('#words3000TestBar')).toBeVisible();
+      await expect(page.locator('#words3000TestCount')).toHaveText('1 / 500');
+      await expect(page.locator('#words3000PosSel')).toBeHidden();
+      await expect(page.locator('#words3000TierSel')).toBeHidden();
+      await expect(page.locator('#words3000ListenBtn')).toBeHidden();
+      await expect(page.locator('.w3k-testbar-back')).toBeVisible(); // still a way back out
+
+      const fits = await page.evaluate(() => {
+        const sticky = document.querySelector('.w3k-sticky').getBoundingClientRect();
+        const card = document.querySelector('.w3k-testcard').getBoundingClientRect();
+        const nav = document.querySelector('.w3k-testnav').getBoundingClientRect();
+        return {
+          panel: Math.round(sticky.height),
+          questionHidden: Math.max(0, Math.round(sticky.bottom - card.top)),
+          bottomBeyondScreen: Math.max(0, Math.round(nav.bottom - window.innerHeight)),
+        };
+      });
+      expect(fits.panel).toBeLessThan(120);        // was 461
+      expect(fits.questionHidden).toBe(0);
+      expect(fits.bottomBeyondScreen).toBe(0);     // word + all four choices on one screen
+    });
+
+    test('answering a quiz question does not shove the choices up the page', async ({ page }) => {
+      // the explanation used to be inserted *above* the choices, so the moment you tapped an
+      // option everything jumped several hundred px and the result appeared off-screen
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TestFormatSel', 'choice');
+      await page.click('#words3000TestModeBtn');
+      await page.waitForSelector('.w3k-choice');
+      await page.waitForTimeout(700);
+
+      const before = await page.locator('.w3k-choices').boundingBox();
+      await page.locator('.w3k-choice').first().click();
+      await expect(page.locator('.w3k-answercard')).toBeVisible();
+      const after = await page.locator('.w3k-choices').boundingBox();
+
+      expect(Math.abs(after.y - before.y)).toBeLessThan(40);
+      // and the explanation lands below the choices, where the eye already is
+      const answerBox = await page.locator('.w3k-answercard').boundingBox();
+      expect(answerBox.y).toBeGreaterThan(after.y);
     });
   });
 

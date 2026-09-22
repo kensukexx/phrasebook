@@ -145,19 +145,38 @@
   .w3k-ex-gloss{ margin-top:8px; padding:10px 12px; background:rgba(47,76,122,0.08); border-left:3px solid var(--blue); border-radius:0 8px 8px 0; font-family:"Noto Sans JP", sans-serif; font-size:12.5px; line-height:1.6; color:var(--ink-soft); }
   .gloss-line{ display:block; font-weight:700; color:var(--ink); }
 
-  .w3k-testcard{ border:1.5px solid var(--line); border-radius:16px; padding:28px 20px; margin-bottom:14px; background:#fff; text-align:center; }
+  /* テスト中は、上部パネルから「テストに関係しないもの」を全部消す。
+     範囲・再生ボタン・品詞・読み上げ順・出題形式などは出題の前に決めるもので、
+     解いている最中には要らない。スマホでは、これらが画面の8割を占めていて
+     問題と選択肢が同時に見えなかった。残すのは←戻ると、進捗＋テスト終了だけ。 */
+  body.w3k-testing .w3k-sticky .field,
+  body.w3k-testing .w3k-collapse-toggle,
+  body.w3k-testing #words3000CollapsibleControls,
+  body.w3k-testing .w3k-review-prompt,
+  body.w3k-testing .w3k-playbar{ display:none !important; }
+  .w3k-testbar{ display:flex; align-items:center; gap:12px; }
+  .w3k-testbar[hidden]{ display:none; }
+  .w3k-testbar-count{ flex:1 1 auto; font-size:13px; color:var(--ink-soft); font-variant-numeric:tabular-nums; }
+  .w3k-testbar-exit{ flex:0 0 auto; padding:7px 14px; border:1.5px solid var(--line); border-radius:999px;
+    background:#fff; color:var(--ink-soft); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif;
+    font-size:12.5px; cursor:pointer; }
+
+  .w3k-testcard{ border:1.5px solid var(--line); border-radius:16px; padding:20px; margin-bottom:12px; background:#fff; text-align:center; }
   .w3k-testrank{ font-size:11px; color:var(--ink-soft); margin-bottom:6px; }
-  .w3k-testword{ font-size:28px; font-weight:900; color:var(--ink); }
-  .w3k-testpos{ font-size:12px; color:var(--ink-soft); margin-top:4px; }
+  .w3k-testword{ font-size:38px; font-weight:900; color:var(--ink); line-height:1.15; word-break:break-word; }
+  .w3k-testpos{ font-size:12px; color:var(--ink-soft); margin-top:6px; }
   .w3k-testkana{ font-size:14px; color:var(--ink-soft); margin-top:4px; }
-  .w3k-testcard .mini-btn{ margin:14px auto 0; width:36px; height:36px; font-size:16px; }
+  .w3k-testcard .mini-btn{ margin:12px auto 0; width:36px; height:36px; font-size:16px; }
   .w3k-testanswer{ margin-top:18px; padding-top:18px; border-top:1px dashed var(--line); text-align:left; }
+  /* 4択の答え合わせは選択肢の下に別カードで出すので、上の区切り線は要らない */
+  .w3k-answercard{ padding:16px 18px; margin-top:12px; }
+  .w3k-answercard .w3k-testanswer{ margin-top:0; padding-top:0; border-top:none; }
   .w3k-testbtns{ display:flex; gap:10px; margin-bottom:10px; }
   .w3k-testbtns button{ flex:1; padding:13px; border:none; border-radius:12px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-weight:700; font-size:14px; cursor:pointer; }
-  #testShowBtn{ background:var(--ink); color:#fff; }
+  #testShowBtn, #testContinueBtn{ background:var(--ink); color:#fff; }
   #testWrongBtn{ background:#fff; border:1.5px solid var(--red); color:var(--red); }
   #testRightBtn{ background:var(--green); color:#fff; }
-  .w3k-testnav{ display:flex; gap:10px; justify-content:space-between; }
+  .w3k-testnav{ display:flex; gap:10px; justify-content:space-between; margin-top:14px; }
   .w3k-testnav button{ flex:0 0 auto; padding:8px 14px; border:1.5px solid var(--line); border-radius:999px; background:#fff; color:var(--ink-soft); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:12.5px; cursor:pointer; }
   .w3k-testnav button:disabled{ opacity:0.4; cursor:default; }
   .w3k-test-done{ text-align:center; padding:30px 10px; color:var(--ink-soft); }
@@ -183,6 +202,11 @@
       <button class="filter-icon rate-quick" id="words3000RateBtn" aria-label="スピード" title="タップで速度を切り替え">1.0x</button>
       <button class="filter-icon" id="words3000LoopBtn" aria-label="ループ再生" title="ループ再生">🔁</button>
       <button class="filter-icon" id="words3000ShuffleBtn" aria-label="ランダム再生" title="ランダムな順番で再生">🔀</button>
+    </div>
+    <div class="w3k-testbar" id="words3000TestBar" hidden>
+      <a class="filter-icon w3k-testbar-back" href="./index.html" aria-label="フレーズ帳に戻る" title="フレーズ帳に戻る">←</a>
+      <span class="w3k-testbar-count" id="words3000TestCount"></span>
+      <button class="w3k-testbar-exit" id="words3000TestExitBtn">✕ テストを終える</button>
     </div>
     <button class="w3k-collapse-toggle" id="words3000CollapseToggle" aria-expanded="true">詳細設定 ▾</button>
     <div id="words3000CollapsibleControls">
@@ -1081,6 +1105,10 @@ function setWords3000Mode(mode){
   document.getElementById("words3000List").hidden = testMode;
   document.getElementById("words3000Progress").hidden = testMode;
   document.getElementById("words3000TestArea").hidden = !testMode;
+  // テスト中は上部パネルを「戻る＋進捗＋終了」だけに畳む（CSSはbodyのクラスで効かせる）
+  document.body.classList.toggle("w3k-testing", testMode);
+  document.getElementById("words3000TestBar").hidden = !testMode;
+  updateScrollPadding();
   if(testMode){
     // hidden属性は視覚的に隠すだけでDOMには残るため、そのままだと一覧側の.w3k-ja等が
     // テストモード側の同名クラスと衝突する（同じ単語なら文面まで一致し得るため見た目では
@@ -1099,14 +1127,19 @@ function startTestMode(){
   testState = { list, index:0, revealed:false, choices:null, picked:null };
   renderTestCard(true);
 }
+function setTestCount(text){
+  document.getElementById("words3000TestCount").textContent = text;
+}
 function renderTestCard(autoSpeak){
   const area = document.getElementById("words3000TestArea");
   refreshReviewOptionLabel(); // ✓/❌のたびに「今日の復習（N語）」の残数を更新する
   if(testState.list.length === 0){
+    setTestCount("");
     area.innerHTML = '<p class="hint w3k-test-done">該当する単語がありません（範囲・検索・品詞の条件を確認してください）。</p>';
     return;
   }
   if(testState.index >= testState.list.length){
+    setTestCount(`${testState.list.length} / ${testState.list.length}`);
     area.innerHTML = `<div class="w3k-test-done">🎉 このセット（${testState.list.length}語）のテストが終わりました。
       <div class="w3k-testnav" style="justify-content:center; margin-top:14px;">
         <button id="testRestartBtn">もう一度</button>
@@ -1116,18 +1149,12 @@ function renderTestCard(autoSpeak){
     return;
   }
   const w = testState.list[testState.index];
-  const isLearned = !!wordsLearned[w.word];
   const choiceMode = testFormat === "choice";
   if(choiceMode && !testState.choices) testState.choices = buildTestChoices(w);
-  area.innerHTML = `
-    <p class="hint">${testState.index+1} / ${testState.list.length}</p>
-    <div class="w3k-testcard">
-      <div class="w3k-testrank">rank ${w.rank}</div>
-      <div class="w3k-testword">${esc(w.word)}</div>
-      <div class="w3k-testpos">${esc(w.pos||"")}</div>
-      <div class="w3k-testkana">${esc(w.kana)}</div>
-      <button class="mini-btn ${isLearned?'done':''}" id="testSpeakBtn" aria-label="発音を聞く">🔊</button>
-      ${(choiceMode ? !!testState.picked : testState.revealed) ? `
+  setTestCount(`${testState.index+1} / ${testState.list.length}`);
+  // 答え合わせの内容（意味・例文・🔤）。4択では選択肢の「下」に出す。
+  // 上に挿入すると、選択肢をタップした指の位置から結果が数百px上へ飛んでしまうため。
+  const answerHtml = `
       <div class="w3k-testanswer">
         <div class="w3k-ja">${esc(w.ja)}</div>
         <div class="w3k-ex">
@@ -1138,7 +1165,15 @@ function renderTestCard(autoSpeak){
             ${w.ex.gloss ? `<div class="w3k-ex-gloss"><span class="gloss-line">🔤 ${esc(w.ex.gloss)}</span></div>` : ''}
           </div>
         </div>
-      </div>` : ''}
+      </div>`;
+  area.innerHTML = `
+    <div class="w3k-testcard">
+      <div class="w3k-testrank">rank ${w.rank}</div>
+      <div class="w3k-testword">${esc(w.word)}</div>
+      <div class="w3k-testpos">${esc(w.pos||"")}</div>
+      <div class="w3k-testkana">${esc(w.kana)}</div>
+      <button class="mini-btn" id="testSpeakBtn" aria-label="発音を聞く">🔊</button>
+      ${(!choiceMode && testState.revealed) ? answerHtml : ''}
     </div>
     ${choiceMode ? `
     <div class="w3k-choices">
@@ -1150,9 +1185,9 @@ function renderTestCard(autoSpeak){
         return `<button class="w3k-choice${cls}" data-ja="${esc(ja)}" ${testState.picked ? 'disabled' : ''}>${mark}${esc(ja)}</button>`;
       }).join('')}
     </div>
-    <div class="w3k-testbtns">
-      ${testState.picked ? '<button id="testContinueBtn">次へ →</button>' : ''}
-    </div>` : `
+    ${testState.picked ? `
+    <div class="w3k-testbtns"><button id="testContinueBtn">次へ →</button></div>
+    <div class="w3k-testcard w3k-answercard">${answerHtml}</div>` : ''}` : `
     <div class="w3k-testbtns">
       ${testState.revealed
         ? '<button id="testWrongBtn">❌ もう一度</button><button id="testRightBtn">✓ わかった</button>'
@@ -1240,6 +1275,8 @@ document.getElementById("words3000ShuffleBtn").addEventListener("click", (e)=>{
 document.getElementById("words3000TestModeBtn").addEventListener("click", ()=>{
   setWords3000Mode(testMode ? 'list' : 'test');
 });
+// テスト中はパネルを畳んでいて「📝テストモード」ボタン自体が見えないので、専用の出口を置く
+document.getElementById("words3000TestExitBtn").addEventListener("click", ()=> setWords3000Mode('list'));
 document.getElementById("words3000ListenBtn").addEventListener("click", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); else startWords3000Listening(); });
 document.getElementById("words3000RateBtn").addEventListener("click", ()=>{
   const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
