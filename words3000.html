@@ -1007,21 +1007,98 @@ function highlightWords3000Playing(word){
 // queueの各要素は "en"(単語の発音)・"ja"(単語の意味)・"ex-en"(例文の英文)・"ex-ja"(例文の和訳)。
 const W3K_QUEUE_TEXT = { en: w=>w.word, ja: w=>w.ja, "ex-en": w=>w.ex.en, "ex-ja": w=>w.ex.ja };
 const W3K_QUEUE_LANG = { en: "en-US", ja: "ja-JP", "ex-en": "en-US", "ex-ja": "ja-JP" };
+// --- バックグラウンド再生（画面ロック中・他アプリ使用中でも読み上げを続ける） ---
+//
+// 【前提】ブラウザを完全に閉じたあとに音を出すことはWebでは不可能。ページのプロセスが
+// 終われば再生手段が無く、Service Workerには音声再生のAPIが無い。できるのは
+// 「画面ロック中・他アプリに切り替えた間」までで、それ以上はネイティブアプリの領分。
+//
+// 【なぜ今のままだと止まるか】自動再生は「短い音声を1つ再生 → JSのコールバックと
+// setTimeout で次を開始」という連鎖になっている。バックグラウンドではJSのタイマーが
+// 絞られる／凍結されるため、いま鳴っている1語が終わったところで止まってしまう。
+//
+// 【対策】①無音を延々ループ再生して「このページはメディアを再生中」という状態を保ち、
+// OSにページごと止められないようにする ②語と語のつなぎは、画面が見えていない間は
+// タイマーを挟まず音声の終了イベントから直接次へ進める ③MediaSessionでロック画面に
+// 操作パネルを出す。①はiOSの挙動がバージョンによって変わるため、実機での確認が要る。
+let keepAliveAudio = null;
+function silentWavUrl(seconds){
+  const sampleRate = 8000, samples = Math.round(sampleRate * seconds);
+  const buf = new ArrayBuffer(44 + samples * 2); // 16bit モノラル、中身はゼロ＝無音
+  const view = new DataView(buf);
+  const writeStr = (off, str)=>{ for(let i=0;i<str.length;i++) view.setUint8(off+i, str.charCodeAt(i)); };
+  writeStr(0, "RIFF"); view.setUint32(4, 36 + samples*2, true); writeStr(8, "WAVE");
+  writeStr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate*2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  writeStr(36, "data"); view.setUint32(40, samples*2, true);
+  return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+}
+function startKeepAlive(){
+  if(keepAliveAudio) { keepAliveAudio.play().catch(()=>{}); return; }
+  try{
+    keepAliveAudio = new Audio(silentWavUrl(1));
+    keepAliveAudio.loop = true;
+    keepAliveAudio.volume = 0;   // 無音データだが、念のため音量も0にしておく
+    keepAliveAudio.play().catch(()=>{}); // 自動再生が拒否されても再生自体は続ける
+  }catch(e){ keepAliveAudio = null; }
+}
+function stopKeepAlive(){
+  if(!keepAliveAudio) return;
+  keepAliveAudio.pause();
+  if(keepAliveAudio.src) URL.revokeObjectURL(keepAliveAudio.src);
+  keepAliveAudio = null;
+}
+// ロック画面・通知領域の操作パネル。今どの単語を読んでいるかも出す。
+function updateMediaSession(w){
+  if(!("mediaSession" in navigator)) return;
+  try{
+    if(w){
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: w.word,
+        artist: w.ja,
+        album: `英単語3000（${words3000ListenState.index + 1} / ${words3000ListenState.list.length}）`,
+      });
+    }
+    navigator.mediaSession.playbackState = words3000ListenState.active ? "playing" : "paused";
+  }catch(e){}
+}
+function setupMediaSessionHandlers(){
+  if(!("mediaSession" in navigator)) return;
+  const set = (action, fn)=>{ try{ navigator.mediaSession.setActionHandler(action, fn); }catch(e){} };
+  set("play", ()=>{ if(!words3000ListenState.active) startWords3000Listening(); });
+  set("pause", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); });
+  set("stop", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); });
+  set("nexttrack", ()=> skipWords3000(1));
+  set("previoustrack", ()=> skipWords3000(-1));
+}
+// ロック画面の送り／戻し。再生中でなければ何もしない。
+function skipWords3000(delta){
+  if(!words3000ListenState.active) return;
+  stopAllAudio();
+  const next = words3000ListenState.index + delta;
+  words3000ListenState.index = Math.min(Math.max(next, 0), words3000ListenState.list.length - 1);
+  playWords3000Step();
+}
+
 function playWords3000Queue(w, queue, i){
   if(!words3000ListenState.active) return;
   if(i >= queue.length){
-    setTimeout(()=>{
+    const advance = ()=>{
       if(!words3000ListenState.active) return;
       words3000ListenState.index++;
       playWords3000Step();
-    }, listenGap);
+    };
+    // バックグラウンドではsetTimeoutが絞られる／凍結されるため、画面が見えていない間は
+    // 間隔を挟まず、音声の終了からそのまま次の語へ進める（ここで待つと止まってしまう）。
+    if(document.hidden) advance(); else setTimeout(advance, listenGap);
     return;
   }
   const kind = queue[i];
   const isLastInWord = i === queue.length - 1;
   speakRaw(W3K_QUEUE_TEXT[kind](w), W3K_QUEUE_LANG[kind], null, ()=>{
     if(!words3000ListenState.active) return;
-    if(isLastInWord){ playWords3000Queue(w, queue, i+1); }
+    if(isLastInWord || document.hidden){ playWords3000Queue(w, queue, i+1); }
     else { setTimeout(()=> playWords3000Queue(w, queue, i+1), Math.min(listenGap, 350)); }
   });
 }
@@ -1033,6 +1110,7 @@ function playWords3000Step(){
   const w = words3000ListenState.list[words3000ListenState.index];
   highlightWords3000Playing(w.word);
   updateWords3000ListenButton();
+  updateMediaSession(w);
   const queue = readOrder.split(',').filter(Boolean);
   if(readExample){ queue.push("ex-en"); queue.push("ex-ja"); }
   if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回・例文もOFFは想定しないが、無音で止まらないための保険
@@ -1047,6 +1125,7 @@ function startWords3000Listening(){
   if(words3000PausedState && words3000PausedState.index < words3000PausedState.list.length){
     words3000ListenState = { active:true, list: words3000PausedState.list, index: words3000PausedState.index };
     words3000PausedState = null;
+    startKeepAlive();
     playWords3000Step();
     return;
   }
@@ -1060,6 +1139,7 @@ function startWords3000Listening(){
   if(list.length===0){ alert("再生できる単語がありません（範囲・検索条件を確認するか、すべて覚えた✓済みかもしれません）"); return; }
   if(shuffleListen) list = shuffleArray(list.slice());
   words3000ListenState = { active:true, list, index:0 };
+  startKeepAlive();
   playWords3000Step();
 }
 function stopWords3000Listening(){
@@ -1067,6 +1147,8 @@ function stopWords3000Listening(){
   words3000ListenState.active = false;
   words3000PausedState = { list: words3000ListenState.list, index: words3000ListenState.index };
   stopAllAudio();
+  stopKeepAlive();
+  updateMediaSession(null);
   document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
   updateWords3000ListenButton();
 }
@@ -1319,6 +1401,7 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
     saveW3kPrefs();
     if(testMode) startTestMode(); // 形式を変えたらその場で出題し直す
   });
+  setupMediaSessionHandlers();
   const readOrderSel = document.getElementById("words3000ReadOrderSel");
   readOrderSel.innerHTML = READ_ORDER_PRESETS.map(p=>`<option value="${p.value}">${p.label}</option>`).join('');
   readOrderSel.value = readOrder;

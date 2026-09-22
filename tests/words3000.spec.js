@@ -361,6 +361,65 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('バックグラウンド再生（画面ロック中・他アプリ使用中）', () => {
+    // A web page cannot play anything once the browser is actually closed - there is no audio
+    // API in a service worker and the page's process is gone. What these cover is the part
+    // that IS achievable: surviving a locked screen or a switch to another app.
+    test('auto-play holds a silent looping element so the page is not suspended, and releases it on stop', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 0.3 });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => !!keepAliveAudio && !keepAliveAudio.paused)).toBe(true);
+      const alive = await page.evaluate(() => ({ loop: keepAliveAudio.loop, volume: keepAliveAudio.volume }));
+      expect(alive.loop).toBe(true);     // must never run out, or the page goes to sleep
+      expect(alive.volume).toBe(0);      // silent data, but belt and braces
+
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => keepAliveAudio)).toBeNull();
+    });
+
+    test('the lock screen shows the current word and its controls move through the list', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 0.3 });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.click('#words3000ListenBtn');
+
+      await expect.poll(() => page.evaluate(() => navigator.mediaSession.playbackState)).toBe('playing');
+      expect(await page.evaluate(() => navigator.mediaSession.metadata.title)).toBe('the');
+
+      // "next track" on the lock screen / headphones
+      await page.evaluate(() => skipWords3000(1));
+      await expect.poll(() => page.evaluate(() => words3000ListenState.index)).toBe(1);
+      await page.evaluate(() => skipWords3000(-1));
+      await expect.poll(() => page.evaluate(() => words3000ListenState.index)).toBe(0);
+      // and it cannot be driven off either end of the list
+      await page.evaluate(() => skipWords3000(-1));
+      expect(await page.evaluate(() => words3000ListenState.index)).toBe(0);
+
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => navigator.mediaSession.playbackState)).toBe('paused');
+    });
+
+    test('while the page is hidden the gap between words is skipped, so no timer is on the critical path', async ({ page }) => {
+      // setTimeout is throttled or frozen in the background, so waiting out the inter-word gap
+      // there would simply end playback after the current word.
+      await mockGoogleTTS(page, { seconds: 0.2 });
+      await page.addInitScript(() => {
+        Object.defineProperty(document, 'hidden', { get: () => true, configurable: true });
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      // a gap long enough that reaching word 3 within the timeout is only possible if it is skipped
+      await page.evaluate(() => { listenGap = 8000; });
+
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => words3000ListenState.index), { timeout: 6000 })
+        .toBeGreaterThanOrEqual(2);
+    });
+  });
+
   test.describe('4択クイズ・苦手リスト・継続の記録', () => {
     test('the quiz hides the answer until you pick, then marks both the right one and your mistake', async ({ page }) => {
       await page.goto('/words3000.html');
