@@ -321,7 +321,7 @@
     <button class="tool-item" id="menuSpeak"><span>🗣️</span>話す（翻訳して発音）</button>
     <button class="tool-item" id="menuPractice"><span>🎓</span>学習ラウンジ</button>
     <a class="tool-item" id="menuWords3000" href="words3000.html" style="text-decoration:none;"><span>📚</span>英単語3000</a>
-    <button class="tool-item" id="menuScan"><span>📷</span>メニュー翻訳（写真から）</button>
+    <button class="tool-item" id="menuScan"><span>🔍</span>調べる（写真・テキスト）</button>
     <button class="tool-item" id="menuLearnJa"><span>🌏</span>日本語を学ぶ（外国人向け）</button>
     <button class="tool-item" id="menuCurrency"><span>💱</span>通貨換算</button>
     <button class="tool-item" id="menuSettings"><span>⚙</span>設定（声・速度・文字サイズ）</button>
@@ -439,10 +439,22 @@
 
 <div class="overlay" id="menuScanOverlay">
   <div class="panel">
-    <h2>メニュー翻訳 <button id="closeMenuScan" aria-label="閉じる">✕</button></h2>
-    <p class="hint">レストランのメニューや看板を撮影すると、書かれている内容をAIが読み取り、読み方と意味の一覧を作ります（設定でGemini APIキーの登録が必要）。</p>
-    <input type="file" id="menuScanFile" accept="image/*" style="display:none;">
-    <button class="submitbtn" id="menuScanPickBtn" style="background:var(--blue);">📷 写真を撮る・選ぶ</button>
+    <h2>調べる <button id="closeMenuScan" aria-label="閉じる">✕</button></h2>
+    <p class="hint">読めない文章を、読み方（カタカナ）と意味の一覧にします。写真を撮るか、コピーした文章を貼り付けてください。英語・日本語どちらを入れても構いません（向きは自動で判断します）。</p>
+    <div class="mode-tabs" style="margin-bottom:12px;">
+      <button class="mode-tab active" id="lookupModeTextBtn" data-mode="text">📋 文章を貼り付け</button>
+      <button class="mode-tab" id="lookupModePhotoBtn" data-mode="photo">📷 写真から</button>
+    </div>
+    <div id="lookupTextPane">
+      <textarea id="lookupText" rows="4" placeholder="調べたい文章を貼り付け（英語でも日本語でも構いません）" style="width:100%; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:15px; color:var(--ink); resize:vertical;"></textarea>
+      <button class="submitbtn" id="lookupTextBtn" style="background:var(--blue); margin-top:8px;">🔍 調べる</button>
+      <p class="hint" style="margin-top:8px;">Gemini APIキーを登録していると🔤単語ごとの意味も付きます（未登録でも訳と読み方は出ます）。</p>
+    </div>
+    <div id="lookupPhotoPane" style="display:none;">
+      <input type="file" id="menuScanFile" accept="image/*" style="display:none;">
+      <button class="submitbtn" id="menuScanPickBtn" style="background:var(--blue);">📷 写真を撮る・選ぶ</button>
+      <p class="hint" style="margin-top:8px;">メニューや看板を撮ると、AIが文章を読み取ります（設定でGemini APIキーの登録が必要）。</p>
+    </div>
     <div id="menuScanPreviewWrap" style="display:none; margin-top:10px;">
       <img id="menuScanPreview" alt="撮影したメニュー・看板の写真" style="width:100%; max-height:220px; object-fit:cover; border-radius:12px; display:block;">
     </div>
@@ -516,8 +528,8 @@
     </div>
 
     <div class="manual-section">
-      <h3>📷 メニュー翻訳（写真から）</h3>
-      <p>レストランのメニューや街の看板を撮影すると、写っている文章をAIが読み取り、フレーズごとの読み方（カタカナ）と意味の一覧を作ります（設定でGeminiキーの登録が必要）。何語で書かれているかも自動で判定します。一覧の各項目は🔊で発音を確認できます。</p>
+      <h3>🔍 調べる（写真・テキスト）</h3>
+      <p>読めない文章を、読み方（カタカナ）と意味の一覧にする道具です。入力は2通りあります。<b>📋 文章を貼り付け</b>は、コピーした文章をそのまま貼って「🔍 調べる」を押すと、文ごとに原文・カタカナ読み・日本語訳が並びます。英語を入れれば意味と読み方が、日本語を入れれば英語の言い方とその読み方が出ます（どちら向きかは自動で判断します）。<b>Geminiキーが無くても使えます</b>が、登録しておくと🔤単語ごとの意味も付きます。<b>📷 写真から</b>は、レストランのメニューや街の看板を撮影すると、写っている文章をAIが読み取って同じ一覧にします（こちらはGeminiキーの登録が必要）。何語で書かれているかも自動で判定します。一覧の各項目は🔊で発音を確認でき、★でフレーズ帳に追加できます（🔤単語ごとの意味は解説欄に引き継がれます）。</p>
     </div>
 
     <div class="manual-section">
@@ -547,7 +559,7 @@
 
     <div class="manual-section">
       <h3>🔑 Gemini APIキーの設定</h3>
-      <p>学習ラウンジ（AIによる例文生成・AIチャット）・メニュー翻訳（写真から）には必須です。そのほか、フレーズ追加時のカタカナ自動生成や、翻訳・読み上げがGoogle翻訳側で失敗した時の予備手段としても使われます。未登録でも一覧・話す・通貨換算・日本語を学ぶなど他の機能は問題なく使えます。</p>
+      <p>学習ラウンジ（AIによる例文生成・AIチャット）・「調べる」の写真からの読み取りには必須です。「調べる」の文章の貼り付けはキーが無くても使えますが、キーがあると🔤単語ごとの意味も付きます。そのほか、フレーズ追加時のカタカナ自動生成や、翻訳・読み上げがGoogle翻訳側で失敗した時の予備手段としても使われます。未登録でも一覧・話す・通貨換算・日本語を学ぶなど他の機能は問題なく使えます。</p>
       <ol>
         <li><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a>を開く（Googleアカウントのみでよく、クレジットカード登録は不要）</li>
         <li>「Create API key」でキーを発行してコピー</li>
@@ -2326,6 +2338,11 @@ const CHANGELOG = [
     "ロック画面に今読んでいる単語と、再生・停止・次へ・前へのボタンが出ます（イヤホンのボタンでも操作できます）。",
     "ブラウザ自体を完全に閉じると音は止まります。これはWebページの仕組み上できないことなので、ご了承ください。",
   ]},
+  { id: 23, date: "2026-09-23", title: "「メニュー翻訳」を「調べる」にして、文章の貼り付けに対応しました", items: [
+    "コピーした文章を貼り付けると、文ごとに原文・カタカナ読み・日本語訳が出るようになりました。英語を入れても日本語を入れても構いません（向きは自動で判断します）。",
+    "Geminiキーが無くても訳と読み方は出ます。キーがあると🔤単語ごとの意味も付きます。",
+    "写真から読み取った結果にも🔤単語ごとの意味が付き、★でフレーズ帳に追加できるようになりました。",
+  ]},
 ];
 
 function checkWhatsNew(){
@@ -2807,13 +2824,90 @@ const MENU_SCAN_SCHEMA = {
           text: { type: "string" },
           kana: { type: "string" },
           ja: { type: "string" },
+          gloss: { type: "string" },
         },
-        required: ["text","kana","ja"],
+        required: ["text","kana","ja","gloss"],
       },
     },
   },
   required: ["items"],
 };
+
+// --- 貼り付けた文章を調べる ---
+// 写真からの読み取りと同じ形（原文・カナ・訳・🔤単語の意味）に揃えて、同じ描画に流す。
+// Geminiキーが無くても使えるようにしてあるのがポイントで、その場合はGoogle翻訳と
+// アプリ内蔵の英語→カタカナ変換だけで「訳＋読み方」まで出す（🔤単語の意味は付かない）。
+const LOOKUP_TEXT_SCHEMA = {
+  type: "object",
+  properties: {
+    languageLabel: { type: "string" },
+    speechLang: { type: "string" },
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          text: { type: "string" },
+          kana: { type: "string" },
+          ja: { type: "string" },
+          gloss: { type: "string" },
+        },
+        required: ["text","kana","ja","gloss"],
+      },
+    },
+  },
+  required: ["items"],
+};
+// 日本語が含まれているかで向きを決める。ひらがな・カタカナ・漢字のいずれかがあれば
+// 「日本語を入れた」とみなし、英語にして返す。無ければ外国語とみなして日本語にする。
+function looksJapanese(text){
+  return /[ぁ-んァ-ヴ一-龥]/.test(text);
+}
+async function lookupTextWithGemini(text){
+  const toEnglish = looksJapanese(text);
+  const prompt = `あなたは日本語話者の学習を助ける語学講師です。次の文章を、読み方と意味が分かる形に整理してください。
+
+対象の文章：
+"""
+${text}
+"""
+
+${toEnglish
+  ? "これは日本語です。自然な英語に訳したうえで、英語のほうを text に入れてください。"
+  : "これは外国語です。原文をそのまま text に入れてください。"}
+
+文が複数ある場合は文ごとに分け、最大20件まで items に入れてください。各件に次の4つを必ず入れてください。
+- text: ${toEnglish ? "英訳した文" : "原文の文"}
+- kana: text を日本語話者が読むためのカタカナ発音表記
+- ja: ${toEnglish ? "元の日本語（その文に対応する部分）" : "簡潔な日本語訳"}
+- gloss: text を単語・意味のまとまりごとに区切り、直後の丸括弧に日本語の意味を書いたもの。
+  例："What(何を) do you(あなたは) recommend(おすすめする)?"
+  text に書かれている語だけを使い、語順も変えないでください。
+
+languageLabel には text が何語かを日本語で一言（例："英語"）、speechLang にはその言語のBCP-47言語タグ（例:"en-US"）を入れてください。`;
+  return callGeminiJSON(prompt, LOOKUP_TEXT_SCHEMA);
+}
+// キー未登録時の簡易版。Google翻訳＋内蔵のカタカナ変換だけで組み立てる。
+async function lookupTextWithoutKey(text){
+  const toEnglish = looksJapanese(text);
+  // 文ごとに分ける（多すぎる場合は先頭20件）。区切れない場合は全体を1件として扱う。
+  const sentences = text.split(/(?<=[。．.!?！？\n])\s*/).map(t=>t.trim()).filter(Boolean).slice(0, 20);
+  const list = sentences.length ? sentences : [text.trim()];
+  const items = [];
+  for(const sentence of list){
+    if(toEnglish){
+      const translated = await translateText(sentence, "en");
+      items.push({ text: translated, kana: englishToKatakana(translated), ja: sentence, gloss: "" });
+    } else {
+      // キーが無いと言語を判定できないので、Google翻訳の自動判定（sl=auto）に任せる。
+      // カタカナは英語用のエンジンしか無いため、英字の文のときだけ付ける。
+      const ja = await translateToJapanese(sentence, "auto");
+      const isLatin = !/[^\u0000-\u024F\s]/.test(sentence);
+      items.push({ text: sentence, kana: isLatin ? englishToKatakana(sentence) : "", ja, gloss: "" });
+    }
+  }
+  return { languageLabel: toEnglish ? "英語" : "", speechLang: toEnglish ? "en-US" : "en-US", items };
+}
 
 async function scanMenuPhoto(base64Image, mimeType){
   const prompt = `あなたは日本語話者の旅行者を助けるガイドです。添付した写真には、海外のレストランのメニューや街の看板など、外国語で書かれた文章が写っています。
@@ -2822,6 +2916,9 @@ async function scanMenuPhoto(base64Image, mimeType){
 - text: 写真に書かれている原文そのまま
 - kana: 日本語話者向けのカタカナ発音表記
 - ja: 簡潔な日本語訳
+- gloss: 原文を単語・意味のまとまりごとに区切り、直後の丸括弧に日本語の意味を書いたもの。
+  例："Bon(良い)jour(日)"、"What(何を) do you(あなたは) recommend(おすすめする)?"
+  textに書かれている語だけを使い、語順も変えないでください。
 
 languageLabel には写っている文章が何語かを日本語で一言（例："フランス語"）、speechLang にはその言語のBCP-47言語タグ（例:"fr-FR"）を入れてください。
 文章が読み取れない、または意味のある文章が見当たらない場合は items を空配列にしてください。`;
@@ -2851,10 +2948,17 @@ async function resizeImageForGemini(file, maxDim = 1280, quality = 0.82){
   return { base64, mimeType: "image/jpeg", blob };
 }
 
-function renderMenuScanResults(items, speechLang){
+// speechLang（"fr-FR"等）から、アプリが持っている13言語のキーを探す。見つからなければnull。
+function langKeyForSpeechLang(speechLang){
+  if(!speechLang) return null;
+  const prefix = String(speechLang).toLowerCase().split('-')[0];
+  const meta = LANGS.find(l => String(l.speech).toLowerCase().split('-')[0] === prefix);
+  return meta ? meta.key : null;
+}
+function renderMenuScanResults(items, speechLang, languageLabelForSave){
   const wrap = document.getElementById("menuScanResults");
   if(!items || items.length === 0){
-    wrap.innerHTML = '<p class="hint">文章を読み取れませんでした。もう少し近づいて、はっきり写るようにもう一度お試しください。</p>';
+    wrap.innerHTML = '<p class="hint">読み取れませんでした。写真の場合はもう少し近づいてはっきり写るように、文章の場合は内容を確かめてもう一度お試しください。</p>';
     return;
   }
   wrap.innerHTML = items.map((it)=>`
@@ -2863,14 +2967,36 @@ function renderMenuScanResults(items, speechLang){
         <div class="pe-text">${esc(it.text)}</div>
         <div class="pe-kana">${esc(it.kana || "")}</div>
         <div class="pe-ja">${esc(it.ja || "")}</div>
+        ${it.gloss ? `<div class="pe-gloss">🔤 ${esc(it.gloss)}</div>` : ''}
       </div>
-      <button class="pe-speak" aria-label="発音を聞く">🔊</button>
+      <div class="pe-btns">
+        <button class="pe-speak" aria-label="発音を聞く">🔊</button>
+        <button class="pe-save" aria-label="フレーズ帳に追加">★</button>
+      </div>
     </div>
   `).join('');
   wrap.querySelectorAll('.practice-ex').forEach((row,i)=>{
     const it = items[i];
     row.querySelector('.pe-speak').addEventListener('click', (e)=>{
       speakRaw(it.text, speechLang || "en-US", e.currentTarget);
+    });
+    // ★でフレーズ帳へ。読み取った言語がアプリの13言語に無いこともあるので、
+    // 該当する言語の欄があるときだけ原文を入れる（無ければ日本語と解説だけ埋める）。
+    row.querySelector('.pe-save').addEventListener('click', ()=>{
+      const langKey = langKeyForSpeechLang(speechLang);
+      document.getElementById("menuScanOverlay").classList.remove("open");
+      openAddPanel(null);
+      document.getElementById("addJa").value = it.ja || "";
+      if(langKey){
+        const textField = document.getElementById(`add_${langKey}`);
+        const kanaField = document.getElementById(`add_${langKey}_kana`);
+        if(textField) textField.value = it.text || "";
+        if(kanaField) kanaField.value = it.kana || "";
+      }
+      document.getElementById("addNote").value = [
+        langKey ? "" : `原文（${languageLabelForSave || "読み取った言語"}）：${it.text}`,
+        it.gloss ? `🔤 ${it.gloss}` : "",
+      ].filter(Boolean).join("\n");
     });
   });
 }
@@ -2904,10 +3030,53 @@ document.getElementById("menuScanFile").addEventListener("change", async (e)=>{
       langWrap.textContent = "検出した言語：" + parsed.languageLabel;
       langWrap.style.display = "block";
     }
-    renderMenuScanResults(parsed.items, parsed.speechLang);
+    renderMenuScanResults(parsed.items, parsed.speechLang, parsed.languageLabel);
   }catch(err){
     console.error("menu scan error:", err);
     alert(geminiErrorMessage(err));
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+});
+
+// 「調べる」の入力切り替え（貼り付け／写真）
+function setLookupMode(mode){
+  const isText = mode === "text";
+  document.getElementById("lookupTextPane").style.display = isText ? "block" : "none";
+  document.getElementById("lookupPhotoPane").style.display = isText ? "none" : "block";
+  document.getElementById("lookupModeTextBtn").classList.toggle("active", isText);
+  document.getElementById("lookupModePhotoBtn").classList.toggle("active", !isText);
+  document.getElementById("menuScanResults").innerHTML = "";
+  document.getElementById("menuScanLangLabel").style.display = "none";
+  document.getElementById("menuScanPreviewWrap").style.display = isText ? "none" : document.getElementById("menuScanPreviewWrap").style.display;
+}
+document.getElementById("lookupModeTextBtn").addEventListener("click", ()=> setLookupMode("text"));
+document.getElementById("lookupModePhotoBtn").addEventListener("click", ()=> setLookupMode("photo"));
+
+document.getElementById("lookupTextBtn").addEventListener("click", async ()=>{
+  const text = document.getElementById("lookupText").value.trim();
+  if(!text) return;
+  const btn = document.getElementById("lookupTextBtn");
+  const originalLabel = btn.textContent;
+  const resultsWrap = document.getElementById("menuScanResults");
+  const langWrap = document.getElementById("menuScanLangLabel");
+  resultsWrap.innerHTML = "";
+  langWrap.style.display = "none";
+  btn.disabled = true;
+  btn.textContent = "調べています…";
+  try{
+    // キーがあれば🔤単語ごとの意味まで付く。無ければGoogle翻訳＋内蔵のカタカナ変換で
+    // 訳と読み方までを出す（キーが無いと何もできない、という状態にはしない）。
+    const parsed = geminiApiKey ? await lookupTextWithGemini(text) : await lookupTextWithoutKey(text);
+    if(parsed.languageLabel){
+      langWrap.textContent = "言語：" + parsed.languageLabel + (geminiApiKey ? "" : "（🔤単語ごとの意味は、設定でGemini APIキーを登録すると付きます）");
+      langWrap.style.display = "block";
+    }
+    renderMenuScanResults(parsed.items, parsed.speechLang, parsed.languageLabel);
+  }catch(err){
+    console.error("lookup text error:", err);
+    alert(geminiApiKey ? geminiErrorMessage(err) : "翻訳に失敗しました。通信状況を確認してもう一度お試しください。");
   }finally{
     btn.disabled = false;
     btn.textContent = originalLabel;

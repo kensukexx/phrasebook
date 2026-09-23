@@ -6,13 +6,15 @@ const { mockGemini, mockGeminiError, setGeminiKey } = require('./helpers');
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 const pngBuffer = () => Buffer.from(PNG_B64, 'base64');
 
-test.describe('メニュー翻訳（写真から）', () => {
+test.describe('調べる（写真・テキスト）', () => {
   test('opens from the tools menu with a picker button', async ({ page }) => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('#toolsBtn');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
+    // the paste-text tab is the default now; the camera lives behind the second tab
+    await page.click('#lookupModePhotoBtn');
     await expect(page.locator('#menuScanPickBtn')).toBeVisible();
     await expect(page.locator('#menuScanResults')).toBeEmpty();
   });
@@ -26,6 +28,7 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
 
+    await page.click('#lookupModePhotoBtn');
     await page.locator('#menuScanFile').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: pngBuffer() });
     await page.waitForTimeout(300);
     expect(alerts.join()).toContain('Gemini APIキー');
@@ -51,6 +54,7 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.click('#toolsBtn');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
+    await page.click('#lookupModePhotoBtn');
     await page.locator('#menuScanFile').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: pngBuffer() });
 
     await page.waitForSelector('#menuScanResults .practice-ex', { timeout: 10000 });
@@ -78,6 +82,7 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.click('#toolsBtn');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
+    await page.click('#lookupModePhotoBtn');
     await page.locator('#menuScanFile').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: pngBuffer() });
 
     await expect(page.locator('#menuScanResults')).toContainText('読み取れませんでした', { timeout: 10000 });
@@ -97,6 +102,7 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.click('#toolsBtn');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
+    await page.click('#lookupModePhotoBtn');
     await page.locator('#menuScanFile').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: pngBuffer() });
     await page.waitForTimeout(500);
     expect(alerts.join()).toContain('安全フィルター');
@@ -114,6 +120,7 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.click('#toolsBtn');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
+    await page.click('#lookupModePhotoBtn');
     await page.locator('#menuScanFile').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: pngBuffer() });
     await page.waitForTimeout(500);
     expect(alerts.join()).toContain('API key not valid');
@@ -132,6 +139,7 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.click('#toolsBtn');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
+    await page.click('#lookupModePhotoBtn');
     await page.locator('#menuScanFile').setInputFiles({ name: 'menu.png', mimeType: 'image/png', buffer: pngBuffer() });
 
     await page.waitForSelector('#menuScanResults .practice-ex', { timeout: 10000 });
@@ -145,10 +153,80 @@ test.describe('メニュー翻訳（写真から）', () => {
     await page.goto('/index.html');
     await page.waitForSelector('#deck .ticket');
     await page.click('#toolsBtn');
-    await expect(page.locator('#menuScan')).toContainText('メニュー翻訳');
+    await expect(page.locator('#menuScan')).toContainText('調べる');
     await page.click('#menuScan');
     await page.waitForSelector('#menuScanOverlay.open');
     await page.click('#closeMenuScan');
     await expect(page.locator('#menuScanOverlay')).not.toHaveClass(/open/);
   });
 });
+  test('pasted text is broken down into reading and meaning, without needing a Gemini key', async ({ page }) => {
+    // The key point of putting this here rather than in the AI-only 学習ラウンジ: the app can
+    // already translate and can generate English katakana on its own, so the tool still does
+    // something useful with no key - only the 🔤 word-by-word part needs the AI.
+    await page.route('**/translate_a/single**', route => {
+      const url = new URL(route.request().url());
+      const out = url.searchParams.get('tl') === 'ja' ? '駅はどこですか？' : 'Where is the station?';
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([[[out, '', null]]]) });
+    });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuScan');
+    await page.waitForSelector('#menuScanOverlay.open');
+    await expect(page.locator('#lookupTextPane')).toBeVisible(); // paste is the default input
+
+    await page.fill('#lookupText', 'Where is the station?');
+    await page.click('#lookupTextBtn');
+    await page.waitForSelector('#menuScanResults .practice-ex');
+
+    await expect(page.locator('.pe-text').first()).toHaveText('Where is the station?');
+    await expect(page.locator('.pe-kana').first()).toHaveText('ウェア イズ ザ ステーション?');
+    await expect(page.locator('.pe-ja').first()).toHaveText('駅はどこですか？');
+    await expect(page.locator('.pe-gloss')).toHaveCount(0); // that part does need the AI
+  });
+
+  test('pasting Japanese goes the other way and gives the English with its reading', async ({ page }) => {
+    await page.route('**/translate_a/single**', route => {
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([[['Where is the station?', '', null]]]) });
+    });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuScan');
+    await page.fill('#lookupText', '駅はどこですか？');
+    await page.click('#lookupTextBtn');
+    await page.waitForSelector('#menuScanResults .practice-ex');
+
+    await expect(page.locator('.pe-text').first()).toHaveText('Where is the station?');
+    await expect(page.locator('.pe-kana').first()).not.toBeEmpty();
+    await expect(page.locator('.pe-ja').first()).toHaveText('駅はどこですか？');
+  });
+
+  test('with a key the breakdown gains 🔤 word meanings, and ★ carries everything into the add panel', async ({ page, browserName }) => {
+    test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await setGeminiKey(page, 'FAKE_KEY');
+    await mockGemini(page, {
+      languageLabel: '英語', speechLang: 'en-US',
+      items: [{ text: 'Where is the station?', kana: 'ウェア イズ ザ ステーション',
+                ja: '駅はどこですか？', gloss: 'Where(どこに) is(ある) the station(その駅は)?' }],
+    });
+    await page.click('#toolsBtn');
+    await page.click('#menuScan');
+    await page.fill('#lookupText', 'Where is the station?');
+    await page.click('#lookupTextBtn');
+    await page.waitForSelector('.pe-gloss');
+
+    await expect(page.locator('.pe-gloss')).toHaveText('🔤 Where(どこに) is(ある) the station(その駅は)?');
+    await expect(page.locator('#menuScanLangLabel')).toContainText('英語');
+
+    await page.locator('#menuScanResults .pe-save').first().click();
+    await expect(page.locator('#addOverlay')).toHaveClass(/open/);
+    await expect(page.locator('#addJa')).toHaveValue('駅はどこですか？');
+    await expect(page.locator('#add_en')).toHaveValue('Where is the station?');
+    await expect(page.locator('#add_en_kana')).toHaveValue('ウェア イズ ザ ステーション');
+    await expect(page.locator('#addNote')).toHaveValue('🔤 Where(どこに) is(ある) the station(その駅は)?');
+  });
+
