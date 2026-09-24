@@ -118,7 +118,18 @@
 
   .w3k-card{ border:1.5px solid var(--line); border-radius:12px; padding:14px; margin-bottom:10px; background:#fff; }
   .w3k-card.learned{ border-color:var(--green); }
+  /* 自動再生中の1枚。枠だけだと「どれか」は分かっても「読める」ようにはならないので、
+     今鳴っている単語そのものを大きくする。自動再生は再生中のカードをパネルのすぐ下へ
+     スクロールさせるため、大きい文字は常に画面の同じ位置に出る。 */
   .w3k-card.now-playing{ box-shadow:0 0 0 3px rgba(255,107,107,0.5), 0 4px 16px rgba(47,53,66,0.12); }
+  /* 大きくした単語は2列（単語｜意味）のままだと意味の列に食い込む（実際に
+     "interesting"が意味に重なった）。再生中だけ縦積みにして、単語を1行まるごと使う。 */
+  .w3k-card.now-playing .w3k-word-wrap{ flex-direction:column; gap:4px; }
+  .w3k-card.now-playing .w3k-word-col{ max-width:100%; }
+  .w3k-card.now-playing .w3k-word{ font-size:30px; line-height:1.15; word-break:break-word; }
+  .w3k-card.now-playing .w3k-kana{ font-size:15px; margin-top:2px; }
+  .w3k-card.now-playing .w3k-ja-front{ font-size:16px; font-weight:700; }
+  .w3k-card.now-playing .w3k-pos{ font-size:12px; }
   .w3k-front{ display:flex; align-items:center; gap:10px; cursor:pointer; }
   .w3k-rank{ flex:0 0 auto; width:30px; font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif; font-size:11px; color:var(--ink-soft); }
   /* 単語・カナ（左）と、意味・例文（右）を横並びにして、短い単語の右側に空く余白を

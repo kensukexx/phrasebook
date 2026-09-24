@@ -361,6 +361,47 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('自動再生中のカードの見やすさ', () => {
+    test('the word being spoken is shown much larger, and does not collide with its meaning', async ({ page }) => {
+      // A ring around the card tells you *which* one is playing but does not make it readable.
+      // Enlarging the word inside the existing two-column layout made a long word overlap the
+      // meaning column ("interesting" ran straight through 面白い), so the playing card stacks.
+      await mockGoogleTTS(page, { seconds: 0.3 });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.fill('#words3000Search', 'interesting'); // a long word, the case that broke
+      await expect(page.locator('.w3k-card')).toHaveCount(1);
+
+      const normal = await page.evaluate(() =>
+        parseFloat(getComputedStyle(document.querySelector('.w3k-word')).fontSize));
+
+      await page.click('#words3000ListenBtn');
+      await page.waitForSelector('.w3k-card.now-playing');
+
+      const playing = await page.evaluate(() => {
+        const card = document.querySelector('.w3k-card.now-playing');
+        const word = card.querySelector('.w3k-word');
+        const wordBox = word.getBoundingClientRect();
+        const meaningBox = card.querySelector('.w3k-ja-front').getBoundingClientRect();
+        return {
+          size: parseFloat(getComputedStyle(word).fontSize),
+          overlap: Math.max(0, Math.round(wordBox.bottom - meaningBox.top)),
+          pageOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+      expect(playing.size).toBeGreaterThan(normal * 1.5); // readable at a glance
+      expect(playing.overlap).toBe(0);                    // stacked, so nothing runs into anything
+      expect(playing.pageOverflow).toBe(0);
+
+      // and it goes back to the compact row once it is no longer the one playing
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('.w3k-card.now-playing')).toHaveCount(0);
+      expect(await page.evaluate(() =>
+        parseFloat(getComputedStyle(document.querySelector('.w3k-word')).fontSize))).toBe(normal);
+    });
+  });
+
   test.describe('バックグラウンド再生（画面ロック中・他アプリ使用中）', () => {
     // A web page cannot play anything once the browser is actually closed - there is no audio
     // API in a service worker and the page's process is gone. What these cover is the part
