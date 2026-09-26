@@ -159,6 +159,49 @@ test.describe('調べる（写真・テキスト）', () => {
     await page.click('#closeMenuScan');
     await expect(page.locator('#menuScanOverlay')).not.toHaveClass(/open/);
   });
+  test('the preview shows the whole photo, because the whole photo is what gets analysed', async ({ page }) => {
+    // Reported as "the position it recognises does not seem right". The image sent was always
+    // the complete photo - but the preview used object-fit:cover and showed only the middle
+    // ~47% of a portrait shot, so it looked like the top and bottom were being ignored.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuScan');
+    await page.click('#lookupModePhotoBtn');
+
+    expect(await page.evaluate(() =>
+      getComputedStyle(document.getElementById('menuScanPreview')).objectFit)).toBe('contain');
+  });
+
+  test('the image sent to the AI keeps the full frame and its aspect ratio', async ({ page }) => {
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+
+    const sent = await page.evaluate(async () => {
+      // a tall 3:4 frame, the shape a phone photo of a menu actually has
+      const canvas = document.createElement('canvas');
+      canvas.width = 1200; canvas.height = 1600;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, 1200, 1600);
+      const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.9));
+      const file = new File([blob], 'menu.jpg', { type: 'image/jpeg' });
+
+      const out = await resizeImageForGemini(file);
+      const url = URL.createObjectURL(out.blob);
+      const dim = await new Promise((r) => {
+        const img = new Image();
+        img.onload = () => r({ w: img.naturalWidth, h: img.naturalHeight });
+        img.src = url;
+      });
+      return dim;
+    });
+
+    // same 3:4 shape as the original - nothing cropped off any edge
+    expect(sent.w / sent.h).toBeCloseTo(1200 / 1600, 2);
+    // and big enough that small menu text survives; 1280 used to squeeze it harder
+    expect(Math.max(sent.w, sent.h)).toBeGreaterThanOrEqual(1600);
+  });
+
 });
   test('pasted text is broken down into reading and meaning, without needing a Gemini key', async ({ page }) => {
     // The key point of putting this here rather than in the AI-only 学習ラウンジ: the app can

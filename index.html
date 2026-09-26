@@ -456,7 +456,8 @@
       <p class="hint" style="margin-top:8px;">メニューや看板を撮ると、AIが文章を読み取ります（設定でGemini APIキーの登録が必要）。</p>
     </div>
     <div id="menuScanPreviewWrap" style="display:none; margin-top:10px;">
-      <img id="menuScanPreview" alt="撮影したメニュー・看板の写真" style="width:100%; max-height:220px; object-fit:cover; border-radius:12px; display:block;">
+      <img id="menuScanPreview" alt="撮影したメニュー・看板の写真" style="width:100%; max-height:300px; object-fit:contain; background:rgba(47,53,66,0.06); border-radius:12px; display:block;">
+      <p class="hint" style="margin-top:6px;">この写真の全体を読み取ります。</p>
     </div>
     <p class="hint" id="menuScanLangLabel" style="display:none; margin-top:10px;"></p>
     <div id="menuScanResults" style="margin-top:6px;"></div>
@@ -2346,6 +2347,10 @@ const CHANGELOG = [
   { id: 24, date: "2026-09-24", title: "自動再生中の単語が大きく表示されるようになりました", items: [
     "いま読み上げている単語のカードだけ、単語・読み方・意味が大きく表示されるようになりました。赤い枠だけだった頃より、ちらっと見るだけで分かります。",
   ]},
+  { id: 25, date: "2026-09-26", title: "「調べる」の写真プレビューが全体を表示するようになりました", items: [
+    "撮った写真のプレビューが真ん中だけ切り取られて表示されていたのを直しました。読み取りは元から写真全体を対象にしていましたが、画面上で上下が切れていたため、一部しか見ていないように見えていました。",
+    "文字を読み取る精度を上げるため、送信する画像の解像度も上げました。",
+  ]},
 ];
 
 function checkWhatsNew(){
@@ -2929,7 +2934,11 @@ languageLabel には写っている文章が何語かを日本語で一言（例
 }
 
 // Gemini APIのリクエストサイズを抑えるため、送信前に長辺1280px・JPEG品質0.82程度まで縮小する
-async function resizeImageForGemini(file, maxDim = 1280, quality = 0.82){
+// maxDim は「長辺の最大px」。メニューや看板の細かい文字を読ませるので、通信量より
+// 文字の判読性を優先して1600にしてある（1280だと小さな文字が潰れて読み落としやすい）。
+// 縦横比は保つので、写真の一部が切り取られることはない。表示側のプレビューも
+// object-fit:contain にしてあり、「見えている範囲＝送っている範囲」を崩さないこと。
+async function resizeImageForGemini(file, maxDim = 1600, quality = 0.82){
   const bitmap = await createImageBitmap(file);
   let width = bitmap.width, height = bitmap.height;
   if(width > maxDim || height > maxDim){
