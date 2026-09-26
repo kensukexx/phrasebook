@@ -402,6 +402,97 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('日常英会話フレーズ100', () => {
+    // The phrase set reuses this page wholesale: the two datasets share one shape, so the
+    // study machinery (auto-play, test, quiz, SRS, weak list, streak, sync) works for both.
+    // These guard the seams - the dataset swap, the multi-example schema, and the labels.
+    test('the switch swaps the dataset, the tiers, the filter and the heading', async ({ page }) => {
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('.w3k-card')).toHaveCount(500);
+
+      await page.click('.w3k-set-btn[data-set="phrases"]');
+      await expect(page.locator('#w3kTitle')).toHaveText(/フレーズ100/);
+      await expect(page.locator('.w3k-card')).toHaveCount(25);            // 100 in tiers of 25
+      await expect(page.locator('#words3000PosLabel')).toHaveText('用途'); // not 品詞
+      await expect(page.locator('#words3000TierSel option').first()).toHaveText('1〜25フレーズ');
+      await expect(page.locator('.w3k-word').first()).toHaveText('I want to ~');
+
+      await page.click('.w3k-set-btn[data-set="words"]');
+      await expect(page.locator('.w3k-card')).toHaveCount(500);
+      await expect(page.locator('#words3000PosLabel')).toHaveText('品詞');
+    });
+
+    test('every phrase carries three examples, each with its own reading and word meanings', async ({ page }) => {
+      // one example is enough for a word, but a pattern is about what goes in the slot -
+      // with a single example it does not read as a pattern at all
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+
+      const data = await page.evaluate(() => ({
+        count: PHRASES100.length,
+        ranksOk: PHRASES100.every((x, i) => x.rank === i + 1),
+        allHaveThree: PHRASES100.every((x) => x.ex.length === 3),
+        allFieldsPresent: PHRASES100.every((x) => x.word && x.pos && x.kana && x.ja
+          && x.ex.every((e) => e.en && e.kana && e.ja && e.gloss)),
+        // the gloss must only use words that are actually in the sentence
+        glossMismatch: PHRASES100.flatMap((x) => x.ex)
+          .filter((e) => {
+            const inGloss = (e.gloss.match(/[A-Za-z][A-Za-z'\-]*/g) || [])
+              .filter((w) => !/^(.)$/.test(w));
+            const inSentence = new Set((e.en.match(/[A-Za-z][A-Za-z'\-]*/g) || []).map((w) => w.toLowerCase()));
+            return inGloss.some((w) => !inSentence.has(w.toLowerCase()));
+          }).map((e) => e.en),
+      }));
+      expect(data.count).toBe(100);
+      expect(data.ranksOk).toBe(true);
+      expect(data.allHaveThree).toBe(true);
+      expect(data.allFieldsPresent).toBe(true);
+      expect(data.glossMismatch).toEqual([]);
+
+      await page.locator('.w3k-card .w3k-front').first().click();
+      await expect(page.locator('.w3k-card.revealed .w3k-ex-one')).toHaveCount(3);
+      await expect(page.locator('.w3k-card.revealed .w3k-ex-gloss')).toHaveCount(3);
+    });
+
+    test('the tools menu opens straight into the phrase set', async ({ page }) => {
+      await page.goto('/index.html');
+      await page.waitForSelector('#deck .ticket');
+      await page.click('#toolsBtn');
+      await expect(page.locator('#menuPhrases100')).toHaveAttribute('href', 'words3000.html?set=phrases');
+
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#w3kTitle')).toHaveText(/フレーズ100/);
+    });
+
+    test('the learning machinery works on phrases too, and the two sets keep separate counts', async ({ page }) => {
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+
+      await page.locator('.w3k-card').first().locator('[data-role="learn"]').click();
+      await expect(page.locator('.w3k-card').first()).toHaveClass(/learned/);
+      const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('phrasebook-words-learned')));
+      expect(stored['I want to ~']).toBeTruthy(); // shares the synced store, no key collision
+
+      // the word set must not show the phrase as one of its own
+      await page.click('.w3k-set-btn[data-set="words"]');
+      await expect(page.locator('#words3000Progress')).toHaveText(/覚えた 0 \/ 500/);
+    });
+
+    test('a phrase test asks in the same formats the word test does', async ({ page }) => {
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000TestFormatSel', 'choice');
+      await page.click('#words3000TestModeBtn');
+      await page.waitForSelector('.w3k-choice');
+
+      await expect(page.locator('.w3k-testword')).toHaveText('I want to ~');
+      await expect(page.locator('.w3k-choice')).toHaveCount(4);
+      await expect(page.locator('#words3000TestCount')).toHaveText('1 / 25');
+    });
+  });
+
   test.describe('バックグラウンド再生（画面ロック中・他アプリ使用中）', () => {
     // A web page cannot play anything once the browser is actually closed - there is no audio
     // API in a service worker and the page's process is gone. What these cover is the part
@@ -544,7 +635,13 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
     test('the streak counts consecutive days and shows today\'s total', async ({ page }) => {
       await page.addInitScript(() => {
-        const day = (back) => { const d = new Date(); d.setDate(d.getDate() - back); return d.toISOString().slice(0, 10); };
+        // the app keys by local date, so build these the same way - toISOString() is UTC
+        // and made these tests fail when run between midnight and 09:00 JST
+        const day = (back) => {
+          const d = new Date(); d.setDate(d.getDate() - back);
+          const p2 = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+        };
         localStorage.setItem('phrasebook-study-log', JSON.stringify({ [day(0)]: 7, [day(1)]: 20, [day(2)]: 12 }));
       });
       await page.goto('/words3000.html');
@@ -555,7 +652,13 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
     test('a gap breaks the streak, and yesterday-only still counts so the morning does not read as zero', async ({ page }) => {
       await page.addInitScript(() => {
-        const day = (back) => { const d = new Date(); d.setDate(d.getDate() - back); return d.toISOString().slice(0, 10); };
+        // the app keys by local date, so build these the same way - toISOString() is UTC
+        // and made these tests fail when run between midnight and 09:00 JST
+        const day = (back) => {
+          const d = new Date(); d.setDate(d.getDate() - back);
+          const p2 = (n) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+        };
         // studied yesterday and the day before, nothing yet today; the day 4 back is orphaned
         localStorage.setItem('phrasebook-study-log', JSON.stringify({ [day(1)]: 5, [day(2)]: 5, [day(4)]: 5 }));
       });

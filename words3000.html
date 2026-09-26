@@ -85,6 +85,16 @@
     letter-spacing:normal; text-transform:none; color:var(--ink); }
   .w3k-checkbox-label input{ width:16px; height:16px; flex:0 0 auto; }
 
+  /* 学習する対象の切り替え。同じ仕組みで2つのデータを扱うので、見た目もタブ1組で済ませる。 */
+  .w3k-setswitch{ display:flex; gap:8px; margin-bottom:12px; }
+  .w3k-set-btn{ flex:1; padding:9px 8px; border-radius:10px; border:1.5px solid var(--line);
+    background:rgba(255,255,255,0.5); font-family:"Zen Maru Gothic","Noto Sans JP",sans-serif;
+    font-size:13px; font-weight:700; color:var(--ink-soft); cursor:pointer; }
+  .w3k-set-btn.on{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  body.w3k-testing .w3k-setswitch{ display:none !important; }
+  /* フレーズは例文が複数あるので、1本ずつ区切る */
+  .w3k-ex-one + .w3k-ex-one{ margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); }
+
   /* 4択クイズ。自己採点だと「わかったつもり」で通してしまうので、○×が機械的に決まる形も選べる。 */
   .w3k-choices{ display:grid; gap:8px; margin-top:14px; }
   .w3k-choice{ padding:12px 14px; border:1.5px solid var(--line); border-radius:10px;
@@ -196,12 +206,16 @@
 <body>
 
 <header>
-  <h1>📚 英単語3000</h1>
-  <p class="sub">日常会話の9割をカバーすると言われる頻出語を、使用頻度順に学べます。</p>
+  <h1 id="w3kTitle">📚 英単語3000</h1>
+  <p class="sub" id="w3kSub">日常会話の9割をカバーすると言われる頻出語を、使用頻度順に学べます。</p>
 </header>
 
 <main>
   <div class="w3k-sticky">
+    <div class="w3k-setswitch" id="words3000SetSwitch">
+      <button class="w3k-set-btn on" data-set="words">📚 英単語3000</button>
+      <button class="w3k-set-btn" data-set="phrases">🗣️ フレーズ100</button>
+    </div>
     <div class="field">
       <label>範囲</label>
       <select id="words3000TierSel"></select>
@@ -222,7 +236,7 @@
     <button class="w3k-collapse-toggle" id="words3000CollapseToggle" aria-expanded="true">詳細設定 ▾</button>
     <div id="words3000CollapsibleControls">
       <div class="field">
-        <label>品詞</label>
+        <label id="words3000PosLabel">品詞</label>
         <select id="words3000PosSel"></select>
       </div>
       <div class="field">
@@ -252,6 +266,7 @@
 </main>
 
 <script src="./words3000-data.js"></script>
+<script src="./phrases100-data.js"></script>
 <script>
 // --- localStorageの薄いラッパー。index.html（フレーズ帳本体）と同一オリジン・同一キーを
 // 直接読み書きすることで、Firebase同期を含む状態をこのページ単独でも共有する。 ---
@@ -314,6 +329,47 @@ async function saveSharedSetting(fields){
 }
 async function saveWordsLearned(){ await safeSet('phrasebook-words-learned', JSON.stringify(wordsLearned)); }
 
+// --- 学習する対象（英単語3000 / 日常英会話フレーズ100）---
+// 2つのデータは同じ形（rank/word/pos/kana/ja/ex）にそろえてあるので、
+// このページの仕組み（自動再生・テスト・4択・間隔反復・苦手リスト・継続の記録・同期）は
+// そのまま両方に効く。**直接 activeItems() を見ないこと。**必ず activeItems() を通す。
+const STUDY_SETS = {
+  words: { title:"📚 英単語3000", unit:"語", itemLabel:"単語", filterLabel:"品詞", tierSize:500, data:()=>WORDS3000,
+    sub:"日常会話の9割をカバーすると言われる頻出語を、使用頻度順に学べます。" },
+  phrases: { title:"🗣️ 日常英会話フレーズ100", unit:"フレーズ", itemLabel:"フレーズ", filterLabel:"用途", tierSize:25, data:()=>PHRASES100,
+    sub:"「〜したい」「〜してもらえますか」など、入れ替えて使える型を100。各3つの例文つきです。" },
+};
+let activeSet = "words";
+function currentSet(){ return STUDY_SETS[activeSet] || STUDY_SETS.words; }
+// 対象を切り替える。絞り込みもテストも再生も、対象が変われば全部やり直す必要がある。
+function setStudySet(key){
+  if(!STUDY_SETS[key] || key === activeSet) return;
+  stopWords3000Listening();
+  words3000PausedState = null;          // 前の対象の続きは意味を持たない
+  activeSet = key;
+  applyStudySetHeader();
+  document.getElementById("words3000Search").value = "";
+  populateWords3000TierSelect();
+  populateWords3000PosSelect("");
+  document.getElementById("words3000TierSel").selectedIndex = 0;
+  if(testMode) startTestMode(); else renderWords3000List();
+  saveW3kPrefs();
+}
+function activeItems(){ return currentSet().data(); }
+// 見出し・説明・切り替えボタンの見た目を、いまの対象に合わせる
+function applyStudySetHeader(){
+  const set = currentSet();
+  document.getElementById("w3kTitle").textContent = set.title;
+  document.getElementById("w3kSub").textContent = set.sub;
+  document.title = set.title.replace(/^\S+\s*/, "") + " — ツウジル";
+  document.querySelectorAll(".w3k-set-btn").forEach(b=> b.classList.toggle("on", b.dataset.set === activeSet));
+}
+
+// 例文は英単語3000が1つ、フレーズ100が複数。どちらも受けられるようにしておく。
+// （型は「穴に何を入れるか」が肝なので、フレーズ側は複数ないと型に見えない）
+function allEx(w){ return Array.isArray(w.ex) ? w.ex : (w.ex ? [w.ex] : []); }
+function mainEx(w){ return allEx(w)[0] || { en:"", kana:"", ja:"", gloss:"" }; }
+
 // --- 苦手リストと継続の記録 ---
 // wordsLearnedの値に相乗りさせることはできない。あの値は「truthyなら覚えた」という判定に
 // アプリ全体が依存しているため、間違えただけの未習得語を入れると「覚えた」扱いになってしまう。
@@ -341,7 +397,7 @@ function recordAnswer(word, correct){
 // 苦手＝間違えた回数が正解した回数を上回っている単語。正解を重ねれば自然に外れる。
 function isWeakWord(word){ const s = wordStats[word]; return !!s && s.miss > s.ok; }
 function weakScore(word){ const s = wordStats[word]; return s ? (s.miss - s.ok) : 0; }
-function countWeakWords(){ return WORDS3000.reduce((n,w)=> n + (isWeakWord(w.word) ? 1 : 0), 0); }
+function countWeakWords(){ return activeItems().reduce((n,w)=> n + (isWeakWord(w.word) ? 1 : 0), 0); }
 
 // 連続学習日数。今日まだ何もしていない場合は昨日から数える（朝ひらいた時に
 // 「0日」と出てせっかくの連続が途切れたように見えるのを避けるため）。
@@ -360,7 +416,7 @@ function studyStatusText(){
   const today = todayStudyCount();
   const parts = [];
   if(streak > 0) parts.push(`🔥 ${streak}日連続`);
-  if(today > 0) parts.push(`今日 ${today}語`);
+  if(today > 0) parts.push(`今日 ${today}${currentSet().unit}`);
   return parts.length ? `　・　${parts.join('　・　')}` : "";
 }
 
@@ -404,7 +460,7 @@ function isDueForReview(word){
   return !!e && e.due <= dateKey(new Date());
 }
 function countDueWords(){
-  return WORDS3000.reduce((n,w)=> n + (isDueForReview(w.word) ? 1 : 0), 0);
+  return activeItems().reduce((n,w)=> n + (isDueForReview(w.word) ? 1 : 0), 0);
 }
 // --- クラウドとローカルで「覚えた」状態を突き合わせる ---
 // 単純な和集合（{...cloud, ...local}＝ローカル優先）では駄目だった。同じ単語について、
@@ -528,6 +584,9 @@ async function loadW3kPrefs(){
   readExample = !!saved.readExample;
   controlsCollapsed = !!saved.controlsCollapsed;
   testFormat = saved.testFormat === "choice" ? "choice" : "self";
+  // URLで指定があればそれを優先する（ツールメニューから直接フレーズで開けるように）
+  const urlSet = new URLSearchParams(location.search).get("set");
+  activeSet = STUDY_SETS[urlSet] ? urlSet : (STUDY_SETS[saved.activeSet] ? saved.activeSet : "words");
   readOrder = normalizeReadOrder(saved);
   return saved.posFilter || "";
 }
@@ -547,7 +606,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, testFormat }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, testFormat, activeSet }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -791,14 +850,14 @@ function speakRaw(text, speechLang, btn, onDone, rateOverride){
   }
 }
 
-// --- 範囲（ティア）：WORDS3000の実際の最大rankから動的に500語ずつのティア数を計算するため、
+// --- 範囲（ティア）：対象データの実際の最大rankから動的にティア数を計算するため、
 // バッチを追加していってもUI側の変更は不要。500語区切りに加え、末尾に「全◯語」を通しで
 // 選べる選択肢も足す（区切りが複数ある時だけ＝1ティアしか無いなら同じ内容になるので不要）。
 // 選択肢のvalueは"from-to"形式の文字列にして、全語オプションのような+499で機械的に
 // 求まらない範囲も表現できるようにしている。
 function words3000TierRanges(){
-  const maxRank = WORDS3000.reduce((m,w)=>Math.max(m,w.rank), 0);
-  const tierSize = 500;
+  const maxRank = activeItems().reduce((m,w)=>Math.max(m,w.rank), 0);
+  const tierSize = currentSet().tierSize;
   const tierCount = Math.max(1, Math.ceil(maxRank / tierSize));
   const ranges = Array.from({length:tierCount}, (_,i)=>({from:i*tierSize+1, to:Math.min((i+1)*tierSize, maxRank)}));
   if(tierCount > 1){
@@ -813,7 +872,8 @@ function populateWords3000TierSelect(){
   // 既存の絞り込み（words3000FilteredList）に乗せるだけで、一覧・自動再生・テストモードの
   // すべてが復習対象だけを扱うようになる。
   sel.innerHTML = words3000TierRanges().map(r=>{
-    const label = r.all ? `全${r.to}語（1〜${r.to}語）` : `${r.from}〜${r.to}語`;
+    const unit = currentSet().unit;
+    const label = r.all ? `全${r.to}${unit}（1〜${r.to}${unit}）` : `${r.from}〜${r.to}${unit}`;
     return `<option value="${r.from}-${r.to}">${label}</option>`;
   }).join('')
     + `<option value="review">🔁 今日の復習（${countDueWords()}語）</option>`
@@ -831,14 +891,14 @@ function isWeakTier(){
 function refreshReviewOptionLabel(){
   const due = countDueWords();
   const opt = document.querySelector('#words3000TierSel option[value="review"]');
-  if(opt) opt.textContent = `🔁 今日の復習（${due}語）`;
+  if(opt) opt.textContent = `🔁 今日の復習（${due}${currentSet().unit}）`;
   const weakOpt = document.querySelector('#words3000TierSel option[value="weak"]');
-  if(weakOpt) weakOpt.textContent = `⚠️ 苦手な単語（${countWeakWords()}語）`;
+  if(weakOpt) weakOpt.textContent = `⚠️ 苦手な${currentSet().itemLabel}（${countWeakWords()}${currentSet().unit}）`;
   const prompt = document.getElementById("words3000ReviewPrompt");
   if(prompt){
     const show = due > 0 && !isReviewTier();
     prompt.hidden = !show;
-    if(show) prompt.textContent = `🔁 今日の復習が${due}語あります → まとめて復習する`;
+    if(show) prompt.textContent = `🔁 今日の復習が${due}${currentSet().unit}あります → まとめて復習する`;
   }
 }
 
@@ -847,10 +907,13 @@ function refreshReviewOptionLabel(){
 const POS_ORDER = ["名詞","動詞","形容詞","副詞","代名詞","前置詞","接続詞","数詞","助動詞","疑問詞","冠詞"];
 function populateWords3000PosSelect(initialValue){
   const sel = document.getElementById("words3000PosSel");
-  const present = new Set(WORDS3000.map(w=>w.pos).filter(Boolean));
+  const present = new Set(activeItems().map(w=>w.pos).filter(Boolean));
   const ordered = POS_ORDER.filter(p=>present.has(p));
   present.forEach(p=>{ if(!ordered.includes(p)) ordered.push(p); });
-  sel.innerHTML = '<option value="">すべての品詞</option>' + ordered.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  const fl = currentSet().filterLabel;
+  const labelEl = document.getElementById("words3000PosLabel");
+  if(labelEl) labelEl.textContent = fl;
+  sel.innerHTML = `<option value="">すべての${fl}</option>` + ordered.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
   if(initialValue && ordered.includes(initialValue)) sel.value = initialValue;
 }
 
@@ -862,16 +925,16 @@ function words3000FilteredList(){
   const pos = document.getElementById("words3000PosSel").value;
   let items;
   if(tierValue === "review"){
-    items = WORDS3000.filter(w=>isDueForReview(w.word));
+    items = activeItems().filter(w=>isDueForReview(w.word));
   } else if(tierValue === "weak"){
     // 苦手な順（間違い超過が大きい順）に並べる。頻度順のままだと、いちばん苦戦している
     // 単語が後ろに埋もれてしまい、絞り込んだ意味が薄れるため。
-    items = WORDS3000.filter(w=>isWeakWord(w.word)).sort((a,b)=> weakScore(b.word) - weakScore(a.word));
+    items = activeItems().filter(w=>isWeakWord(w.word)).sort((a,b)=> weakScore(b.word) - weakScore(a.word));
   } else {
     const [tierFromStr, tierToStr] = tierValue.split('-');
     const tierFrom = parseInt(tierFromStr, 10) || 1;
     const tierTo = parseInt(tierToStr, 10) || (tierFrom + 499);
-    items = WORDS3000.filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
+    items = activeItems().filter(w=>w.rank>=tierFrom && w.rank<=tierTo);
   }
   if(pos) items = items.filter(w=>w.pos===pos);
   if(q) items = items.filter(w=> w.word.toLowerCase().includes(q) || w.ja.includes(q));
@@ -893,8 +956,9 @@ function renderWords3000List(){
   const items = words3000FilteredList();
   refreshReviewOptionLabel();
   const doneCount = items.filter(w=>wordsLearned[w.word]).length;
-  const head = isReviewTier() ? `今日の復習 ${items.length}語`
-    : isWeakTier() ? `苦手な単語 ${items.length}語`
+  const unit = currentSet().unit;
+  const head = isReviewTier() ? `今日の復習 ${items.length}${unit}`
+    : isWeakTier() ? `苦手な${currentSet().itemLabel} ${items.length}${unit}`
     : `覚えた ${doneCount} / ${items.length}`;
   document.getElementById("words3000Progress").textContent = head + studyStatusText();
   if(items.length === 0){
@@ -918,8 +982,8 @@ function renderWords3000List(){
           </span>
           <span class="w3k-meaning-col">
             <div class="w3k-ja-front">${esc(w.ja)}</div>
-            <div class="w3k-ex-front">${esc(w.ex.en)}</div>
-            <div class="w3k-ex-ja-front">${esc(w.ex.ja)}</div>
+            <div class="w3k-ex-front">${esc(mainEx(w).en)}</div>
+            <div class="w3k-ex-ja-front">${esc(mainEx(w).ja)}</div>
           </span>
         </span>
         <span class="w3k-btns">
@@ -934,10 +998,13 @@ function renderWords3000List(){
         <div class="w3k-ja">${esc(w.ja)}</div>
         <div class="w3k-ex">
           <div class="w3k-ex-text">
-            <div class="w3k-ex-en">${esc(w.ex.en)}</div>
-            <div class="w3k-ex-kana">${esc(w.ex.kana)}</div>
-            <div class="w3k-ex-ja">${esc(w.ex.ja)}</div>
-            ${w.ex.gloss ? `<div class="w3k-ex-gloss"><span class="gloss-line">🔤 ${esc(w.ex.gloss)}</span></div>` : ''}
+            ${allEx(w).map(e=>`
+            <div class="w3k-ex-one">
+              <div class="w3k-ex-en">${esc(e.en)}</div>
+              <div class="w3k-ex-kana">${esc(e.kana)}</div>
+              <div class="w3k-ex-ja">${esc(e.ja)}</div>
+              ${e.gloss ? `<div class="w3k-ex-gloss"><span class="gloss-line">🔤 ${esc(e.gloss)}</span></div>` : ''}
+            </div>`).join('')}
           </div>
           <button class="mini-btn" aria-label="例文の発音を聞く" data-role="speak-ex">🔊</button>
         </div>
@@ -945,7 +1012,7 @@ function renderWords3000List(){
     </div>`;
   }).join('');
   wrap.querySelectorAll('.w3k-card').forEach(card=>{
-    const w = WORDS3000.find(x=>x.word===card.dataset.word);
+    const w = activeItems().find(x=>x.word===card.dataset.word);
     card.querySelector('.w3k-front').addEventListener('click', (e)=>{
       if(e.target.closest('[data-role]')) return;
       card.classList.toggle('revealed');
@@ -957,7 +1024,7 @@ function renderWords3000List(){
     });
     card.querySelector('[data-role="speak-ex"]').addEventListener('click', (e)=>{
       e.stopPropagation();
-      speakRaw(w.ex.en, "en-US", e.currentTarget, null);
+      speakRaw(mainEx(w).en, "en-US", e.currentTarget, null);
     });
     card.querySelector('[data-role="learn"]').addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -1016,7 +1083,7 @@ function highlightWords3000Playing(word){
   scrollBelowSticky(el);
 }
 // queueの各要素は "en"(単語の発音)・"ja"(単語の意味)・"ex-en"(例文の英文)・"ex-ja"(例文の和訳)。
-const W3K_QUEUE_TEXT = { en: w=>w.word, ja: w=>w.ja, "ex-en": w=>w.ex.en, "ex-ja": w=>w.ex.ja };
+const W3K_QUEUE_TEXT = { en: w=>w.word, ja: w=>w.ja, "ex-en": w=>mainEx(w).en, "ex-ja": w=>mainEx(w).ja };
 const W3K_QUEUE_LANG = { en: "en-US", ja: "ja-JP", "ex-en": "en-US", "ex-ja": "ja-JP" };
 // --- バックグラウンド再生（画面ロック中・他アプリ使用中でも読み上げを続ける） ---
 //
@@ -1172,8 +1239,8 @@ let testState = { list:[], index:0, revealed:false, choices:null, picked:null };
 // 4択の選択肢。誤答は同じ品詞から選ぶ（品詞が違うと意味を読まなくても消去法で当たるため）。
 // 同じ意味の文字列は除く（正解と見分けがつかない選択肢ができてしまう）。
 function buildTestChoices(w){
-  const samePos = WORDS3000.filter(x => x.pos === w.pos && x.ja !== w.ja);
-  const pool = samePos.length >= 3 ? samePos : WORDS3000.filter(x => x.ja !== w.ja);
+  const samePos = activeItems().filter(x => x.pos === w.pos && x.ja !== w.ja);
+  const pool = samePos.length >= 3 ? samePos : activeItems().filter(x => x.ja !== w.ja);
   const used = new Set([w.ja]);
   const picked = [];
   for(let guard = 0; guard < 300 && picked.length < 3; guard++){
@@ -1252,10 +1319,13 @@ function renderTestCard(autoSpeak){
         <div class="w3k-ja">${esc(w.ja)}</div>
         <div class="w3k-ex">
           <div class="w3k-ex-text">
-            <div class="w3k-ex-en">${esc(w.ex.en)}</div>
-            <div class="w3k-ex-kana">${esc(w.ex.kana)}</div>
-            <div class="w3k-ex-ja">${esc(w.ex.ja)}</div>
-            ${w.ex.gloss ? `<div class="w3k-ex-gloss"><span class="gloss-line">🔤 ${esc(w.ex.gloss)}</span></div>` : ''}
+            ${allEx(w).map(e=>`
+            <div class="w3k-ex-one">
+              <div class="w3k-ex-en">${esc(e.en)}</div>
+              <div class="w3k-ex-kana">${esc(e.kana)}</div>
+              <div class="w3k-ex-ja">${esc(e.ja)}</div>
+              ${e.gloss ? `<div class="w3k-ex-gloss"><span class="gloss-line">🔤 ${esc(e.gloss)}</span></div>` : ''}
+            </div>`).join('')}
           </div>
         </div>
       </div>`;
@@ -1370,6 +1440,9 @@ document.getElementById("words3000TestModeBtn").addEventListener("click", ()=>{
 });
 // テスト中はパネルを畳んでいて「📝テストモード」ボタン自体が見えないので、専用の出口を置く
 document.getElementById("words3000TestExitBtn").addEventListener("click", ()=> setWords3000Mode('list'));
+document.querySelectorAll(".w3k-set-btn").forEach(btn=>{
+  btn.addEventListener("click", ()=> setStudySet(btn.dataset.set));
+});
 document.getElementById("words3000ListenBtn").addEventListener("click", ()=>{ if(words3000ListenState.active) stopWords3000Listening(); else startWords3000Listening(); });
 document.getElementById("words3000RateBtn").addEventListener("click", ()=>{
   const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
@@ -1405,6 +1478,7 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
+  applyStudySetHeader();
   const testFormatSel = document.getElementById("words3000TestFormatSel");
   testFormatSel.value = testFormat;
   testFormatSel.addEventListener("change", (e)=>{
