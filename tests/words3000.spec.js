@@ -455,6 +455,59 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await expect(page.locator('.w3k-card.revealed .w3k-ex-gloss')).toHaveCount(3);
     });
 
+    test('how many examples to show is a setting, and the opened card obeys it', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 0.15 });
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+
+      await page.selectOption('#words3000ExampleCountSel', '3');
+      await page.locator('.w3k-card .w3k-front').first().click();
+      await expect(page.locator('.w3k-card.revealed .w3k-ex-one')).toHaveCount(3);
+      await page.locator('.w3k-card .w3k-front').first().click();
+
+      await page.selectOption('#words3000ExampleCountSel', '1');
+      await page.locator('.w3k-card .w3k-front').first().click();
+      await expect(page.locator('.w3k-card.revealed .w3k-ex-one')).toHaveCount(1);
+
+      // and the choice is remembered
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleCountSel')).toHaveValue('1');
+    });
+
+    test('playback reads as many examples as the setting says', async ({ page }) => {
+      // Kept apart from the display test on purpose: tapping a card speaks the word, so doing
+      // both in one test let a stray utterance land in the middle of the recorded sequence.
+      await mockGoogleTTS(page, { seconds: 0.15 });
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words3000-prefs', JSON.stringify({
+          activeSet: 'phrases', exampleCount: 2, readExample: true, readOrder: 'en',
+        }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+
+      // Record what the app decides to speak, not the network requests: WebKit fetches the
+      // same audio twice for one utterance, so counting requests overcounts on that engine.
+      await page.evaluate(() => {
+        window.__spoken = [];
+        const original = speakRaw;
+        speakRaw = function (text, ...rest) { window.__spoken.push(text); return original(text, ...rest); };
+        listenGap = 30;
+      });
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => window.__spoken.length), { timeout: 15000 })
+        .toBeGreaterThanOrEqual(5);
+      await page.click('#words3000ListenBtn');
+
+      const spoken = await page.evaluate(() => window.__spoken);
+      expect(spoken.slice(0, 5)).toEqual([
+        'I want to ~',                    // the pattern itself; "~" is dropped at speak time
+        'I want to go there.', 'そこに行きたいです。',
+        'I want to change my seat.', '席を替えたいです。',
+      ]);
+    });
+
     test('the tools menu opens straight into the phrase set', async ({ page }) => {
       await page.goto('/index.html');
       await page.waitForSelector('#deck .ticket');

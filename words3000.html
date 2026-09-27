@@ -243,6 +243,15 @@
         <label>自動再生の読み上げ順</label>
         <select id="words3000ReadOrderSel"></select>
         <label class="w3k-checkbox-label"><input type="checkbox" id="words3000ExampleToggle"> 最後に例文も読む（英文 → 和訳）</label>
+        <div class="w3k-range-row" style="margin-top:10px;">
+          <label for="words3000ExampleCountSel">例文の数</label>
+          <select id="words3000ExampleCountSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);">
+            <option value="1">1つだけ</option>
+            <option value="2">2つ</option>
+            <option value="3">3つ（すべて）</option>
+          </select>
+        </div>
+        <p class="hint" style="margin-top:6px;">カードを開いたとき・テストの答え・読み上げで使う数です（フレーズは例文が3つ、英単語は1つ）。</p>
       </div>
       <div class="field">
         <label>テストの出題形式</label>
@@ -369,6 +378,8 @@ function applyStudySetHeader(){
 // （型は「穴に何を入れるか」が肝なので、フレーズ側は複数ないと型に見えない）
 function allEx(w){ return Array.isArray(w.ex) ? w.ex : (w.ex ? [w.ex] : []); }
 function mainEx(w){ return allEx(w)[0] || { en:"", kana:"", ja:"", gloss:"" }; }
+// 設定で選んだ数だけ使う。英単語3000は例文が1つしか無いので、この設定は実質フレーズ用。
+function usedEx(w){ return allEx(w).slice(0, exampleCount); }
 
 // --- 苦手リストと継続の記録 ---
 // wordsLearnedの値に相乗りさせることはできない。あの値は「truthyなら覚えた」という判定に
@@ -533,6 +544,7 @@ let testFormat = "self";   // "self"（自己採点）か "choice"（4択）
 let shuffleListen = false;
 let testMode = false;
 let readExample = false;
+let exampleCount = 3;   // カードを開いたとき・テストの答え・読み上げで使う例文の数
 // 詳細設定パネルの開閉。スマホだと開いたままでは画面の6割近くを占めて単語が2枚半しか
 // 見えないため、閉じた状態も記憶して次に開いた時もそのままにする。
 let controlsCollapsed = false;
@@ -582,6 +594,7 @@ async function loadW3kPrefs(){
   unlearnedOnly = !!saved.unlearnedOnly;
   shuffleListen = !!saved.shuffleListen;
   readExample = !!saved.readExample;
+  exampleCount = [1,2,3].includes(saved.exampleCount) ? saved.exampleCount : 3;
   controlsCollapsed = !!saved.controlsCollapsed;
   testFormat = saved.testFormat === "choice" ? "choice" : "self";
   // URLで指定があればそれを優先する（ツールメニューから直接フレーズで開けるように）
@@ -606,7 +619,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, controlsCollapsed, testFormat, activeSet }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, controlsCollapsed, testFormat, activeSet }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -1017,7 +1030,7 @@ function renderWords3000List(){
         <div class="w3k-ja">${esc(w.ja)}</div>
         <div class="w3k-ex">
           <div class="w3k-ex-text">
-            ${allEx(w).map(e=>`
+            ${usedEx(w).map(e=>`
             <div class="w3k-ex-one">
               <div class="w3k-ex-en">${esc(e.en)}</div>
               <div class="w3k-ex-kana">${esc(e.kana)}</div>
@@ -1102,8 +1115,20 @@ function highlightWords3000Playing(word){
   scrollBelowSticky(el);
 }
 // queueの各要素は "en"(単語の発音)・"ja"(単語の意味)・"ex-en"(例文の英文)・"ex-ja"(例文の和訳)。
-const W3K_QUEUE_TEXT = { en: w=>w.word, ja: w=>w.ja, "ex-en": w=>mainEx(w).en, "ex-ja": w=>mainEx(w).ja };
-const W3K_QUEUE_LANG = { en: "en-US", ja: "ja-JP", "ex-en": "en-US", "ex-ja": "ja-JP" };
+// キューの要素は "en"(単語)・"ja"(意味)・"ex-en#0"(1つ目の例文の英文)・"ex-ja#0"(その和訳)。
+// フレーズは例文が複数あるので、何番目かを番号で持たせる。
+function queuePart(kind){ const [base, i] = String(kind).split("#"); return { base, i: Number(i) || 0 }; }
+function queueText(w, kind){
+  const { base, i } = queuePart(kind);
+  if(base === "en") return w.word;
+  if(base === "ja") return w.ja;
+  const ex = usedEx(w)[i] || mainEx(w);
+  return base === "ex-en" ? ex.en : ex.ja;
+}
+function queueLang(kind){
+  const { base } = queuePart(kind);
+  return (base === "ja" || base === "ex-ja") ? "ja-JP" : "en-US";
+}
 // --- バックグラウンド再生（画面ロック中・他アプリ使用中でも読み上げを続ける） ---
 //
 // 【前提】ブラウザを完全に閉じたあとに音を出すことはWebでは不可能。ページのプロセスが
@@ -1194,7 +1219,7 @@ function playWords3000Queue(w, queue, i){
   }
   const kind = queue[i];
   const isLastInWord = i === queue.length - 1;
-  speakRaw(W3K_QUEUE_TEXT[kind](w), W3K_QUEUE_LANG[kind], null, ()=>{
+  speakRaw(queueText(w, kind), queueLang(kind), null, ()=>{
     if(!words3000ListenState.active) return;
     if(isLastInWord || document.hidden){ playWords3000Queue(w, queue, i+1); }
     else { setTimeout(()=> playWords3000Queue(w, queue, i+1), Math.min(listenGap, 350)); }
@@ -1210,7 +1235,10 @@ function playWords3000Step(){
   updateWords3000ListenButton();
   updateMediaSession(w);
   const queue = readOrder.split(',').filter(Boolean);
-  if(readExample){ queue.push("ex-en"); queue.push("ex-ja"); }
+  if(readExample){
+    // 使う例文の数だけ、英文→和訳 を繰り返す
+    usedEx(w).forEach((_, i)=>{ queue.push(`ex-en#${i}`); queue.push(`ex-ja#${i}`); });
+  }
   if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回・例文もOFFは想定しないが、無音で止まらないための保険
   playWords3000Queue(w, queue, 0);
 }
@@ -1339,7 +1367,7 @@ function renderTestCard(autoSpeak){
         <div class="w3k-ja">${esc(w.ja)}</div>
         <div class="w3k-ex">
           <div class="w3k-ex-text">
-            ${allEx(w).map(e=>`
+            ${usedEx(w).map(e=>`
             <div class="w3k-ex-one">
               <div class="w3k-ex-en">${esc(e.en)}</div>
               <div class="w3k-ex-kana">${esc(e.kana)}</div>
@@ -1511,6 +1539,13 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   readOrderSel.innerHTML = READ_ORDER_PRESETS.map(p=>`<option value="${p.value}">${p.label}</option>`).join('');
   readOrderSel.value = readOrder;
   document.getElementById("words3000ExampleToggle").checked = readExample;
+  const exCountSel = document.getElementById("words3000ExampleCountSel");
+  exCountSel.value = String(exampleCount);
+  exCountSel.addEventListener("change", (e)=>{
+    exampleCount = Number(e.currentTarget.value) || 3;
+    saveW3kPrefs();
+    if(testMode) renderTestCard(false); else renderWords3000List();
+  });
   applyControlsCollapsed();
   populateWords3000TierSelect();
   populateWords3000PosSelect(savedPos);
