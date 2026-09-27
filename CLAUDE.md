@@ -94,6 +94,10 @@
     - **`setTimeout`だけに頼らないこと**。画面を消すとタイマーは絞られるので、本命は**期限の時刻（`sleepDeadline`）を語を進めるたびに見る**（`playWords3000Step()`の先頭）。音声の終了イベントは背面でも走るのでこれで止まる。`setTimeout`は前面にいる時に語の途中でも止めるための補助。
     - 止まった位置は`stopWords3000Listening()`が`words3000PausedState`に残すので、**寝落ちても翻日続きから聞ける**。
     - 残り時間の表示は、一覧を丸ごと再描画せず`refreshProgressLine()`で**その行だけ**書き換える（500件の再生成を避ける）。
+  - **例文だけ別の速さで読む設定（2026-09-28）**: 「どちらの例文もスピード調整できるように」という要望。`exampleRate`（0＝単語と同じ／0.6〜2.0、既定0）。単語は速く回して長い例文はゆっくり、という使い方。
+    - **`rate`（共有設定）は触らない**。`speakRaw`の第5引数`rateOverride`に渡す形にして、例文のときだけ上書きする（`rateForKind(kind)`が`ex-en`/`ex-ja`にだけ値を返す）。`rate`を書き換える実装にすると`phrasebook-settings`経由でフレーズ帳本体の速さまで変わってしまう。
+    - `rateOverride`に0を渡すと`rateVal = rateOverride || rate`で`rate`に落ちる。**「単語と同じ」を0で表しているのはこのため**（`undefined`と0のどちらでも同じ挙動になるので、選択値をそのまま渡せる）。
+    - 再生中に速さを変えたときにどちらを当てるかは`currentSpeakIsExample`（`speakRaw`が`!!rateOverride`で毎回更新）で決める。
   - **例文をいくつ使うかの設定（2026-09-27）**: `exampleCount`（1/2/3、既定3）。`usedEx(w)`を通して、カードの裏・テストの答え・読み上げの3つに同じく効かせる。読み上げのキューは`"ex-en#0"`のように**何番目の例文かを番号で持たせる**（以前は`"ex-en"`固定で1つ目しか読まなかった）。
     - **テストで発話を数えるときは、TTSのリクエスト数を代用しないこと**。**WebKitは1つの発話に対して同じ音声を2回取りに行く**ので、数が合わない（実際にmobileだけ落ちた）。`speakRaw`を包んで**アプリが何を読もうとしたか**を記録する。
     - **カードをタップすると発音が鳴る**ので、表示の確認と読み上げの確認を**同じテストに入れない**。先のタップの発話が遅れて混ざる。
@@ -170,7 +174,7 @@ manifest.json          PWAマニフェスト
 sw.js                   Service Worker（オフラインシェルキャッシュのみ、v3）
 firestore.rules         Firestoreセキュリティルール
 tests/                  Playwright仕様16本 + data-integrity.test.js + helpers.js（外部APIのモック）+ fixtures/（既定storageState）
-playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計378テスト
+playwright.config.js    chromium・iPhone13(webkit)の2プロジェクト、計406テスト（うち33はskip）
 .github/workflows/test.yml  push/PRごとの自動テストCI
 ```
 

@@ -252,6 +252,10 @@
           </select>
         </div>
         <div class="w3k-range-row" style="margin-top:10px;">
+          <label for="words3000ExampleRateSel">例文の速さ</label>
+          <select id="words3000ExampleRateSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);"></select>
+        </div>
+        <div class="w3k-range-row" style="margin-top:10px;">
           <label for="words3000SleepSel">自動停止</label>
           <select id="words3000SleepSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);">
             <option value="0">しない</option>
@@ -262,7 +266,7 @@
           </select>
         </div>
         <p class="hint" style="margin-top:6px;">寝る前の聞き流し用。止まった位置は覚えているので、次の▶で続きから聞けます。</p>
-        <p class="hint" style="margin-top:6px;">カードを開いたとき・テストの答え・読み上げで使う数です（フレーズは例文が3つ、英単語は1つ）。</p>
+        <p class="hint" style="margin-top:6px;">例文の数は、カードを開いたとき・テストの答え・読み上げで使う数です（フレーズは例文が3つ、英単語は1つ）。例文の速さは、単語だけ速く回して長い例文はゆっくり聞きたいときに変えてください。単語・意味の速さは ▶ の横の速さボタンのままです。</p>
       </div>
       <div class="field">
         <label>テストの出題形式</label>
@@ -314,6 +318,7 @@ let listenGap = 450;
 let geminiApiKey = "";
 let wordsLearned = {};
 const RATE_QUICK_PRESETS = [0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+function rateLabel(r){ return r.toFixed(2).replace(/0$/,'') + "x"; }
 
 async function loadState(){
   try{
@@ -391,6 +396,14 @@ function allEx(w){ return Array.isArray(w.ex) ? w.ex : (w.ex ? [w.ex] : []); }
 function mainEx(w){ return allEx(w)[0] || { en:"", kana:"", ja:"", gloss:"" }; }
 // 設定で選んだ数だけ使う。英単語3000は例文が1つしか無いので、この設定は実質フレーズ用。
 function usedEx(w){ return allEx(w).slice(0, exampleCount); }
+// 例文を読むときの速さ。未設定（0）なら単語と同じ速さ。
+function exampleRateVal(){ return exampleRate || rate; }
+// 読み上げキューの種類から、speakRawに渡す速さの上書き値を決める。
+// 単語・意味はundefinedを返してrateをそのまま使わせる。
+function rateForKind(kind){
+  const base = queuePart(kind).base;
+  return (base === "ex-en" || base === "ex-ja") ? exampleRate : undefined;
+}
 
 // --- 苦手リストと継続の記録 ---
 // wordsLearnedの値に相乗りさせることはできない。あの値は「truthyなら覚えた」という判定に
@@ -559,6 +572,13 @@ let testMode = false;
 let readExample = false;
 let exampleCount = 3;   // カードを開いたとき・テストの答え・読み上げで使う例文の数
 let sleepMinutes = 0;   // 0なら自動停止なし
+// 例文だけ別の速さで読む。0なら単語と同じ速さ（＝rate）を使う。
+// 単語は速く回して、長い例文はゆっくり聞きたい、という使い方のため。
+let exampleRate = 0;
+const EXAMPLE_RATE_CHOICES = [0.6, 0.75, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0];
+// いま鳴っている音声が例文かどうか。再生中に速さを変えたとき、単語の速さと
+// 例文の速さのどちらを当てるかを決めるために使う。
+let currentSpeakIsExample = false;
 // 詳細設定パネルの開閉。スマホだと開いたままでは画面の6割近くを占めて単語が2枚半しか
 // 見えないため、閉じた状態も記憶して次に開いた時もそのままにする。
 let controlsCollapsed = false;
@@ -610,6 +630,7 @@ async function loadW3kPrefs(){
   readExample = !!saved.readExample;
   exampleCount = [1,2,3].includes(saved.exampleCount) ? saved.exampleCount : 3;
   sleepMinutes = [0,15,30,45,60].includes(saved.sleepMinutes) ? saved.sleepMinutes : 0;
+  exampleRate = EXAMPLE_RATE_CHOICES.includes(saved.exampleRate) ? saved.exampleRate : 0;
   controlsCollapsed = !!saved.controlsCollapsed;
   testFormat = saved.testFormat === "choice" ? "choice" : "self";
   // URLで指定があればそれを優先する（ツールメニューから直接フレーズで開けるように）
@@ -634,7 +655,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, sleepMinutes, controlsCollapsed, testFormat, activeSet }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, exampleRate, sleepMinutes, controlsCollapsed, testFormat, activeSet }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -874,6 +895,7 @@ function speakRaw(text, speechLang, btn, onDone, rateOverride){
   text = text.replace(/~/g, " ").replace(/\s+/g, " ").trim();
   const isJapanese = speechLang.toLowerCase().startsWith("ja");
   const rateVal = rateOverride || rate;
+  currentSpeakIsExample = !!rateOverride;
   if(btn){ btn.classList.add("playing"); currentPlayingBtn = btn; }
   const finish = ()=>{
     if(btn) btn.classList.remove("playing");
@@ -1071,7 +1093,7 @@ function renderWords3000List(){
     });
     card.querySelector('[data-role="speak-ex"]').addEventListener('click', (e)=>{
       e.stopPropagation();
-      speakRaw(mainEx(w).en, "en-US", e.currentTarget, null);
+      speakRaw(mainEx(w).en, "en-US", e.currentTarget, null, exampleRate);
     });
     card.querySelector('[data-role="learn"]').addEventListener('click', (e)=>{
       e.stopPropagation();
@@ -1238,7 +1260,7 @@ function playWords3000Queue(w, queue, i){
     if(!words3000ListenState.active) return;
     if(isLastInWord || document.hidden){ playWords3000Queue(w, queue, i+1); }
     else { setTimeout(()=> playWords3000Queue(w, queue, i+1), Math.min(listenGap, 350)); }
-  });
+  }, rateForKind(kind));
 }
 // --- スリープタイマー ---
 // 寝る前に聞きながら寝落ちても、一定時間で止まるようにする。
@@ -1561,9 +1583,8 @@ document.getElementById("words3000ListenBtn").addEventListener("click", ()=>{ if
 document.getElementById("words3000RateBtn").addEventListener("click", ()=>{
   const next = RATE_QUICK_PRESETS.find(r => r > rate + 0.001) || RATE_QUICK_PRESETS[0];
   rate = next;
-  const label = rate.toFixed(2).replace(/0$/,'') + "x";
-  document.getElementById("words3000RateBtn").textContent = label;
-  if(currentTTSAudio) currentTTSAudio.playbackRate = rate;
+  document.getElementById("words3000RateBtn").textContent = rateLabel(rate);
+  if(currentTTSAudio) currentTTSAudio.playbackRate = currentSpeakIsExample ? exampleRateVal() : rate;
   saveSharedSetting({ rate });
 });
 document.getElementById("words3000LoopBtn").addEventListener("click", (e)=>{
@@ -1588,7 +1609,7 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
 (async function init(){
   await loadState();
   const savedPos = await loadW3kPrefs();
-  document.getElementById("words3000RateBtn").textContent = rate.toFixed(2).replace(/0$/,'') + "x";
+  document.getElementById("words3000RateBtn").textContent = rateLabel(rate);
   document.getElementById("words3000LoopBtn").classList.toggle("on", listenLoop);
   document.getElementById("words3000ShuffleBtn").classList.toggle("on", shuffleListen);
   document.getElementById("words3000UnlearnedBtn").classList.toggle("on", unlearnedOnly);
@@ -1620,6 +1641,16 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
     exampleCount = Number(e.currentTarget.value) || 3;
     saveW3kPrefs();
     if(testMode) renderTestCard(false); else renderWords3000List();
+  });
+  const exRateSel = document.getElementById("words3000ExampleRateSel");
+  exRateSel.innerHTML = ['<option value="0">単語と同じ</option>']
+    .concat(EXAMPLE_RATE_CHOICES.map(r=>`<option value="${r}">${rateLabel(r)}</option>`)).join('');
+  exRateSel.value = String(exampleRate);
+  exRateSel.addEventListener("change", (e)=>{
+    exampleRate = Number(e.currentTarget.value) || 0;
+    saveW3kPrefs();
+    // 例文を鳴らしている最中に変えたら、その場で反映する
+    if(currentTTSAudio && currentSpeakIsExample) currentTTSAudio.playbackRate = exampleRateVal();
   });
   applyControlsCollapsed();
   populateWords3000TierSelect();

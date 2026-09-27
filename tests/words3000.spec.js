@@ -508,6 +508,64 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       ]);
     });
 
+    test('examples can be read at their own speed, separately from the word', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 0.15 });
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words3000-prefs', JSON.stringify({
+          activeSet: 'phrases', exampleCount: 1, readExample: true, readOrder: 'en', exampleRate: 0.6,
+        }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleRateSel')).toHaveValue('0.6');
+
+      await page.evaluate(() => {
+        window.__spoken = [];
+        rate = 1.5; // the word speed, set apart from the example speed on purpose
+        const original = speakRaw;
+        speakRaw = function (text, speechLang, btn, onDone, rateOverride) {
+          window.__spoken.push([text, rateOverride || rate]);
+          return original(text, speechLang, btn, onDone, rateOverride);
+        };
+        listenGap = 30;
+      });
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => window.__spoken.length), { timeout: 15000 })
+        .toBeGreaterThanOrEqual(3);
+      await page.click('#words3000ListenBtn');
+
+      const spoken = await page.evaluate(() => window.__spoken);
+      expect(spoken.slice(0, 3)).toEqual([
+        ['I want to ~', 1.5],                       // the pattern keeps the word speed
+        ['I want to go there.', 0.6], ['そこに行きたいです。', 0.6], // both example lines slow down
+      ]);
+    });
+
+    test('the example speed reaches the audio element, and "単語と同じ" means no override', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 2 });
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+      await page.evaluate(() => { rate = 1.5; });
+
+      await page.selectOption('#words3000ExampleRateSel', '0.6');
+      await page.locator('.w3k-card .w3k-front').first().click(); // opens the card, speaks the word
+      await expect.poll(() => page.evaluate(() => currentTTSAudio && currentTTSAudio.playbackRate))
+        .toBe(1.5);
+      await page.locator('.w3k-card.revealed [data-role="speak-ex"]').first().click();
+      await expect.poll(() => page.evaluate(() => currentTTSAudio && currentTTSAudio.playbackRate))
+        .toBe(0.6);
+
+      // back to the default: the example follows the word speed again
+      await page.selectOption('#words3000ExampleRateSel', '0');
+      await page.locator('.w3k-card.revealed [data-role="speak-ex"]').first().click();
+      await expect.poll(() => page.evaluate(() => currentTTSAudio && currentTTSAudio.playbackRate))
+        .toBe(1.5);
+
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleRateSel')).toHaveValue('0');
+    });
+
     test('the tools menu opens straight into the phrase set', async ({ page }) => {
       await page.goto('/index.html');
       await page.waitForSelector('#deck .ticket');
