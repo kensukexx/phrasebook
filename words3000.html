@@ -251,6 +251,17 @@
             <option value="3">3つ（すべて）</option>
           </select>
         </div>
+        <div class="w3k-range-row" style="margin-top:10px;">
+          <label for="words3000SleepSel">自動停止</label>
+          <select id="words3000SleepSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);">
+            <option value="0">しない</option>
+            <option value="15">15分で止める</option>
+            <option value="30">30分で止める</option>
+            <option value="45">45分で止める</option>
+            <option value="60">60分で止める</option>
+          </select>
+        </div>
+        <p class="hint" style="margin-top:6px;">寝る前の聞き流し用。止まった位置は覚えているので、次の▶で続きから聞けます。</p>
         <p class="hint" style="margin-top:6px;">カードを開いたとき・テストの答え・読み上げで使う数です（フレーズは例文が3つ、英単語は1つ）。</p>
       </div>
       <div class="field">
@@ -428,6 +439,8 @@ function studyStatusText(){
   const parts = [];
   if(streak > 0) parts.push(`🔥 ${streak}日連続`);
   if(today > 0) parts.push(`今日 ${today}${currentSet().unit}`);
+  const remain = sleepRemainingText();
+  if(remain) parts.push(remain);
   return parts.length ? `　・　${parts.join('　・　')}` : "";
 }
 
@@ -545,6 +558,7 @@ let shuffleListen = false;
 let testMode = false;
 let readExample = false;
 let exampleCount = 3;   // カードを開いたとき・テストの答え・読み上げで使う例文の数
+let sleepMinutes = 0;   // 0なら自動停止なし
 // 詳細設定パネルの開閉。スマホだと開いたままでは画面の6割近くを占めて単語が2枚半しか
 // 見えないため、閉じた状態も記憶して次に開いた時もそのままにする。
 let controlsCollapsed = false;
@@ -595,6 +609,7 @@ async function loadW3kPrefs(){
   shuffleListen = !!saved.shuffleListen;
   readExample = !!saved.readExample;
   exampleCount = [1,2,3].includes(saved.exampleCount) ? saved.exampleCount : 3;
+  sleepMinutes = [0,15,30,45,60].includes(saved.sleepMinutes) ? saved.sleepMinutes : 0;
   controlsCollapsed = !!saved.controlsCollapsed;
   testFormat = saved.testFormat === "choice" ? "choice" : "self";
   // URLで指定があればそれを優先する（ツールメニューから直接フレーズで開けるように）
@@ -619,7 +634,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, controlsCollapsed, testFormat, activeSet }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, sleepMinutes, controlsCollapsed, testFormat, activeSet }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -1225,8 +1240,56 @@ function playWords3000Queue(w, queue, i){
     else { setTimeout(()=> playWords3000Queue(w, queue, i+1), Math.min(listenGap, 350)); }
   });
 }
+// --- スリープタイマー ---
+// 寝る前に聞きながら寝落ちても、一定時間で止まるようにする。
+// **setTimeoutだけに頼らないこと**。画面を消すとタイマーは絞られるので、
+// 本命は「期限の時刻を過ぎていないか」を**語を進めるたびに見る**形にする（
+// 音声の終了イベントは背面でも走る）。setTimeoutは、画面を見ている時に
+// 語の途中でもちゃんと止めるための補助。
+let sleepDeadline = null;
+let sleepTimer = null;
+// 残り時間は減っていくので、再生中は定期的に書き換える。
+// 一覧を丸ごと再描画すると500件作り直すことになるので、この行だけ触る。
+let sleepTickTimer = null;
+function refreshProgressLine(){
+  const el = document.getElementById("words3000Progress");
+  if(!el || testMode) return;
+  const base = el.textContent.split("\u3000\u30fb\u3000")[0];
+  el.textContent = base + studyStatusText();
+}
+function startSleepTick(){
+  stopSleepTick();
+  if(sleepDeadline === null) return;
+  sleepTickTimer = setInterval(refreshProgressLine, 30000);
+  refreshProgressLine();
+}
+function stopSleepTick(){
+  if(sleepTickTimer){ clearInterval(sleepTickTimer); sleepTickTimer = null; }
+  refreshProgressLine();
+}
+
+function startSleepTimer(){
+  clearSleepTimer();
+  if(!sleepMinutes) return;
+  sleepDeadline = Date.now() + sleepMinutes * 60000;
+  sleepTimer = setTimeout(()=>{ if(words3000ListenState.active) stopWords3000Listening(); }, sleepMinutes * 60000);
+  startSleepTick();
+}
+function clearSleepTimer(){
+  if(sleepTimer){ clearTimeout(sleepTimer); sleepTimer = null; }
+  sleepDeadline = null;
+  stopSleepTick();
+}
+function sleepTimerExpired(){ return sleepDeadline !== null && Date.now() >= sleepDeadline; }
+function sleepRemainingText(){
+  if(sleepDeadline === null) return "";
+  const min = Math.max(0, Math.ceil((sleepDeadline - Date.now()) / 60000));
+  return `💤 あと${min}分`;
+}
+
 function playWords3000Step(){
   if(!words3000ListenState.active) return;
+  if(sleepTimerExpired()){ stopWords3000Listening(); return; }
   if(words3000ListenState.index >= words3000ListenState.list.length){
     if(listenLoop){ words3000ListenState.index = 0; } else { stopWords3000Listening(); return; }
   }
@@ -1252,6 +1315,7 @@ function startWords3000Listening(){
     words3000ListenState = { active:true, list: words3000PausedState.list, index: words3000PausedState.index };
     words3000PausedState = null;
     startKeepAlive();
+    startSleepTimer();
     playWords3000Step();
     return;
   }
@@ -1266,6 +1330,7 @@ function startWords3000Listening(){
   if(shuffleListen) list = shuffleArray(list.slice());
   words3000ListenState = { active:true, list, index:0 };
   startKeepAlive();
+  startSleepTimer();
   playWords3000Step();
 }
 function stopWords3000Listening(){
@@ -1274,6 +1339,7 @@ function stopWords3000Listening(){
   words3000PausedState = { list: words3000ListenState.list, index: words3000ListenState.index };
   stopAllAudio();
   stopKeepAlive();
+  clearSleepTimer();
   updateMediaSession(null);
   document.querySelectorAll(".w3k-card.now-playing").forEach(el=>el.classList.remove("now-playing"));
   updateWords3000ListenButton();
@@ -1539,6 +1605,15 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
   readOrderSel.innerHTML = READ_ORDER_PRESETS.map(p=>`<option value="${p.value}">${p.label}</option>`).join('');
   readOrderSel.value = readOrder;
   document.getElementById("words3000ExampleToggle").checked = readExample;
+  const sleepSel = document.getElementById("words3000SleepSel");
+  sleepSel.value = String(sleepMinutes);
+  sleepSel.addEventListener("change", (e)=>{
+    sleepMinutes = Number(e.currentTarget.value) || 0;
+    saveW3kPrefs();
+    // 再生中に変えたら、その場で数え直す
+    if(words3000ListenState.active) startSleepTimer(); else clearSleepTimer();
+    renderWords3000List();
+  });
   const exCountSel = document.getElementById("words3000ExampleCountSel");
   exCountSel.value = String(exampleCount);
   exCountSel.addEventListener("change", (e)=>{

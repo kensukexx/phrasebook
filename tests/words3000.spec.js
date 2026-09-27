@@ -546,6 +546,58 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
     });
   });
 
+  test.describe('スリープタイマー（寝る前の聞き流し）', () => {
+    test('playback stops once the deadline passes, and keeps the place for next time', async ({ page }) => {
+      // Deliberately driven by wall-clock, not by setTimeout firing: with the screen off the
+      // timer is throttled, so the deadline is checked as each word comes round instead.
+      await mockGoogleTTS(page, { seconds: 0.12 });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.selectOption('#words3000SleepSel', '30');
+      await page.evaluate(() => { listenGap = 30; });
+
+      await page.click('#words3000ListenBtn');
+      await expect(page.locator('#words3000Progress')).toContainText('💤 あと30分');
+      await expect.poll(() => page.evaluate(() => words3000ListenState.index)).toBeGreaterThan(0);
+
+      // move the deadline into the past WITHOUT letting the 30-minute setTimeout fire
+      await page.evaluate(() => { sleepDeadline = Date.now() - 1000; });
+      await expect.poll(() => page.evaluate(() => words3000ListenState.active), { timeout: 10000 }).toBe(false);
+
+      const after = await page.evaluate(() => ({
+        resumePoint: words3000PausedState ? words3000PausedState.index : null,
+        keepAlive: keepAliveAudio,
+        deadline: sleepDeadline,
+      }));
+      expect(after.resumePoint).toBeGreaterThan(0); // falling asleep should not lose your place
+      expect(after.keepAlive).toBeNull();
+      expect(after.deadline).toBeNull();
+      await expect(page.locator('#words3000Progress')).not.toContainText('💤');
+
+      // and the next ▶ carries on from where it stopped
+      await page.click('#words3000ListenBtn');
+      expect(await page.evaluate(() => words3000ListenState.index)).toBe(after.resumePoint);
+    });
+
+    test('no timer set means playback is never cut short, and the choice is remembered', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 0.12 });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000SleepSel')).toHaveValue('0');
+
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => words3000ListenState.index)).toBeGreaterThan(0);
+      expect(await page.evaluate(() => sleepDeadline)).toBeNull();
+      await expect(page.locator('#words3000Progress')).not.toContainText('💤');
+      await page.click('#words3000ListenBtn');
+
+      await page.selectOption('#words3000SleepSel', '45');
+      await page.reload();
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000SleepSel')).toHaveValue('45');
+    });
+  });
+
   test.describe('バックグラウンド再生（画面ロック中・他アプリ使用中）', () => {
     // A web page cannot play anything once the browser is actually closed - there is no audio
     // API in a service worker and the page's process is gone. What these cover is the part
