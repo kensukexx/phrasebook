@@ -620,6 +620,23 @@ if(synth){ refreshVoices(); synth.onvoiceschanged = refreshVoices; }
 
 let currentUtter = null;
 let currentTTSAudio = null;
+// 【バックグラウンド再生の肝】音声要素は1つを使い回すこと。
+// iOSでは再生の許可がユーザー操作に紐づくため、**画面を消したあとに新しく作った要素は
+// 再生を始められない**。1語ごとに new Audio() していると、最初の1語で止まる
+//（実機で「途中で止まる」と報告された原因）。いったん許可された同じ要素のsrcを
+// 差し替えるぶんには、バックグラウンドでも再生が続く。
+let sharedTTSAudio = null;
+let ttsGeneration = 0;   // 古い再生のコールバックを無視するための世代番号
+function acquireTTSAudio(){
+  if(!sharedTTSAudio){
+    sharedTTSAudio = new Audio();
+    sharedTTSAudio.preload = "auto";
+  }
+  sharedTTSAudio.onended = null;
+  sharedTTSAudio.onerror = null;
+  currentTTSAudio = sharedTTSAudio;
+  return { audio: sharedTTSAudio, gen: ++ttsGeneration };
+}
 let currentPlayingBtn = null;
 
 function voiceQualityScore(v){
@@ -663,8 +680,7 @@ const GOOGLE_TTS_URL_BUILDERS = [
 function playGoogleTTS(text, ttsLang, rateVal){
   return new Promise((resolve, reject)=>{
     const chunks = splitForTTS(text, 180);
-    const audio = new Audio();
-    currentTTSAudio = audio;
+    const { audio, gen } = acquireTTSAudio();
     let idx = 0;
     let hostIdx = 0;
     let settled = false;
@@ -693,7 +709,7 @@ function playGoogleTTS(text, ttsLang, rateVal){
       if(hostIdx + 1 < GOOGLE_TTS_URL_BUILDERS.length){
         hostIdx++;
         setTimeout(()=>{
-          if(currentTTSAudio !== audio) return;
+          if(gen !== ttsGeneration) return; // 別の再生に切り替わっていたら何もしない
           loadChunk();
         }, 400);
       } else {
@@ -714,7 +730,10 @@ function playGoogleTTS(text, ttsLang, rateVal){
   });
 }
 
+// 要素は使い回すので、srcを外すだけで破棄はしない（破棄すると、いったん得た
+// 再生の許可まで失い、バックグラウンドで次の語を鳴らせなくなる）。
 function releaseAudioResources(audio){
+  if(!audio) return;
   audio.removeAttribute("src");
   audio.load();
 }
@@ -742,8 +761,7 @@ function pcm16ToWavBlob(base64Pcm, sampleRate, numChannels){
 async function playGeminiTTS(text, rateVal){
   const chunks = splitForTTS(text, 400);
   const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=" + encodeURIComponent(geminiApiKey);
-  const audio = new Audio();
-  currentTTSAudio = audio;
+  const { audio } = acquireTTSAudio();
   for(let i=0; i<chunks.length; i++){
     const chunk = chunks[i];
     try {
@@ -789,11 +807,12 @@ async function playGeminiTTS(text, rateVal){
 function stopAllAudio(){
   if(synth) synth.cancel();
   if(currentTTSAudio){
+    ttsGeneration++;          // 走っていた再生のコールバックを無効にする
     currentTTSAudio.onended = null;
     currentTTSAudio.onerror = null;
     currentTTSAudio.pause();
     releaseAudioResources(currentTTSAudio);
-    currentTTSAudio = null;
+    // 要素そのものは残す（使い回すため）。currentTTSAudio も保持しておく。
   }
   if(currentPlayingBtn){
     currentPlayingBtn.classList.remove("playing");
@@ -1117,7 +1136,8 @@ function startKeepAlive(){
   try{
     keepAliveAudio = new Audio(silentWavUrl(1));
     keepAliveAudio.loop = true;
-    keepAliveAudio.volume = 0;   // 無音データだが、念のため音量も0にしておく
+    // volumeは下げない。データ自体が無音なので聞こえないが、muteすると
+    // 「音を出していない」とみなされて音声セッションを手放される恐れがある。
     keepAliveAudio.play().catch(()=>{}); // 自動再生が拒否されても再生自体は続ける
   }catch(e){ keepAliveAudio = null; }
 }

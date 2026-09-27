@@ -504,9 +504,16 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
       await page.click('#words3000ListenBtn');
       await expect.poll(() => page.evaluate(() => !!keepAliveAudio && !keepAliveAudio.paused)).toBe(true);
-      const alive = await page.evaluate(() => ({ loop: keepAliveAudio.loop, volume: keepAliveAudio.volume }));
-      expect(alive.loop).toBe(true);     // must never run out, or the page goes to sleep
-      expect(alive.volume).toBe(0);      // silent data, but belt and braces
+      const alive = await page.evaluate(() => ({
+        loop: keepAliveAudio.loop,
+        volume: keepAliveAudio.volume,
+        muted: keepAliveAudio.muted,
+      }));
+      expect(alive.loop).toBe(true);   // must never run out, or the page goes to sleep
+      // deliberately NOT muted or volume 0: the data itself is silence, and a muted element
+      // risks the OS deciding the page is not playing anything and dropping the audio session
+      expect(alive.volume).toBe(1);
+      expect(alive.muted).toBe(false);
 
       await page.click('#words3000ListenBtn');
       await expect.poll(() => page.evaluate(() => keepAliveAudio)).toBeNull();
@@ -532,6 +539,35 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
 
       await page.click('#words3000ListenBtn');
       await expect.poll(() => page.evaluate(() => navigator.mediaSession.playbackState)).toBe('paused');
+    });
+
+    test('one audio element is reused for every word, not a new one each time', async ({ page }) => {
+      // Reported from a real iPhone: playback stopped partway with the screen off. iOS ties
+      // permission to play to a user gesture, so an element CREATED while backgrounded can
+      // never start - only the first word played. Swapping src on the one element that was
+      // already unlocked by the tap keeps working.
+      await mockGoogleTTS(page, { seconds: 0.25 });
+      await page.addInitScript(() => {
+        window.__audioCount = 0;
+        const Original = window.Audio;
+        window.Audio = function (...args) { window.__audioCount++; return new Original(...args); };
+        window.Audio.prototype = Original.prototype;
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await page.evaluate(() => { listenGap = 50; });
+
+      await page.click('#words3000ListenBtn');
+      await expect.poll(() => page.evaluate(() => words3000ListenState.index), { timeout: 15000 })
+        .toBeGreaterThanOrEqual(3);
+
+      const state = await page.evaluate(() => ({
+        created: window.__audioCount,
+        reused: currentTTSAudio === sharedTTSAudio,
+      }));
+      // the silent keep-alive plus the one shared speech element - and nothing per word
+      expect(state.created).toBeLessThanOrEqual(2);
+      expect(state.reused).toBe(true);
     });
 
     test('while the page is hidden the gap between words is skipped, so no timer is on the critical path', async ({ page }) => {
