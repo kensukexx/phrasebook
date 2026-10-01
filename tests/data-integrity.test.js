@@ -82,6 +82,34 @@ const noRomaji = BUILTIN.filter(d => !d.jaRomaji || !d.jaRomaji.trim());
 check(noRomaji.length === 0, `${noRomaji.length} entries have no jaRomaji: ${noRomaji.map(d => d.ja).join(', ')}`);
 if (noRomaji.length === 0) ok('every entry has a jaRomaji (romanized reading)');
 
+// jaRomaji was machine-generated, and the romanizer picks ONE reading for a kanji that has
+// several - so it got the on'yomi where the kun'yomi was meant, and vice versa. The audio does
+// not come from this field (the 🔊 speaks the raw ja text through Google TTS), so a wrong
+// reading here shows up as "the romaji and the voice say different things". These are the
+// entries whose kanji can be read more than one way; pin the correct one.
+const AMBIGUOUS_READINGS = [
+  ['連絡先を交換しませんか？', 'Renrakusaki o kōkan shimasen ka?'], // 先 さき, not せん
+  ['愛してる', 'Aishiteru'],                                      // 愛 あい, not いとし
+  ['辛いですか？', 'Karai desu ka?'],                              // 辛い からい (spicy), not つらい
+  ['趣味は何ですか？', 'Shumi wa nan desu ka?'],                    // 何 なん, not なに
+  ['それをしたいです。それとも、こちらの方がいいですか？',
+   'Sore o shitaidesu. Soretomo, kochira no hō ga īdesu ka?'],    // 方 ほう, not かた
+  ['それをした後で、休みます。', 'Sore o shita ato de, yasumimasu.'], // 後 あと, not のち
+];
+const wrongReading = AMBIGUOUS_READINGS.filter(([ja, expected]) => {
+  const entry = BUILTIN.find(d => d.ja === ja);
+  return !entry || entry.jaRomaji !== expected;
+});
+check(
+  wrongReading.length === 0,
+  `${wrongReading.length} entries have the wrong reading:\n` +
+    wrongReading.map(([ja, expected]) => {
+      const entry = BUILTIN.find(d => d.ja === ja);
+      return `  - ${ja}: expected "${expected}", got ${entry ? `"${entry.jaRomaji}"` : '(entry missing)'}`;
+    }).join('\n')
+);
+if (wrongReading.length === 0) ok(`${AMBIGUOUS_READINGS.length} kanji with more than one reading are romanized the way they are spoken`);
+
 console.log('');
 if (failures > 0) {
   console.error(`${failures} check(s) failed.`);
