@@ -80,4 +80,30 @@ test.describe('日本語を学ぶ（外国人向け、v1）', () => {
     await page.waitForTimeout(300);
     expect(errors).toEqual([]);
   });
+
+  test('a phrase whose kanji has two readings is spoken with the one the romaji shows', async ({ page }) => {
+    // 辛い is からい (spicy) here, but it is also つらい (tough) - and the 🔊 sends the raw
+    // Japanese to Google TTS, which picks on its own. jaSpeech pins the reading, so the
+    // voice and the romaji on the same card cannot drift apart.
+    // Record what the app decided to speak rather than the TTS requests: WebKit and chromium
+    // do not issue those identically (see CLAUDE.md), and the decision is what this pins.
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.click('#toolsBtn');
+    await page.click('#menuLearnJa');
+    await page.waitForSelector('#learnJaOverlay.open');
+    await page.evaluate(() => {
+      window.__spoken = [];
+      const original = speakRaw;
+      speakRaw = function (text, ...rest) { window.__spoken.push(text); return original(text, ...rest); };
+    });
+
+    await page.fill('#learnJaSearch', '辛い');
+    const card = page.locator('.lj-card').first();
+    await expect(card.locator('.lj-ja')).toHaveText('辛いですか？');   // the screen still shows the kanji
+    await expect(card.locator('.lj-romaji')).toHaveText('Karai desu ka?');
+    await card.click();
+    await card.locator('[data-role="ja"]').click();
+    await expect.poll(() => page.evaluate(() => window.__spoken)).toEqual(['からいですか？']); // つらい can't be said
+  });
 });

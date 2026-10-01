@@ -93,7 +93,7 @@ const AMBIGUOUS_READINGS = [
   ['辛いですか？', 'Karai desu ka?'],                              // 辛い からい (spicy), not つらい
   ['趣味は何ですか？', 'Shumi wa nan desu ka?'],                    // 何 なん, not なに
   ['それをしたいです。それとも、こちらの方がいいですか？',
-   'Sore o shitaidesu. Soretomo, kochira no hō ga īdesu ka?'],    // 方 ほう, not かた
+   'Sore o shitai desu. Soretomo, kochira no hō ga ī desu ka?'],  // 方 ほう, not かた
   ['それをした後で、休みます。', 'Sore o shita ato de, yasumimasu.'], // 後 あと, not のち
 ];
 const wrongReading = AMBIGUOUS_READINGS.filter(([ja, expected]) => {
@@ -109,6 +109,16 @@ check(
     }).join('\n')
 );
 if (wrongReading.length === 0) ok(`${AMBIGUOUS_READINGS.length} kanji with more than one reading are romanized the way they are spoken`);
+
+// jaSpeech exists to pin a reading the TTS would otherwise guess at, so it has to be kana
+// only - a kanji left in it would be read by the same guesswork it is there to avoid.
+const badSpeech = BUILTIN.filter(d => d.jaSpeech && /[\u4e00-\u9fff]/.test(d.jaSpeech));
+check(
+  badSpeech.length === 0,
+  `${badSpeech.length} jaSpeech values still contain kanji: ${badSpeech.map(d => `${d.ja} -> ${d.jaSpeech}`).join(', ')}`
+);
+const withSpeech = BUILTIN.filter(d => d.jaSpeech);
+if (badSpeech.length === 0) ok(`${withSpeech.length} entr${withSpeech.length === 1 ? 'y pins its' : 'ies pin their'} spoken reading in kana (jaSpeech)`);
 
 console.log('');
 if (failures > 0) {
