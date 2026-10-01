@@ -508,6 +508,40 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       ]);
     });
 
+    test('how many times each example is read is a setting, and the repeats stay together', async ({ page }) => {
+      await mockGoogleTTS(page, { seconds: 0.15 });
+      await page.addInitScript(() => {
+        localStorage.setItem('phrasebook-words3000-prefs', JSON.stringify({
+          activeSet: 'phrases', exampleCount: 2, exampleReps: 2, readExample: true, readOrder: 'en',
+        }));
+      });
+      await page.goto('/words3000.html');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleRepsSel')).toHaveValue('2');
+
+      await page.evaluate(() => {
+        window.__spoken = [];
+        const original = speakRaw;
+        speakRaw = function (text, ...rest) { window.__spoken.push(text); return original(text, ...rest); };
+        listenGap = 30;
+      });
+      await page.click('#words3000ListenBtn');
+      // 9 utterances - longer than the sibling tests need, so give it room on webkit
+      await expect.poll(() => page.evaluate(() => window.__spoken.length), { timeout: 30000 })
+        .toBeGreaterThanOrEqual(9);
+      await page.click('#words3000ListenBtn');
+
+      const spoken = await page.evaluate(() => window.__spoken);
+      expect(spoken.slice(0, 9)).toEqual([
+        'I want to ~',
+        // the first example twice in a row, THEN the second - not the two alternating
+        'I want to go there.', 'そこに行きたいです。',
+        'I want to go there.', 'そこに行きたいです。',
+        'I want to change my seat.', '席を替えたいです。',
+        'I want to change my seat.', '席を替えたいです。',
+      ]);
+    });
+
     test('examples can be read at their own speed, separately from the word', async ({ page }) => {
       await mockGoogleTTS(page, { seconds: 0.15 });
       await page.addInitScript(() => {

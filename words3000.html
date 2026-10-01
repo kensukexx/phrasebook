@@ -256,6 +256,14 @@
           <select id="words3000ExampleRateSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);"></select>
         </div>
         <div class="w3k-range-row" style="margin-top:10px;">
+          <label for="words3000ExampleRepsSel">例文の回数</label>
+          <select id="words3000ExampleRepsSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);">
+            <option value="1">1回ずつ</option>
+            <option value="2">2回ずつ</option>
+            <option value="3">3回ずつ</option>
+          </select>
+        </div>
+        <div class="w3k-range-row" style="margin-top:10px;">
           <label for="words3000SleepSel">自動停止</label>
           <select id="words3000SleepSel" style="flex:1 1 auto; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; background:rgba(255,255,255,0.5); font-size:14px; color:var(--ink);">
             <option value="0">しない</option>
@@ -266,7 +274,7 @@
           </select>
         </div>
         <p class="hint" style="margin-top:6px;">寝る前の聞き流し用。止まった位置は覚えているので、次の▶で続きから聞けます。</p>
-        <p class="hint" style="margin-top:6px;">例文の数は、カードを開いたとき・テストの答え・読み上げで使う数です（フレーズは例文が3つ、英単語は1つ）。例文の速さは、単語だけ速く回して長い例文はゆっくり聞きたいときに変えてください。単語・意味の速さは ▶ の横の速さボタンのままです。</p>
+        <p class="hint" style="margin-top:6px;">例文の数は、カードを開いたとき・テストの答え・読み上げで使う数です（フレーズは例文が3つ、英単語は1つ）。例文の速さは、単語だけ速く回して長い例文はゆっくり聞きたいときに変えてください。単語・意味の速さは ▶ の横の速さボタンのままです。例文の回数は、1つの例文を「英文 → 和訳」ごと続けて何回読むかです（次の例文へ移る前に繰り返します）。</p>
       </div>
       <div class="field">
         <label>テストの出題形式</label>
@@ -575,6 +583,8 @@ let sleepMinutes = 0;   // 0なら自動停止なし
 // 例文だけ別の速さで読む。0なら単語と同じ速さ（＝rate）を使う。
 // 単語は速く回して、長い例文はゆっくり聞きたい、という使い方のため。
 let exampleRate = 0;
+// 1つの例文を続けて何回読むか。英文→和訳 のまとまりを、そのまま繰り返す。
+let exampleReps = 1;
 const EXAMPLE_RATE_CHOICES = [0.6, 0.75, 0.9, 1.0, 1.25, 1.5, 1.75, 2.0];
 // いま鳴っている音声が例文かどうか。再生中に速さを変えたとき、単語の速さと
 // 例文の速さのどちらを当てるかを決めるために使う。
@@ -631,6 +641,7 @@ async function loadW3kPrefs(){
   exampleCount = [1,2,3].includes(saved.exampleCount) ? saved.exampleCount : 3;
   sleepMinutes = [0,15,30,45,60].includes(saved.sleepMinutes) ? saved.sleepMinutes : 0;
   exampleRate = EXAMPLE_RATE_CHOICES.includes(saved.exampleRate) ? saved.exampleRate : 0;
+  exampleReps = [1,2,3].includes(saved.exampleReps) ? saved.exampleReps : 1;
   controlsCollapsed = !!saved.controlsCollapsed;
   testFormat = saved.testFormat === "choice" ? "choice" : "self";
   // URLで指定があればそれを優先する（ツールメニューから直接フレーズで開けるように）
@@ -655,7 +666,7 @@ function normalizeReadOrder(saved){
 }
 async function saveW3kPrefs(){
   const posFilter = document.getElementById("words3000PosSel").value;
-  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, exampleRate, sleepMinutes, controlsCollapsed, testFormat, activeSet }));
+  await safeSet('phrasebook-words3000-prefs', JSON.stringify({ posFilter, unlearnedOnly, shuffleListen, readOrder, readExample, exampleCount, exampleRate, exampleReps, sleepMinutes, controlsCollapsed, testFormat, activeSet }));
 }
 
 // --- 音声合成：3段階フォールバック（①Google翻訳→②Geminiキー設定時はGemini→③端末TTS）。
@@ -1321,8 +1332,11 @@ function playWords3000Step(){
   updateMediaSession(w);
   const queue = readOrder.split(',').filter(Boolean);
   if(readExample){
-    // 使う例文の数だけ、英文→和訳 を繰り返す
-    usedEx(w).forEach((_, i)=>{ queue.push(`ex-en#${i}`); queue.push(`ex-ja#${i}`); });
+    // 使う例文の数だけ、英文→和訳 を繰り返す。1つの例文は、次の例文へ移る前に
+    // exampleReps回 続けて読む（1つ目→2つ目→1つ目… と散らすより頭に残るため）。
+    usedEx(w).forEach((_, i)=>{
+      for(let r = 0; r < exampleReps; r++){ queue.push(`ex-en#${i}`); queue.push(`ex-ja#${i}`); }
+    });
   }
   if(queue.length === 0) queue.push("en"); // 英語0回・日本語0回・例文もOFFは想定しないが、無音で止まらないための保険
   playWords3000Queue(w, queue, 0);
@@ -1651,6 +1665,12 @@ document.getElementById("words3000CollapseToggle").addEventListener("click", ()=
     saveW3kPrefs();
     // 例文を鳴らしている最中に変えたら、その場で反映する
     if(currentTTSAudio && currentSpeakIsExample) currentTTSAudio.playbackRate = exampleRateVal();
+  });
+  const exRepsSel = document.getElementById("words3000ExampleRepsSel");
+  exRepsSel.value = String(exampleReps);
+  exRepsSel.addEventListener("change", (e)=>{
+    exampleReps = Number(e.currentTarget.value) || 1;
+    saveW3kPrefs();
   });
   applyControlsCollapsed();
   populateWords3000TierSelect();
