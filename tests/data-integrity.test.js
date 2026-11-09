@@ -117,6 +117,37 @@ check(
   badSpeech.length === 0,
   `${badSpeech.length} jaSpeech values still contain kanji: ${badSpeech.map(d => `${d.ja} -> ${d.jaSpeech}`).join(', ')}`
 );
+// 🔊が読む日本語は d.ja をそのままGoogle TTSに渡すので、読みが2通りある漢字はTTS任せに
+// なる。かな書きの jaSpeech で固定した分を表で押さえておく（声とローマ字がずれた、という
+// 形で表に出るので、消えたり変わったりしたら落とす）。
+const PINNED_SPEECH = [
+  ['今日は楽しかったです', 'きょうはたのしかったです'], // 今日は → こんにちは と読まれうる
+  ['今日', 'きょう'], ['明日', 'あした'], ['昨日', 'きのう'],
+  ['月曜日', 'げつようび'], ['日曜日', 'にちようび'],   // 末尾の日 ひ/にち/び
+  ['仕事は何をしていますか？', 'しごとはなにをしていますか？'], // 何 なに/なん
+  ['趣味は何ですか？', 'しゅみはなんですか？'],
+  ['何時ですか？', 'なんじですか？'],
+  ['そこへの行き方を教えてください', 'そこへのいきかたをおしえてください'], // 方 かた/ほう
+  ['それをした後で、休みます。', 'それをしたあとで、やすみます。'],           // 後 あと/のち
+  ['それをもう一つください', 'それをもうひとつください'],                     // 一つ ひとつ/いち
+  ['2名です', 'にめいです'],                                                 // 数字＋助数詞
+  ['私は日本人です', 'わたしはにほんじんです'],                               // 日本 にほん/にっぽん
+  ['暑い（天気）', 'あつい'],                                                 // 括弧は読み手への注記。声に出さない
+];
+const lostSpeech = PINNED_SPEECH.filter(([ja, kana]) => {
+  const e = BUILTIN.find(d => d.ja === ja);
+  return !e || e.jaSpeech !== kana;
+});
+check(
+  lostSpeech.length === 0,
+  `${lostSpeech.length} entries lost their pinned spoken reading:\n` +
+    lostSpeech.map(([ja, kana]) => {
+      const e = BUILTIN.find(d => d.ja === ja);
+      return `  - ${ja}: expected jaSpeech "${kana}", got ${e ? `"${e.jaSpeech}"` : '(entry missing)'}`;
+    }).join('\n')
+);
+if (lostSpeech.length === 0) ok(`${PINNED_SPEECH.length} phrases whose kanji has two readings keep their pinned spoken reading`);
+
 const withSpeech = BUILTIN.filter(d => d.jaSpeech);
 if (badSpeech.length === 0) ok(`${withSpeech.length} entr${withSpeech.length === 1 ? 'y pins its' : 'ies pin their'} spoken reading in kana (jaSpeech)`);
 
