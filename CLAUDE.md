@@ -162,6 +162,25 @@
     - **この2つの関数は index.html と words3000.html の両方に同じ実装がある**（別ファイルで共有できないため）。直すときは必ず両方。
     - 既存テスト`getWordsLearnedSnapshot/applyCloudWordsLearned ...`の「差分なし＝false」という期待値は、旧仕様を写したものだったので更新した。ローカルが`{step,due}`・クラウドが旧形式の`true`なら、`true`は「毎日期限切れ」を意味するので**押し上げるべき差分が実在する**。
 
+### ★パネル内の `position:sticky; bottom:0` は、下端まで届かない（2026-11-09／実機で報告）
+
+💬AIに質問の入力欄（`.pd-chat-input-row`）で、**本文がバーで真っ二つに切れて見える**と報告された。
+原因は**stickyの基準がスクロール領域の「余白を除いた」範囲**であること。`.panel` は
+`padding:20px 20px 28px` なので、`bottom:0` だと帯が**下端の28px手前**で止まり、
+**その隙間を本文が通り抜けて帯の下に顔を出す**。
+```css
+.panel{ --panel-pad-x:20px; --panel-pad-b:28px; padding:20px var(--panel-pad-x) var(--panel-pad-b); }
+.pd-chat-input-row{ margin:14px calc(-1 * var(--panel-pad-x)) 0;
+  padding:8px var(--panel-pad-x) var(--panel-pad-b);
+  position:sticky; bottom:calc(-1 * var(--panel-pad-b)); }
+```
+**余白の値は変数にして両方から参照する。**直書きすると、`.panel` の padding を変えた日に静かに戻る。
+- **確認は「帯の下端とパネルの下端の差が0か」＋「パネル下端のすぐ内側にあるのが帯か」**の2つを、
+  **複数のスクロール位置で**見る。content が短いと帯は自然位置のままなので、**1か所だけ測ると見逃す**
+  （実際に最初の計測で隙間0に見えて、スクロールしていなかっただけだった）。
+- **レイアウトを測るテストは `renderChatDetail()` だけ呼んでも0になる。**詳細ビューが
+  `display:none` のままなので、**`openPracticeDetail()` を通すこと。**
+
 ### オフライン対応
 - `sw.js`はアプリ本体（同一オリジンのシェルファイル）のみキャッシュする。**翻訳・音声合成・為替・Gemini・同期などの外部APIは素通しで、Service Workerは関与しない。**
 - 一度はGoogle音声合成（translate_tts）もService Worker側でfetch()して横取り・キャッシュする実装を試したが、実機検証で「fetch()経由のリクエストだとGoogle側が404を返すことがあるが、`<audio src>`からの直接リクエストは安定して成功する」という挙動が判明し撤去した。キャッシュの横取り自体がオンライン時も含め偶発的な再生失敗を招きうる状態だったため、確実性を優先している。**この種のキャッシュを復活させる提案が出たら、この経緯を踏まえて慎重に検討すること。**

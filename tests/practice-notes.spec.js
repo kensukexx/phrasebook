@@ -428,6 +428,62 @@ test.describe('学習ラウンジ - 💬AIに質問 mode', () => {
     await expect(page.locator('.chat-phrase-card .cp-text')).toHaveText('Old format');
   });
 
+  test('the chat input bar reaches the bottom of the panel, so replies do not show through below it', async ({ page }) => {
+    // 実機で「文章がバーで真っ二つに切れている」と報告された。position:sticky の基準は
+    // パネルの余白を除いた領域なので、bottom:0 だと帯が下端の padding-bottom ぶん手前で
+    // 止まり、その隙間を本文が通り抜けていた。
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/index.html');
+    await page.waitForSelector('#deck .ticket');
+    await page.evaluate(() => {
+      const msgs = [];
+      for (let i = 0; i < 4; i++) {
+        msgs.push({ role: 'user', text: '質問' + i });
+        msgs.push({
+          role: 'ai', text: 'スクロールが起きるだけの長さの回答文をここに置いています。' + i,
+          phrases: [{ text: 'Not much.', kana: 'ノット マッチ', ja: '特に何もないよ。', gloss: 'Not(特に) much(多く).' }],
+        });
+      }
+      customPracticePacks.push({ id: 'bar', type: 'chat', lang: 'en', word: 'q', meaning: '', custom: true, messages: msgs });
+      document.getElementById('practiceOverlay').classList.add('open');
+      renderPracticeList();
+      // renderChatDetail だけでは詳細ビューが display:none のままで、寸法が全部0になる
+      openPracticeDetail(allPracticePacks().length - 1);
+    });
+
+    const seen = await page.evaluate(() => {
+      const panel = document.querySelector('#practiceOverlay .panel');
+      const row = document.querySelector('.pd-chat-input-row');
+      const max = panel.scrollHeight - panel.clientHeight;
+      const out = [];
+      for (const f of [0.2, 0.5, 0.8]) {
+        panel.scrollTop = Math.round(max * f);
+        const pr = panel.getBoundingClientRect();
+        // パネル下端のすぐ内側に何があるか。帯が届いていれば帯（かその子）になる
+        const el = document.elementFromPoint(Math.round(pr.left + pr.width / 2), Math.round(pr.bottom) - 4);
+        out.push({
+          gap: Math.round(pr.bottom - row.getBoundingClientRect().bottom),
+          onBar: !!(el && (el === row || row.contains(el))),
+        });
+      }
+      return out;
+    });
+    for (const s of seen) {
+      expect(s.gap).toBe(0);     // 帯がパネルの下端まで届いている
+      expect(s.onBar).toBe(true); // 帯の下から本文が覗いていない
+    }
+
+    // 一番下まで送れば、最後のカードのボタンは帯に隠れず押せる
+    const reachable = await page.evaluate(() => {
+      const panel = document.querySelector('#practiceOverlay .panel');
+      panel.scrollTop = panel.scrollHeight;
+      const btn = [...document.querySelectorAll('.chat-phrase-card .cp-speak')].pop();
+      const r = btn.getBoundingClientRect();
+      return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === btn;
+    });
+    expect(reachable).toBe(true);
+  });
+
   test('a question with no specific phrase to suggest shows only the reply bubble, no phrase card', async ({ page, browserName }) => {
     test.skip(browserName === 'webkit', 'Playwright WebKit does not intercept this request pattern');
     await page.goto('/index.html');
