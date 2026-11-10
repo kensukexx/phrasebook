@@ -475,6 +475,33 @@ test.describe('英単語3000（頻出英単語を頻度順に学ぶ独立ペー�
       await expect(page.locator('#words3000ExampleCountSel')).toHaveValue('1');
     });
 
+    test('the example-count setting only appears where the set actually has several examples', async ({ page }) => {
+      // 英単語3000は全3000件が例文1つなので、3を選んでも1つしか出ない。選ばせると
+      // 「設定が効かない」と見える（実機で報告された）ので、行ごと出さない。
+      await page.goto('/words3000.html?set=phrases');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleCountRow')).toBeVisible();
+      await expect(page.locator('#words3000ExampleCountSel option')).toHaveCount(3);
+
+      await page.selectOption('#words3000ExampleCountSel', '3');
+      await page.locator('.w3k-card .w3k-front').first().click();
+      await expect(page.locator('.w3k-card.revealed .w3k-ex-one')).toHaveCount(3);
+      await page.locator('.w3k-card .w3k-front').first().click();
+
+      // 単語の側へ切り替えると消え、戻すとまた出る
+      await page.click('.w3k-set-btn[data-set="words"]');
+      await expect(page.locator('#words3000ExampleCountRow')).toBeHidden();
+      await page.locator('.w3k-card .w3k-front').first().click();
+      await expect(page.locator('.w3k-card.revealed .w3k-ex-one')).toHaveCount(1);
+      await page.click('.w3k-set-btn[data-set="phrases"]');
+      await expect(page.locator('#words3000ExampleCountRow')).toBeVisible();
+
+      // 直接ひらいた場合も同じ
+      await page.goto('/words3000.html?set=words');
+      await page.waitForSelector('.w3k-card');
+      await expect(page.locator('#words3000ExampleCountRow')).toBeHidden();
+    });
+
     test('playback reads as many examples as the setting says', async ({ page }) => {
       // Kept apart from the display test on purpose: tapping a card speaks the word, so doing
       // both in one test let a stray utterance land in the middle of the recorded sequence.
